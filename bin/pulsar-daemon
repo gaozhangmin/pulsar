@@ -216,11 +216,11 @@ case $startStop in
     ;;
 
   (stop)
-    stop
+    stop $1
     ;;
 
   (restart)
-    stop
+    stop $1
     start
     ;;
 
