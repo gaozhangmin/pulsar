@@ -21,13 +21,14 @@
 # -*- encoding: utf-8 -*-
 
 ''' log.py '''
+import errno
 import logging
 import logging.config
 import logging.handlers
 import os
-import errno
-import pulsar
 import sys
+
+import pulsar
 
 # Create the logger
 # pylint: disable=invalid-name
@@ -39,80 +40,88 @@ Log = logging.getLogger()
 # see time formatter documentation for more
 date_format = "%Y-%m-%d %H:%M:%S %z"
 
-class LogTopicHandler(logging.Handler):
-  def __init__(self, topic_name, pulsar_client):
-    logging.Handler.__init__(self)
-    Log.info("Setting up producer for log topic %s" % topic_name)
-    self.producer = pulsar_client.create_producer(
-      str(topic_name),
-      block_if_queue_full=True,
-      batching_enabled=True,
-      batching_max_publish_delay_ms=100,
-      compression_type=pulsar._pulsar.CompressionType.LZ4)
 
-  def emit(self, record):
-    msg = self.format(record)
-    self.producer.send_async(str(msg).encode('utf-8'), None)
+class LogTopicHandler(logging.Handler):
+    def __init__(self, topic_name, pulsar_client):
+        logging.Handler.__init__(self)
+        Log.info("Setting up producer for log topic %s" % topic_name)
+        self.producer = pulsar_client.create_producer(
+            str(topic_name),
+            block_if_queue_full=True,
+            batching_enabled=True,
+            batching_max_publish_delay_ms=100,
+            compression_type=pulsar._pulsar.CompressionType.LZ4)
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.producer.send_async(str(msg).encode('utf-8'), None)
+
 
 def mkdir_p(path):
-  try:
-    os.makedirs(path, exist_ok=True)  # Python>3.2
-  except TypeError:
     try:
-      os.makedirs(path)
-    except OSError as exc: # Python >2.5
-      if exc.errno == errno.EEXIST and os.path.isdir(path):
-        pass
-      else: raise
+        os.makedirs(path, exist_ok=True)  # Python>3.2
+    except TypeError:
+        try:
+            os.makedirs(path)
+        except OSError as exc:  # Python >2.5
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+            else:
+                raise
+
 
 # logging handler that is RotatingFileHandler but creates path to log file for you
 # if it doesn't exist
 class CreatePathRotatingFileHandler(logging.handlers.RotatingFileHandler):
-  def __init__(self, filename, mode='a', maxBytes=10 * 1024 * 1024, backupCount=5, encoding=None, delay=0):
-    mkdir_p(os.path.dirname(filename))
-    logging.handlers.RotatingFileHandler.__init__(self, filename, mode=mode, maxBytes=maxBytes, backupCount=backupCount, encoding=encoding, delay=delay)
+    def __init__(self, filename, mode='a', maxBytes=10 * 1024 * 1024, backupCount=5, encoding=None, delay=0):
+        mkdir_p(os.path.dirname(filename))
+        logging.handlers.RotatingFileHandler.__init__(self, filename, mode=mode, maxBytes=maxBytes,
+                                                      backupCount=backupCount, encoding=encoding, delay=delay)
+
 
 def remove_all_handlers():
-  retval = None
-  for handler in Log.handlers:
-    Log.handlers.remove(handler)
-    retval = handler
-  return retval
+    retval = None
+    for handler in Log.handlers:
+        Log.handlers.remove(handler)
+        retval = handler
+    return retval
+
 
 def add_handler(stream_handler):
-  log_format = "[%(asctime)s] [%(levelname)s]: %(message)s"
-  formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
-  stream_handler.setFormatter(formatter)
-  Log.addHandler(stream_handler)
+    log_format = "[%(asctime)s] [%(levelname)s]: %(message)s"
+    formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
+    stream_handler.setFormatter(formatter)
+    Log.addHandler(stream_handler)
+
 
 def init_logger(level, logfile, logging_config_file):
-  global Log
-  # get log file location for function instance
-  os.environ['LOG_FILE'] = logfile
-  logging.config.fileConfig(logging_config_file)
-  Log = logging.getLogger()
-  Log.setLevel(level)
+    global Log
+    # get log file location for function instance
+    os.environ['LOG_FILE'] = logfile
+    logging.config.fileConfig(logging_config_file)
+    Log = logging.getLogger()
+    Log.setLevel(level)
 
-  # set print to redirect to logger
-  class StreamToLogger(object):
-    """
-    Fake file-like stream object that redirects writes to a logger instance.
-    """
+    # set print to redirect to logger
+    class StreamToLogger(object):
+        """
+        Fake file-like stream object that redirects writes to a logger instance.
+        """
 
-    def __init__(self, logger, log_level=logging.INFO):
-      self.logger = logger
-      self.log_level = log_level
-      self.linebuf = ''
+        def __init__(self, logger, log_level=logging.INFO):
+            self.logger = logger
+            self.log_level = log_level
+            self.linebuf = ''
 
-    def write(self, buf):
-      for line in buf.rstrip().splitlines():
-        self.logger.log(self.log_level, line.rstrip())
+        def write(self, buf):
+            for line in buf.rstrip().splitlines():
+                self.logger.log(self.log_level, line.rstrip())
 
-    def flush(self):
-      pass
+        def flush(self):
+            pass
 
-  sl = StreamToLogger(Log, logging.INFO)
-  sys.stdout = sl
+    sl = StreamToLogger(Log, logging.INFO)
+    sys.stdout = sl
 
-  sl = StreamToLogger(Log, logging.ERROR)
-  sys.stderr = sl
+    sl = StreamToLogger(Log, logging.ERROR)
+    sys.stderr = sl

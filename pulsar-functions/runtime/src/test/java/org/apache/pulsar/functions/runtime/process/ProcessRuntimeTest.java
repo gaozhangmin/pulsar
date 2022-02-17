@@ -16,18 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.runtime.process;
 
 import static org.apache.pulsar.functions.runtime.RuntimeUtils.FUNCTIONS_INSTANCE_CLASSPATH;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
-
 import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
 import com.google.gson.reflect.TypeToken;
 import com.google.protobuf.util.JsonFormat;
-
+import io.kubernetes.client.openapi.apis.AppsV1Api;
+import io.kubernetes.client.openapi.apis.CoreV1Api;
+import io.kubernetes.client.openapi.models.V1PodSpec;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,10 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import io.kubernetes.client.openapi.apis.AppsV1Api;
-import io.kubernetes.client.openapi.apis.CoreV1Api;
-import io.kubernetes.client.openapi.models.V1PodSpec;
 import org.apache.pulsar.common.util.ObjectMapperFactory;
 import org.apache.pulsar.functions.instance.InstanceConfig;
 import org.apache.pulsar.functions.proto.Function;
@@ -60,70 +56,27 @@ import org.testng.annotations.Test;
  * Unit test of {@link ThreadRuntime}.
  */
 public class ProcessRuntimeTest {
-    private String narExtractionDirectory = "/tmp/foo";
-    private String defaultWebServiceUrl = "http://localhost:8080";
-
-    class TestSecretsProviderConfigurator implements SecretsProviderConfigurator {
-
-        @Override
-        public void init(Map<String, String> config) {
-
-        }
-
-        @Override
-        public String getSecretsProviderClassName(FunctionDetails functionDetails) {
-            if (functionDetails.getRuntime() == FunctionDetails.Runtime.JAVA) {
-                return ClearTextSecretsProvider.class.getName();
-            } else {
-                return "secretsprovider.ClearTextSecretsProvider";
-            }
-        }
-
-        @Override
-        public Map<String, String> getSecretsProviderConfig(FunctionDetails functionDetails) {
-            Map<String, String> config = new HashMap<>();
-            config.put("Config", "Value");
-            return config;
-        }
-
-        @Override
-        public void configureKubernetesRuntimeSecretsProvider(V1PodSpec podSpec, String functionsContainerName, FunctionDetails functionDetails) {
-        }
-
-        @Override
-        public void configureProcessRuntimeSecretsProvider(ProcessBuilder processBuilder, FunctionDetails functionDetails) {
-        }
-
-        @Override
-        public Type getSecretObjectType() {
-            return TypeToken.get(String.class).getType();
-        }
-
-        @Override
-        public void doAdmissionChecks(AppsV1Api appsV1Api, CoreV1Api coreV1Api, String jobNamespace, String jobName, FunctionDetails functionDetails) {
-
-        }
-    }
-
     private static final String TEST_TENANT = "test-function-tenant";
     private static final String TEST_NAMESPACE = "test-function-namespace";
     private static final String TEST_NAME = "test-function-container";
     private static final Map<String, String> topicsToSerDeClassName = new HashMap<>();
     private static final Map<String, ConsumerSpec> topicsToSchema = new HashMap<>();
+
     static {
         topicsToSerDeClassName.put("persistent://sample/standalone/ns1/test_src", "");
         topicsToSchema.put("persistent://sample/standalone/ns1/test_src",
                 ConsumerSpec.newBuilder().setSerdeClassName("").setIsRegexPattern(false).build());
     }
 
-    private ProcessRuntimeFactory factory;
     private final String userJarFile;
     private final String javaInstanceJarFile;
     private final String pythonInstanceFile;
     private final String pulsarServiceUrl;
     private final String stateStorageServiceUrl;
     private final String logDirectory;
-
+    private String narExtractionDirectory = "/tmp/foo";
+    private String defaultWebServiceUrl = "http://localhost:8080";
+    private ProcessRuntimeFactory factory;
     public ProcessRuntimeTest() {
         this.userJarFile = "/Users/user/UserJar.jar";
         this.javaInstanceJarFile = "/Users/user/JavaInstance.jar";
@@ -172,7 +125,8 @@ public class ProcessRuntimeTest {
         workerConfig.setFunctionRuntimeFactoryClassName(ProcessRuntimeFactory.class.getName());
         workerConfig.setFunctionRuntimeFactoryConfigs(
                 ObjectMapperFactory.getThreadLocal().convertValue(processRuntimeFactoryConfig, Map.class));
-        processRuntimeFactory.initialize(workerConfig, null, new TestSecretsProviderConfigurator(), Mockito.mock(ConnectorsManager.class), Optional.empty(), Optional.empty());
+        processRuntimeFactory.initialize(workerConfig, null, new TestSecretsProviderConfigurator(),
+                Mockito.mock(ConnectorsManager.class), Optional.empty(), Optional.empty());
 
         return processRuntimeFactory;
     }
@@ -309,7 +263,7 @@ public class ProcessRuntimeTest {
             portArg = 25;
             metricsPortArg = 27;
         } else {
-            assertEquals(args.size(), totalArgCount-1);
+            assertEquals(args.size(), totalArgCount - 1);
             extraDepsEnv = "";
             portArg = 24;
             metricsPortArg = 26;
@@ -326,17 +280,20 @@ public class ProcessRuntimeTest {
                 + extraDepsEnv
                 + " -Dpulsar.functions.instance.classpath=/pulsar/lib/*"
                 + " -Dlog4j.configurationFile=java_instance_log4j2.xml "
-                + "-Dpulsar.function.log.dir=" + logDirectory + "/functions/" + FunctionCommon.getFullyQualifiedName(config.getFunctionDetails())
+                + "-Dpulsar.function.log.dir=" + logDirectory + "/functions/" +
+                FunctionCommon.getFullyQualifiedName(config.getFunctionDetails())
                 + " -Dpulsar.function.log.file=" + config.getFunctionDetails().getName() + "-" + config.getInstanceId()
                 + " -Dio.netty.tryReflectionSetAccessible=true"
                 + " org.apache.pulsar.functions.instance.JavaInstanceMain"
                 + " --jar " + userJarFile + " --instance_id "
                 + config.getInstanceId() + " --function_id " + config.getFunctionId()
                 + " --function_version " + config.getFunctionVersion()
-                + " --function_details '" + JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
+                + " --function_details '" +
+                JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
                 + "' --pulsar_serviceurl " + pulsarServiceUrl
                 + pulsarAdminArg
-                + " --max_buffered_tuples 1024 --port " + args.get(portArg) + " --metrics_port " + args.get(metricsPortArg)
+                + " --max_buffered_tuples 1024 --port " + args.get(portArg) + " --metrics_port " +
+                args.get(metricsPortArg)
                 + " --pending_async_requests 200"
                 + " --state_storage_serviceurl " + stateStorageServiceUrl
                 + " --expected_healthcheck_interval 30"
@@ -383,7 +340,8 @@ public class ProcessRuntimeTest {
                 + " --logging_config_file " + args.get(configArg) + " --instance_id "
                 + config.getInstanceId() + " --function_id " + config.getFunctionId()
                 + " --function_version " + config.getFunctionVersion()
-                + " --function_details '" + JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
+                + " --function_details '" +
+                JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
                 + "' --pulsar_serviceurl " + pulsarServiceUrl
                 + " --max_buffered_tuples 1024 --port " + args.get(portArg)
                 + " --metrics_port " + args.get(metricsPortArg)
@@ -429,6 +387,51 @@ public class ProcessRuntimeTest {
         factory = createProcessRuntimeFactory(null, null, false);
 
         verifyJavaInstance(config, null, null);
+    }
+
+    class TestSecretsProviderConfigurator implements SecretsProviderConfigurator {
+
+        @Override
+        public void init(Map<String, String> config) {
+
+        }
+
+        @Override
+        public String getSecretsProviderClassName(FunctionDetails functionDetails) {
+            if (functionDetails.getRuntime() == FunctionDetails.Runtime.JAVA) {
+                return ClearTextSecretsProvider.class.getName();
+            } else {
+                return "secretsprovider.ClearTextSecretsProvider";
+            }
+        }
+
+        @Override
+        public Map<String, String> getSecretsProviderConfig(FunctionDetails functionDetails) {
+            Map<String, String> config = new HashMap<>();
+            config.put("Config", "Value");
+            return config;
+        }
+
+        @Override
+        public void configureKubernetesRuntimeSecretsProvider(V1PodSpec podSpec, String functionsContainerName,
+                                                              FunctionDetails functionDetails) {
+        }
+
+        @Override
+        public void configureProcessRuntimeSecretsProvider(ProcessBuilder processBuilder,
+                                                           FunctionDetails functionDetails) {
+        }
+
+        @Override
+        public Type getSecretObjectType() {
+            return TypeToken.get(String.class).getType();
+        }
+
+        @Override
+        public void doAdmissionChecks(AppsV1Api appsV1Api, CoreV1Api coreV1Api, String jobNamespace, String jobName,
+                                      FunctionDetails functionDetails) {
+
+        }
     }
 
 }

@@ -26,6 +26,15 @@ import org.apache.pulsar.common.configuration.FieldContext;
 @Accessors(chain = true)
 public class ThreadRuntimeFactoryConfig {
 
+    @FieldContext(
+            doc = "The name of thread group running function threads"
+    )
+    protected String threadGroupName;
+    @FieldContext(
+            doc = "Memory limit set for the pulsar client used by all instances"
+    )
+    protected MemoryLimit pulsarClientMemoryLimit;
+
     @Data
     @Accessors(chain = true)
     /**
@@ -42,14 +51,4 @@ public class ThreadRuntimeFactoryConfig {
         )
         Double percentOfMaxDirectMemory;
     }
-
-    @FieldContext(
-        doc = "The name of thread group running function threads"
-    )
-    protected String threadGroupName;
-
-    @FieldContext(
-            doc = "Memory limit set for the pulsar client used by all instances"
-    )
-    protected MemoryLimit pulsarClientMemoryLimit;
 }

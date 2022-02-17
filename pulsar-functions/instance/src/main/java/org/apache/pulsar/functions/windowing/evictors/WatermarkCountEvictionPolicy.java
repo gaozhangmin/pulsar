@@ -18,13 +18,12 @@
  */
 package org.apache.pulsar.functions.windowing.evictors;
 
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.pulsar.functions.windowing.Event;
 import org.apache.pulsar.functions.windowing.EvictionContext;
 import org.apache.pulsar.functions.windowing.EvictionPolicy;
-import org.apache.commons.lang3.tuple.Pair;
-
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 /**
  * An eviction policy that tracks count based on watermark ts and
@@ -34,12 +33,11 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
  */
 public class WatermarkCountEvictionPolicy<T>
         implements EvictionPolicy<T, Pair<Long, Long>> {
+    private static final AtomicLongFieldUpdater<WatermarkCountEvictionPolicy> PROCESSED_UPDATER =
+            AtomicLongFieldUpdater.newUpdater(WatermarkCountEvictionPolicy.class, "processed");
     protected final int threshold;
     protected final AtomicLong currentCount;
     private EvictionContext context;
-
-    private static final AtomicLongFieldUpdater<WatermarkCountEvictionPolicy> PROCESSED_UPDATER =
-            AtomicLongFieldUpdater.newUpdater(WatermarkCountEvictionPolicy.class, "processed");
     private volatile long processed;
 
     public WatermarkCountEvictionPolicy(int count) {

@@ -86,13 +86,6 @@ public class SchedulerManagerTest {
     private ErrorNotifier errorNotifier;
     private PulsarClient pulsarClient;
 
-    // Ops on the drain map used in this UT.
-    enum DrainOps {
-        GetDrainStatus,  // get drain status of a worker
-        SetDrainStatus,  // set the status of a worker
-        ClearDrainMap    // clear the entire thing
-    };
-
     @BeforeMethod
     public void setup() {
         WorkerConfig workerConfig = new WorkerConfig();
@@ -135,7 +128,7 @@ public class SchedulerManagerTest {
                 .newSingleThreadScheduledExecutor(new DefaultThreadFactory("worker-test"));
         errorNotifier = spy(ErrorNotifier.getDefaultImpl());
         schedulerManager = spy(new SchedulerManager(workerConfig, pulsarClient,
-          null, mock(WorkerStatsManager.class), errorNotifier));
+                null, mock(WorkerStatsManager.class), errorNotifier));
         functionRuntimeManager = mock(FunctionRuntimeManager.class);
         functionMetaDataManager = mock(FunctionMetaDataManager.class);
         membershipManager = mock(MembershipManager.class);
@@ -145,6 +138,8 @@ public class SchedulerManagerTest {
         schedulerManager.setMembershipManager(membershipManager);
         schedulerManager.setLeaderService(leaderService);
     }
+
+    ;
 
     @AfterMethod(alwaysRun = true)
     public void stop() {
@@ -366,7 +361,8 @@ public class SchedulerManagerTest {
         Assert.assertEquals(0, send.length);
 
         // make sure we also directly deleted the assignment from the in memory assignment cache in function runtime manager
-        verify(functionRuntimeManager, times(1)).deleteAssignment(eq(FunctionCommon.getFullyQualifiedInstanceId(assignment2.getInstance())));
+        verify(functionRuntimeManager, times(1))
+                .deleteAssignment(eq(FunctionCommon.getFullyQualifiedInstanceId(assignment2.getInstance())));
     }
 
     @Test
@@ -430,7 +426,8 @@ public class SchedulerManagerTest {
         Assert.assertEquals(assignments, assignment2);
 
         // updating assignments
-        currentAssignments.get("worker-1").put(FunctionCommon.getFullyQualifiedInstanceId(assignment2.getInstance()), assignment2);
+        currentAssignments.get("worker-1")
+                .put(FunctionCommon.getFullyQualifiedInstanceId(assignment2.getInstance()), assignment2);
 
         // scale up
 
@@ -469,7 +466,7 @@ public class SchedulerManagerTest {
         Set<Assignment> allAssignments = Sets.newHashSet();
         invocations.forEach(invocation -> {
             try {
-                allAssignments.add(Assignment.parseFrom((byte[])invocation.getRawArguments()[0]));
+                allAssignments.add(Assignment.parseFrom((byte[]) invocation.getRawArguments()[0]));
             } catch (InvalidProtocolBufferException e) {
                 throw new RuntimeException(e);
             }
@@ -544,7 +541,7 @@ public class SchedulerManagerTest {
         Set<Assignment> allAssignments = Sets.newHashSet();
         invocations.forEach(invocation -> {
             try {
-                allAssignments.add(Assignment.parseFrom((byte[])invocation.getRawArguments()[0]));
+                allAssignments.add(Assignment.parseFrom((byte[]) invocation.getRawArguments()[0]));
             } catch (InvalidProtocolBufferException e) {
                 throw new RuntimeException(e);
             }
@@ -577,9 +574,12 @@ public class SchedulerManagerTest {
         verify(functionRuntimeManager, times(1)).processAssignment(eq(assignment2_3));
 
         // updating assignments
-        currentAssignments.get("worker-1").put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_1.getInstance()), assignment2_1);
-        currentAssignments.get("worker-1").put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance()), assignment2_2);
-        currentAssignments.get("worker-1").put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_3.getInstance()), assignment2_3);
+        currentAssignments.get("worker-1")
+                .put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_1.getInstance()), assignment2_1);
+        currentAssignments.get("worker-1")
+                .put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance()), assignment2_2);
+        currentAssignments.get("worker-1")
+                .put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_3.getInstance()), assignment2_3);
 
         // scale down
 
@@ -608,7 +608,7 @@ public class SchedulerManagerTest {
         Set<Assignment> allAssignments2 = Sets.newHashSet();
         invocations.forEach(invocation -> {
             try {
-                allAssignments2.add(Assignment.parseFrom((byte[])invocation.getRawArguments()[0]));
+                allAssignments2.add(Assignment.parseFrom((byte[]) invocation.getRawArguments()[0]));
             } catch (InvalidProtocolBufferException e) {
                 throw new RuntimeException(e);
             }
@@ -618,8 +618,10 @@ public class SchedulerManagerTest {
 
         // make sure we also directly removed the assignment from the in memory assignment cache in function runtime manager
         verify(functionRuntimeManager, times(2)).deleteAssignment(anyString());
-        verify(functionRuntimeManager, times(1)).deleteAssignment(eq(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance())));
-        verify(functionRuntimeManager, times(1)).deleteAssignment(eq(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance())));
+        verify(functionRuntimeManager, times(1))
+                .deleteAssignment(eq(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance())));
+        verify(functionRuntimeManager, times(1))
+                .deleteAssignment(eq(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance())));
 
         verify(functionRuntimeManager, times(4)).processAssignment(any());
         verify(functionRuntimeManager, times(1)).processAssignment(eq(assignment2Scaled));
@@ -671,7 +673,7 @@ public class SchedulerManagerTest {
                 Object.class));
         invocations.forEach(invocation -> {
             try {
-                Assignment assignment = Assignment.parseFrom((byte[])invocation.getRawArguments()[0]);
+                Assignment assignment = Assignment.parseFrom((byte[]) invocation.getRawArguments()[0]);
                 String functionName = assignment.getInstance().getFunctionMetaData().getFunctionDetails().getName();
                 String assignedWorkerId = assignment.getWorkerId();
                 Assert.assertEquals(functionName, assignedWorkerId);
@@ -751,7 +753,7 @@ public class SchedulerManagerTest {
         Set<Assignment> allAssignments = Sets.newHashSet();
         invocations.forEach(invocation -> {
             try {
-                allAssignments.add(Assignment.parseFrom((byte[])invocation.getRawArguments()[0]));
+                allAssignments.add(Assignment.parseFrom((byte[]) invocation.getRawArguments()[0]));
             } catch (InvalidProtocolBufferException e) {
                 throw new RuntimeException(e);
             }
@@ -769,9 +771,12 @@ public class SchedulerManagerTest {
         verify(functionRuntimeManager, times(1)).processAssignment(eq(assignment2_3));
 
         // updating assignments
-        currentAssignments.get("worker-1").put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_1.getInstance()), assignment2_1);
-        currentAssignments.get("worker-1").put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance()), assignment2_2);
-        currentAssignments.get("worker-1").put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_3.getInstance()), assignment2_3);
+        currentAssignments.get("worker-1")
+                .put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_1.getInstance()), assignment2_1);
+        currentAssignments.get("worker-1")
+                .put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_2.getInstance()), assignment2_2);
+        currentAssignments.get("worker-1")
+                .put(FunctionCommon.getFullyQualifiedInstanceId(assignment2_3.getInstance()), assignment2_3);
 
         // update field
 
@@ -811,7 +816,7 @@ public class SchedulerManagerTest {
         Set<Assignment> allAssignments2 = Sets.newHashSet();
         invocations.forEach(invocation -> {
             try {
-                allAssignments2.add(Assignment.parseFrom((byte[])invocation.getRawArguments()[0]));
+                allAssignments2.add(Assignment.parseFrom((byte[]) invocation.getRawArguments()[0]));
             } catch (InvalidProtocolBufferException e) {
                 throw new RuntimeException(e);
             }
@@ -982,7 +987,7 @@ public class SchedulerManagerTest {
     }
 
     @Test
-    public void testGetDrainStatus() throws Exception{
+    public void testGetDrainStatus() throws Exception {
         // Clear the drain status map in the SchedulerManager; all other parameters are don't care for a clear.
         callGetDrainStatus(null, DrainOps.ClearDrainMap,
                 SchedulerManager.DrainOpStatus.DrainCompleted);
@@ -1141,5 +1146,12 @@ public class SchedulerManagerTest {
             }
         }
         return ret;
+    }
+
+    // Ops on the drain map used in this UT.
+    enum DrainOps {
+        GetDrainStatus,  // get drain status of a worker
+        SetDrainStatus,  // set the status of a worker
+        ClearDrainMap    // clear the entire thing
     }
 }

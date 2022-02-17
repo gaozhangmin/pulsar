@@ -35,9 +35,9 @@ public interface StateManager extends AutoCloseable {
     /**
      * Get the state store with the given name.
      *
-     * @param tenant the state store tenant.
+     * @param tenant    the state store tenant.
      * @param namespace the state store namespace.
-     * @param name the state store name.
+     * @param name      the state store name.
      * @return the state store with the given name.
      */
     StateStore getStore(String tenant, String namespace, String name);

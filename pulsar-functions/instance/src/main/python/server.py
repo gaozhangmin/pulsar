@@ -22,44 +22,45 @@
 
 """python_instance.py: Python Instance for running python functions
 """
-from concurrent import futures
-from log import Log
 import grpc
+from concurrent import futures
 
 import InstanceCommunication_pb2_grpc
+from log import Log
+
 
 class InstanceCommunicationServicer(InstanceCommunication_pb2_grpc.InstanceControlServicer):
-  """Provides methods that implement functionality of route guide server."""
+    """Provides methods that implement functionality of route guide server."""
 
-  def __init__(self, pyinstance):
-    self.pyinstance = pyinstance
+    def __init__(self, pyinstance):
+        self.pyinstance = pyinstance
 
-  def GetFunctionStatus(self, request, context):
-    Log.debug("Came in GetFunctionStatus")
-    return self.pyinstance.get_function_status()
+    def GetFunctionStatus(self, request, context):
+        Log.debug("Came in GetFunctionStatus")
+        return self.pyinstance.get_function_status()
 
-  def GetAndResetMetrics(self, request, context):
-    Log.debug("Came in GetAndResetMetrics")
-    return self.pyinstance.get_and_reset_metrics()
+    def GetAndResetMetrics(self, request, context):
+        Log.debug("Came in GetAndResetMetrics")
+        return self.pyinstance.get_and_reset_metrics()
 
-  def ResetMetrics(self, request, context):
-    Log.debug("Came in ResetMetrics")
-    self.pyinstance.reset_metrics()
-    return request
+    def ResetMetrics(self, request, context):
+        Log.debug("Came in ResetMetrics")
+        self.pyinstance.reset_metrics()
+        return request
 
-  def GetMetrics(self, request, context):
-    Log.debug("Came in GetMetrics")
-    return self.pyinstance.get_metrics()
+    def GetMetrics(self, request, context):
+        Log.debug("Came in GetMetrics")
+        return self.pyinstance.get_metrics()
 
-  def HealthCheck(self, request, context):
-    return self.pyinstance.health_check()
+    def HealthCheck(self, request, context):
+        return self.pyinstance.health_check()
 
 
 def serve(port, pyinstance):
-  server_instance = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-  InstanceCommunication_pb2_grpc.add_InstanceControlServicer_to_server(
-    InstanceCommunicationServicer(pyinstance), server_instance)
-  server_instance.add_insecure_port('[::]:%d' % port)
-  Log.info("Serving InstanceCommunication on port %d" % int(port))
-  server_instance.start()
-  return server_instance
+    server_instance = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    InstanceCommunication_pb2_grpc.add_InstanceControlServicer_to_server(
+        InstanceCommunicationServicer(pyinstance), server_instance)
+    server_instance.add_insecure_port('[::]:%d' % port)
+    Log.info("Serving InstanceCommunication on port %d" % int(port))
+    server_instance.start()
+    return server_instance

@@ -21,10 +21,11 @@
 
 from pulsar import Function
 
+
 # Example function that does not return any value
 class VoidFunction(Function):
-  def __init__(self):
-    pass
+    def __init__(self):
+        pass
 
-  def process(self, input, context):
-    return
+    def process(self, input, context):
+        return

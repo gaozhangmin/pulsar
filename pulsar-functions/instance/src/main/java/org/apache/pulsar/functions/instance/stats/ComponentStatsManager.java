@@ -32,40 +32,20 @@ import org.apache.pulsar.functions.proto.InstanceCommunication;
 @Slf4j
 public abstract class ComponentStatsManager implements AutoCloseable {
 
-    protected String[] metricsLabels;
-
-    protected ScheduledFuture<?> scheduledFuture;
-
-    protected final FunctionCollectorRegistry collectorRegistry;
-
-    protected final EvictingQueue EMPTY_QUEUE = EvictingQueue.create(0);
-
     public static final String USER_METRIC_PREFIX = "user_metric_";
-
-    public static final String[] metricsLabelNames = {"tenant", "namespace", "name", "instance_id", "cluster", "fqfn"};
-
-    protected static final String[] exceptionMetricsLabelNames;
+    public static final String[] METRICS_LABEL_NAMES = {"tenant", "namespace", "name", "instance_id", "cluster",
+            "fqfn"};
+    protected static final String[] EXCEPTION_METRICS_LABEL_NAMES;
 
     static {
-        exceptionMetricsLabelNames = Arrays.copyOf(metricsLabelNames, metricsLabelNames.length + 1);
-        exceptionMetricsLabelNames[metricsLabelNames.length] = "error";
+        EXCEPTION_METRICS_LABEL_NAMES = Arrays.copyOf(METRICS_LABEL_NAMES, METRICS_LABEL_NAMES.length + 1);
+        EXCEPTION_METRICS_LABEL_NAMES[METRICS_LABEL_NAMES.length] = "error";
     }
 
-    public static ComponentStatsManager getStatsManager(FunctionCollectorRegistry collectorRegistry,
-                                  String[] metricsLabels,
-                                  ScheduledExecutorService scheduledExecutorService,
-                                  Function.FunctionDetails.ComponentType componentType) {
-        switch (componentType) {
-            case FUNCTION:
-                return new FunctionStatsManager(collectorRegistry, metricsLabels, scheduledExecutorService);
-            case SOURCE:
-                return new SourceStatsManager(collectorRegistry, metricsLabels, scheduledExecutorService);
-            case SINK:
-                return new SinkStatsManager(collectorRegistry, metricsLabels, scheduledExecutorService);
-            default:
-                throw new RuntimeException("Unknown component type: " + componentType);
-        }
-    }
+    protected final FunctionCollectorRegistry collectorRegistry;
+    protected final EvictingQueue emptyQueue = EvictingQueue.create(0);
+    protected String[] metricsLabels;
+    protected ScheduledFuture<?> scheduledFuture;
 
     public ComponentStatsManager(FunctionCollectorRegistry collectorRegistry,
                                  String[] metricsLabels,
@@ -83,6 +63,22 @@ public abstract class ComponentStatsManager implements AutoCloseable {
         }, 1, 1, TimeUnit.MINUTES);
     }
 
+    public static ComponentStatsManager getStatsManager(FunctionCollectorRegistry collectorRegistry,
+                                                        String[] metricsLabels,
+                                                        ScheduledExecutorService scheduledExecutorService,
+                                                        Function.FunctionDetails.ComponentType componentType) {
+        switch (componentType) {
+            case FUNCTION:
+                return new FunctionStatsManager(collectorRegistry, metricsLabels, scheduledExecutorService);
+            case SOURCE:
+                return new SourceStatsManager(collectorRegistry, metricsLabels, scheduledExecutorService);
+            case SINK:
+                return new SinkStatsManager(collectorRegistry, metricsLabels, scheduledExecutorService);
+            default:
+                throw new RuntimeException("Unknown component type: " + componentType);
+        }
+    }
+
     public abstract void reset();
 
     public abstract void incrTotalReceived();
@@ -96,8 +92,6 @@ public abstract class ComponentStatsManager implements AutoCloseable {
     public abstract void incrSourceExceptions(Throwable userException);
 
     public abstract void incrSinkExceptions(Throwable userException);
-
-    public abstract void setLastInvocation(long ts);
 
     public abstract void processTimeStart();
 
@@ -113,6 +107,8 @@ public abstract class ComponentStatsManager implements AutoCloseable {
 
     public abstract double getLastInvocation();
 
+    public abstract void setLastInvocation(long ts);
+
     public abstract double getAvgProcessLatency();
 
     public abstract double getTotalProcessedSuccessfully1min();
@@ -125,13 +121,17 @@ public abstract class ComponentStatsManager implements AutoCloseable {
 
     public abstract double getAvgProcessLatency1min();
 
-    public abstract EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestUserExceptions();
+    public abstract
+    EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestUserExceptions();
 
-    public abstract EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSystemExceptions();
+    public abstract
+    EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSystemExceptions();
 
-    public abstract EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSourceExceptions();
+    public abstract
+    EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSourceExceptions();
 
-    public abstract EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSinkExceptions();
+    public abstract
+    EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSinkExceptions();
 
     public String getStatsAsString() throws IOException {
         StringWriter outputWriter = new StringWriter();

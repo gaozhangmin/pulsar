@@ -18,26 +18,6 @@
  */
 package org.apache.pulsar.functions.windowing;
 
-import com.google.gson.Gson;
-import org.apache.pulsar.client.api.TypedMessageBuilder;
-import org.apache.pulsar.functions.api.Context;
-import org.apache.pulsar.functions.api.Record;
-
-import org.apache.pulsar.common.functions.WindowConfig;
-import org.apache.pulsar.functions.api.WindowContext;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
-
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doReturn;
@@ -46,53 +26,28 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
+import com.google.gson.Gson;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import org.apache.pulsar.client.api.TypedMessageBuilder;
+import org.apache.pulsar.common.functions.WindowConfig;
+import org.apache.pulsar.functions.api.Context;
+import org.apache.pulsar.functions.api.Record;
+import org.apache.pulsar.functions.api.WindowContext;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 /**
  * Unit tests for {@link WindowFunctionExecutor}
  */
 public class WindowFunctionExecutorTest {
-
-    private static class TestWindowFunctionExecutor extends WindowFunctionExecutor<Long, Long> {
-
-        List<Window<Record<Long>>> windows = new ArrayList<>();
-
-        @Override
-        public Long process(Window<Record<Long>> inputWindow, WindowContext context) throws Exception {
-            windows.add(inputWindow);
-            return null;
-        }
-    }
-
-    private static class TestFunction implements Function<Collection<Long>, Long> {
-
-        @Override
-        public Long apply(Collection<Long> longs) {
-            return null;
-        }
-    }
-
-    private static class TestWrongFunction implements Function<Long, Long> {
-
-        @Override
-        public Long apply(Long aLong) {
-            return null;
-        }
-    }
-
-    private static class TestTimestampExtractor implements TimestampExtractor<Long> {
-        @Override
-        public long extractTimestamp(Long input) {
-            return input;
-        }
-    }
-
-    private static class TestWrongTimestampExtractor implements TimestampExtractor<String> {
-        @Override
-        public long extractTimestamp(String input) {
-            return Long.parseLong(input);
-        }
-    }
-
 
     private TestWindowFunctionExecutor testWindowedPulsarFunction;
     private Context context;
@@ -118,7 +73,8 @@ public class WindowFunctionExecutorTest {
         // trigger manually to avoid timing issues
         windowConfig.setWatermarkEmitIntervalMs(100000L);
         windowConfig.setActualWindowFunctionClassName(TestFunction.class.getName());
-        doReturn(Optional.of(new Gson().fromJson(new Gson().toJson(windowConfig), Map.class))).when(context).getUserConfigValue(WindowConfig.WINDOW_CONFIG_KEY);
+        doReturn(Optional.of(new Gson().fromJson(new Gson().toJson(windowConfig), Map.class))).when(context)
+                .getUserConfigValue(WindowConfig.WINDOW_CONFIG_KEY);
 
         doReturn(Collections.singleton("test-source-topic")).when(context).getInputTopics();
         doReturn("test-sink-topic").when(context).getOutputTopic();
@@ -164,15 +120,18 @@ public class WindowFunctionExecutorTest {
         Window<Record<Long>> first = testWindowedPulsarFunction.windows.get(0);
         assertArrayEquals(
                 new long[]{603, 605, 607},
-                new long[]{first.get().get(0).getValue(), first.get().get(1).getValue(), first.get().get(2).getValue()});
+                new long[]{first.get().get(0).getValue(), first.get().get(1).getValue(),
+                        first.get().get(2).getValue()});
 
         Window<Record<Long>> second = testWindowedPulsarFunction.windows.get(1);
         assertArrayEquals(
                 new long[]{603, 605, 607, 618},
-                new long[]{second.get().get(0).getValue(), second.get().get(1).getValue(), second.get().get(2).getValue(), second.get().get(3).getValue()});
+                new long[]{second.get().get(0).getValue(), second.get().get(1).getValue(),
+                        second.get().get(2).getValue(), second.get().get(3).getValue()});
 
         Window<Record<Long>> third = testWindowedPulsarFunction.windows.get(2);
-        assertArrayEquals(new long[]{618, 626}, new long[]{third.get().get(0).getValue(), third.get().get(1).getValue()});
+        assertArrayEquals(new long[]{618, 626},
+                new long[]{third.get().get(0).getValue(), third.get().get(1).getValue()});
     }
 
     @Test
@@ -229,5 +188,46 @@ public class WindowFunctionExecutorTest {
         }
         System.out.println(testWindowedPulsarFunction.windows);
         long event = events.get(events.size() - 1);
+    }
+
+    private static class TestWindowFunctionExecutor extends WindowFunctionExecutor<Long, Long> {
+
+        List<Window<Record<Long>>> windows = new ArrayList<>();
+
+        @Override
+        public Long process(Window<Record<Long>> inputWindow, WindowContext context) throws Exception {
+            windows.add(inputWindow);
+            return null;
+        }
+    }
+
+    private static class TestFunction implements Function<Collection<Long>, Long> {
+
+        @Override
+        public Long apply(Collection<Long> longs) {
+            return null;
+        }
+    }
+
+    private static class TestWrongFunction implements Function<Long, Long> {
+
+        @Override
+        public Long apply(Long aLong) {
+            return null;
+        }
+    }
+
+    private static class TestTimestampExtractor implements TimestampExtractor<Long> {
+        @Override
+        public long extractTimestamp(Long input) {
+            return input;
+        }
+    }
+
+    private static class TestWrongTimestampExtractor implements TimestampExtractor<String> {
+        @Override
+        public long extractTimestamp(String input) {
+            return Long.parseLong(input);
+        }
     }
 }

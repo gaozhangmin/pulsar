@@ -22,7 +22,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.doAnswer;
-
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.SettableFuture;
 import java.time.Duration;
@@ -51,6 +50,105 @@ import org.mockito.stubbing.Answer;
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
 public class MockExecutorController {
+
+    @Getter
+    private final MockClock clock = new MockClock();
+    private final List<DeferredTask> deferredTasks = Lists.newArrayList();
+
+    private static Answer<ScheduledFuture<?>> answerAtFixedRate(MockExecutorController controller, int numTimes) {
+        return invocationOnMock -> {
+            Runnable task = invocationOnMock.getArgument(0);
+            long initialDelay = invocationOnMock.getArgument(1);
+            long delay = invocationOnMock.getArgument(2);
+            TimeUnit unit = invocationOnMock.getArgument(3);
+
+            DeferredTask deferredTask = null;
+            for (int i = 0; i < numTimes; i++) {
+                long delayMs = unit.toMillis(initialDelay) + i * unit.toMillis(delay);
+
+                deferredTask = controller.addDelayedTask(
+                        controller,
+                        delayMs,
+                        task);
+            }
+            return deferredTask;
+        };
+    }
+
+    private static Answer<ScheduledFuture<?>> answerDelay(MockExecutorController executor) {
+        return invocationOnMock -> {
+
+            Runnable task = invocationOnMock.getArgument(0);
+            long value = invocationOnMock.getArgument(1);
+            TimeUnit unit = invocationOnMock.getArgument(2);
+            DeferredTask deferredTask = executor.addDelayedTask(executor, unit.toMillis(value), task);
+            if (value <= 0) {
+                task.run();
+                FutureUtils.complete(deferredTask.future, null);
+            }
+            return deferredTask;
+        };
+    }
+
+    private static Answer<Future<?>> answerNow() {
+        return invocationOnMock -> {
+
+            Runnable task = invocationOnMock.getArgument(0);
+            task.run();
+            SettableFuture<Void> future = SettableFuture.create();
+            future.set(null);
+            return future;
+        };
+    }
+
+    public MockExecutorController controlSubmit(ScheduledExecutorService service) {
+        doAnswer(answerNow()).when(service).submit(any(Runnable.class));
+        return this;
+    }
+
+    public MockExecutorController controlExecute(ScheduledExecutorService service) {
+        doAnswer(answerNow()).when(service).execute(any(Runnable.class));
+        return this;
+    }
+
+    public MockExecutorController controlSchedule(ScheduledExecutorService service) {
+        doAnswer(answerDelay(this)).when(service).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+        return this;
+    }
+
+    public MockExecutorController controlScheduleAtFixedRate(ScheduledExecutorService service,
+                                                             int maxInvocations) {
+        doAnswer(answerAtFixedRate(this, maxInvocations))
+                .when(service)
+                .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
+        return this;
+    }
+
+    private DeferredTask addDelayedTask(
+            MockExecutorController executor,
+            long delayTimeMs,
+            Runnable task) {
+        checkArgument(delayTimeMs >= 0);
+        DeferredTask deferredTask = new DeferredTask(task, delayTimeMs);
+        executor.deferredTasks.add(deferredTask);
+        return deferredTask;
+    }
+
+    public void advance(Duration duration) {
+        clock.advance(duration);
+        Iterator<DeferredTask> entries = deferredTasks.iterator();
+        List<DeferredTask> toExecute = Lists.newArrayList();
+        while (entries.hasNext()) {
+            DeferredTask next = entries.next();
+            if (next.getDelay(TimeUnit.MILLISECONDS) <= 0) {
+                entries.remove();
+                toExecute.add(next);
+            }
+        }
+        for (DeferredTask task : toExecute) {
+            task.run();
+        }
+    }
 
     @Data
     private class DeferredTask implements ScheduledFuture<Void> {
@@ -110,105 +208,6 @@ public class MockExecutorController {
             FutureUtils.complete(future, null);
         }
 
-    }
-
-    @Getter
-    private final MockClock clock = new MockClock();
-    private final List<DeferredTask> deferredTasks = Lists.newArrayList();
-
-    public MockExecutorController controlSubmit(ScheduledExecutorService service) {
-        doAnswer(answerNow()).when(service).submit(any(Runnable.class));
-        return this;
-    }
-
-    public MockExecutorController controlExecute(ScheduledExecutorService service) {
-        doAnswer(answerNow()).when(service).execute(any(Runnable.class));
-        return this;
-    }
-
-    public MockExecutorController controlSchedule(ScheduledExecutorService service) {
-        doAnswer(answerDelay(this)).when(service).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
-        return this;
-    }
-
-    public MockExecutorController controlScheduleAtFixedRate(ScheduledExecutorService service,
-                                                             int maxInvocations) {
-        doAnswer(answerAtFixedRate(this, maxInvocations))
-            .when(service)
-            .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
-        return this;
-    }
-
-    private static Answer<ScheduledFuture<?>> answerAtFixedRate(MockExecutorController controller, int numTimes) {
-        return invocationOnMock -> {
-            Runnable task = invocationOnMock.getArgument(0);
-            long initialDelay = invocationOnMock.getArgument(1);
-            long delay = invocationOnMock.getArgument(2);
-            TimeUnit unit = invocationOnMock.getArgument(3);
-
-            DeferredTask deferredTask = null;
-            for (int i = 0; i < numTimes; i++) {
-                long delayMs = unit.toMillis(initialDelay) + i * unit.toMillis(delay);
-
-                deferredTask = controller.addDelayedTask(
-                    controller,
-                    delayMs,
-                    task);
-            }
-            return deferredTask;
-        };
-    }
-
-    private static Answer<ScheduledFuture<?>> answerDelay(MockExecutorController executor) {
-        return invocationOnMock -> {
-
-           Runnable task = invocationOnMock.getArgument(0);
-           long value = invocationOnMock.getArgument(1);
-           TimeUnit unit = invocationOnMock.getArgument(2);
-           DeferredTask deferredTask = executor.addDelayedTask(executor, unit.toMillis(value), task);
-           if (value <= 0) {
-               task.run();
-               FutureUtils.complete(deferredTask.future, null);
-           }
-           return deferredTask;
-       };
-    }
-
-    private static Answer<Future<?>> answerNow() {
-        return invocationOnMock -> {
-
-           Runnable task = invocationOnMock.getArgument(0);
-           task.run();
-           SettableFuture<Void> future = SettableFuture.create();
-           future.set(null);
-           return future;
-       };
-    }
-
-    private DeferredTask addDelayedTask(
-            MockExecutorController executor,
-            long delayTimeMs,
-            Runnable task) {
-        checkArgument(delayTimeMs >= 0);
-        DeferredTask deferredTask = new DeferredTask(task, delayTimeMs);
-        executor.deferredTasks.add(deferredTask);
-        return deferredTask;
-    }
-
-    public void advance(Duration duration) {
-        clock.advance(duration);
-        Iterator<DeferredTask> entries = deferredTasks.iterator();
-        List<DeferredTask> toExecute = Lists.newArrayList();
-        while (entries.hasNext()) {
-            DeferredTask next = entries.next();
-            if (next.getDelay(TimeUnit.MILLISECONDS) <= 0) {
-                entries.remove();
-                toExecute.add(next);
-            }
-        }
-        for (DeferredTask task : toExecute) {
-            task.run();
-        }
     }
 
 }

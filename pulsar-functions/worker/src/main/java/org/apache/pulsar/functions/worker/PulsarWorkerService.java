@@ -80,15 +80,7 @@ import org.slf4j.LoggerFactory;
 public class PulsarWorkerService implements WorkerService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PulsarWorkerService.class);
-
-    public interface PulsarClientCreator {
-
-        PulsarAdmin newPulsarAdmin(String pulsarServiceUrl, WorkerConfig workerConfig);
-
-        PulsarClient newPulsarClient(String pulsarServiceUrl, WorkerConfig workerConfig);
-
-    }
-
+    private final PulsarClientCreator clientCreator;
     private WorkerConfig workerConfig;
 
     private PulsarClient client;
@@ -121,8 +113,6 @@ public class PulsarWorkerService implements WorkerService {
     private Sources<PulsarWorkerService> sources;
     private Workers<PulsarWorkerService> workers;
 
-    private final PulsarClientCreator clientCreator;
-
     public PulsarWorkerService() {
         this.clientCreator = new PulsarClientCreator() {
             @Override
@@ -130,12 +120,12 @@ public class PulsarWorkerService implements WorkerService {
                 // using isBrokerClientAuthenticationEnabled instead of isAuthenticationEnabled in function-worker
                 if (workerConfig.isBrokerClientAuthenticationEnabled()) {
                     return WorkerUtils.getPulsarAdminClient(
-                        pulsarServiceUrl,
-                        workerConfig.getBrokerClientAuthenticationPlugin(),
-                        workerConfig.getBrokerClientAuthenticationParameters(),
-                        workerConfig.getBrokerClientTrustCertsFilePath(),
-                        workerConfig.isTlsAllowInsecureConnection(),
-                        workerConfig.isTlsEnableHostnameVerification());
+                            pulsarServiceUrl,
+                            workerConfig.getBrokerClientAuthenticationPlugin(),
+                            workerConfig.getBrokerClientAuthenticationParameters(),
+                            workerConfig.getBrokerClientTrustCertsFilePath(),
+                            workerConfig.isTlsAllowInsecureConnection(),
+                            workerConfig.isTlsEnableHostnameVerification());
                 } else {
                     return WorkerUtils.getPulsarAdminClient(
                             pulsarServiceUrl,
@@ -152,13 +142,13 @@ public class PulsarWorkerService implements WorkerService {
                 // using isBrokerClientAuthenticationEnabled instead of isAuthenticationEnabled in function-worker
                 if (workerConfig.isBrokerClientAuthenticationEnabled()) {
                     return WorkerUtils.getPulsarClient(
-                        pulsarServiceUrl,
-                        workerConfig.getBrokerClientAuthenticationPlugin(),
-                        workerConfig.getBrokerClientAuthenticationParameters(),
-                        workerConfig.isUseTls(),
-                        workerConfig.getBrokerClientTrustCertsFilePath(),
-                        workerConfig.isTlsAllowInsecureConnection(),
-                        workerConfig.isTlsEnableHostnameVerification());
+                            pulsarServiceUrl,
+                            workerConfig.getBrokerClientAuthenticationPlugin(),
+                            workerConfig.getBrokerClientAuthenticationParameters(),
+                            workerConfig.isUseTls(),
+                            workerConfig.getBrokerClientTrustCertsFilePath(),
+                            workerConfig.isTlsAllowInsecureConnection(),
+                            workerConfig.isTlsEnableHostnameVerification());
                 } else {
                     return WorkerUtils.getPulsarClient(
                             pulsarServiceUrl,
@@ -175,35 +165,6 @@ public class PulsarWorkerService implements WorkerService {
 
     public PulsarWorkerService(PulsarClientCreator clientCreator) {
         this.clientCreator = clientCreator;
-    }
-
-    @Override
-    public void generateFunctionsStats(SimpleTextOutputStream out) {
-        FunctionsStatsGenerator.generate(
-            this, out
-        );
-    }
-
-    public void init(WorkerConfig workerConfig,
-                     URI dlogUri,
-                     boolean runAsStandalone) {
-        this.statsUpdater = Executors
-            .newSingleThreadScheduledExecutor(new DefaultThreadFactory("worker-stats-updater"));
-        this.metricsGenerator = new MetricsGenerator(this.statsUpdater, workerConfig);
-        this.workerConfig = workerConfig;
-        this.dlogUri = dlogUri;
-        this.workerStatsManager = new WorkerStatsManager(workerConfig, runAsStandalone);
-        this.functions = new FunctionsImpl(() -> PulsarWorkerService.this);
-        this.functionsV2 = new FunctionsImplV2(() -> PulsarWorkerService.this);
-        this.sinks = new SinksImpl(() -> PulsarWorkerService.this);
-        this.sources = new SourcesImpl(() -> PulsarWorkerService.this);
-        this.workers = new WorkerImpl(() -> PulsarWorkerService.this);
-    }
-
-    @Override
-    public void initAsStandalone(WorkerConfig workerConfig) throws Exception {
-        URI dlogUri = initializeStandaloneWorkerService(clientCreator, workerConfig);
-        init(workerConfig, dlogUri, true);
     }
 
     private static URI initializeStandaloneWorkerService(PulsarClientCreator clientCreator,
@@ -286,6 +247,44 @@ public class PulsarWorkerService implements WorkerService {
         return dlogURI;
     }
 
+    private static Policies createFunctionsNamespacePolicies(String pulsarFunctionsCluster) {
+        Policies policies = new Policies();
+        policies.retention_policies = new RetentionPolicies(-1, -1);
+        policies.replication_clusters = Collections.singleton(pulsarFunctionsCluster);
+        // override inactive_topic_policies so that it's always disabled
+        policies.inactive_topic_policies = new InactiveTopicPolicies();
+        return policies;
+    }
+
+    @Override
+    public void generateFunctionsStats(SimpleTextOutputStream out) {
+        FunctionsStatsGenerator.generate(
+                this, out
+        );
+    }
+
+    public void init(WorkerConfig workerConfig,
+                     URI dlogUri,
+                     boolean runAsStandalone) {
+        this.statsUpdater = Executors
+                .newSingleThreadScheduledExecutor(new DefaultThreadFactory("worker-stats-updater"));
+        this.metricsGenerator = new MetricsGenerator(this.statsUpdater, workerConfig);
+        this.workerConfig = workerConfig;
+        this.dlogUri = dlogUri;
+        this.workerStatsManager = new WorkerStatsManager(workerConfig, runAsStandalone);
+        this.functions = new FunctionsImpl(() -> PulsarWorkerService.this);
+        this.functionsV2 = new FunctionsImplV2(() -> PulsarWorkerService.this);
+        this.sinks = new SinksImpl(() -> PulsarWorkerService.this);
+        this.sources = new SourcesImpl(() -> PulsarWorkerService.this);
+        this.workers = new WorkerImpl(() -> PulsarWorkerService.this);
+    }
+
+    @Override
+    public void initAsStandalone(WorkerConfig workerConfig) throws Exception {
+        URI dlogUri = initializeStandaloneWorkerService(clientCreator, workerConfig);
+        init(workerConfig, dlogUri, true);
+    }
+
     @Override
     public void initInBroker(ServiceConfiguration brokerConfig,
                              WorkerConfig workerConfig,
@@ -354,7 +353,7 @@ public class PulsarWorkerService implements WorkerService {
         URI dlogURI;
         try {
             // initializing dlog namespace for function worker
-            if (workerConfig.isInitializedDlogMetadata()){
+            if (workerConfig.isInitializedDlogMetadata()) {
                 dlogURI = WorkerUtils.newDlogNamespaceURI(internalConf.getZookeeperServers());
             } else {
                 dlogURI = WorkerUtils.initializeDlogNamespace(internalConf);
@@ -369,15 +368,6 @@ public class PulsarWorkerService implements WorkerService {
         init(workerConfig, dlogURI, false);
 
         LOG.info("Function worker service setup completed");
-    }
-
-    private static Policies createFunctionsNamespacePolicies(String pulsarFunctionsCluster) {
-        Policies policies = new Policies();
-        policies.retention_policies = new RetentionPolicies(-1, -1);
-        policies.replication_clusters = Collections.singleton(pulsarFunctionsCluster);
-        // override inactive_topic_policies so that it's always disabled
-        policies.inactive_topic_policies = new InactiveTopicPolicies();
-        return policies;
     }
 
     private void tryCreateNonPartitionedTopic(final String topic) throws PulsarAdminException {
@@ -432,7 +422,7 @@ public class PulsarWorkerService implements WorkerService {
             final String functionWebServiceUrl = StringUtils.isNotBlank(workerConfig.getFunctionWebServiceUrl())
                     ? workerConfig.getFunctionWebServiceUrl()
                     : (workerConfig.getTlsEnabled()
-                        ? workerConfig.getWorkerWebAddressTls() : workerConfig.getWorkerWebAddress());
+                    ? workerConfig.getWorkerWebAddressTls() : workerConfig.getWorkerWebAddress());
 
             this.brokerAdmin = clientCreator.newPulsarAdmin(workerConfig.getPulsarWebServiceUrl(), workerConfig);
             this.functionAdmin = clientCreator.newPulsarAdmin(functionWebServiceUrl, workerConfig);
@@ -485,13 +475,13 @@ public class PulsarWorkerService implements WorkerService {
             // Start worker early in the worker service init process so that functions don't get re-assigned because
             // initialize operations of FunctionRuntimeManager and FunctionMetadataManger might take a while
             this.leaderService = new LeaderService(this,
-              client,
-              functionAssignmentTailer,
-              schedulerManager,
-              functionRuntimeManager,
-              functionMetaDataManager,
-              membershipManager,
-              errorNotifier);
+                    client,
+                    functionAssignmentTailer,
+                    schedulerManager,
+                    functionRuntimeManager,
+                    functionMetaDataManager,
+                    membershipManager,
+                    errorNotifier);
 
             log.info("/** Start Leader Service **/");
             leaderService.start();
@@ -563,7 +553,7 @@ public class PulsarWorkerService implements WorkerService {
                 clusterServiceCoordinator.addTask("drain-worker-list-probe-periodic-check",
                         workerConfig.getWorkerListProbeIntervalSec() * 1000L,
                         () -> {
-                                schedulerManager.updateWorkerDrainMap();
+                            schedulerManager.updateWorkerDrainMap();
                         });
             }
 
@@ -659,6 +649,14 @@ public class PulsarWorkerService implements WorkerService {
         if (statsUpdater != null) {
             statsUpdater.shutdownNow();
         }
+    }
+
+    public interface PulsarClientCreator {
+
+        PulsarAdmin newPulsarAdmin(String pulsarServiceUrl, WorkerConfig workerConfig);
+
+        PulsarClient newPulsarClient(String pulsarServiceUrl, WorkerConfig workerConfig);
+
     }
 
 }

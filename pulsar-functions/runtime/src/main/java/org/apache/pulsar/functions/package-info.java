@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 /**
  * <i>Pulsar Functions</i> enables lightweight computation in Apache Pulsar.
  */

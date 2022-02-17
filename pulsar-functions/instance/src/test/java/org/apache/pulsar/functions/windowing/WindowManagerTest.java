@@ -16,9 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.windowing;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.functions.windowing.evictors.CountEvictionPolicy;
 import org.apache.pulsar.functions.windowing.evictors.TimeEvictionPolicy;
@@ -32,71 +41,16 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
 
 /**
  * Unit tests for {@link WindowManager}
  */
 @Slf4j
 public class WindowManagerTest {
-    private WindowManager<Integer> windowManager;
-    private Listener listener;
-
     private static final long TIMESTAMP = 1516776194873L;
     private static final String TOPIC = "test-topic";
-
-    private static class Listener implements WindowLifecycleListener<Event<Integer>> {
-        private List<Event<Integer>> onExpiryEvents = Collections.emptyList();
-        private List<Event<Integer>> onActivationEvents = Collections.emptyList();
-        private List<Event<Integer>> onActivationNewEvents = Collections.emptyList();
-        private List<Event<Integer>> onActivationExpiredEvents = Collections.emptyList();
-
-        // all events since last clear
-        private List<List<Event<Integer>>> allOnExpiryEvents = new ArrayList<>();
-        private List<List<Event<Integer>>> allOnActivationEvents = new ArrayList<>();
-        private List<List<Event<Integer>>> allOnActivationNewEvents = new ArrayList<>();
-        private List<List<Event<Integer>>> allOnActivationExpiredEvents = new ArrayList<>();
-
-        @Override
-        public void onExpiry(List<Event<Integer>> events) {
-            onExpiryEvents = events;
-            allOnExpiryEvents.add(events);
-        }
-
-        @Override
-        public void onActivation(List<Event<Integer>> events, List<Event<Integer>> newEvents, List<Event<Integer>>
-                expired, Long timestamp) {
-            onActivationEvents = events;
-            allOnActivationEvents.add(events);
-            onActivationNewEvents = newEvents;
-            allOnActivationNewEvents.add(newEvents);
-            onActivationExpiredEvents = expired;
-            allOnActivationExpiredEvents.add(expired);
-        }
-
-        void clear() {
-            onExpiryEvents = Collections.emptyList();
-            onActivationEvents = Collections.emptyList();
-            onActivationNewEvents = Collections.emptyList();
-            onActivationExpiredEvents = Collections.emptyList();
-
-            allOnExpiryEvents.clear();
-            allOnActivationEvents.clear();
-            allOnActivationNewEvents.clear();
-            allOnActivationExpiredEvents.clear();
-        }
-    }
+    private WindowManager<Integer> windowManager;
+    private Listener listener;
 
     @BeforeMethod
     public void setUp() {
@@ -235,7 +189,7 @@ public class WindowManagerTest {
         /*
          * Don't wait for Timetrigger to fire since this could lead to timing issues in unit tests.
          * Set it to a large value and trigger manually.
-          */
+         */
         TriggerPolicy<Integer, ?> triggerPolicy = new TimeTriggerPolicy<Integer>(Duration.ofDays(1)
                 .toMillis(), windowManager, evictionPolicy, null);
         triggerPolicy.start();
@@ -294,7 +248,6 @@ public class WindowManagerTest {
 
     }
 
-
     @Test
     public void testTimeBasedWindowExpiry() throws Exception {
         EvictionPolicy<Integer, ?> evictionPolicy =
@@ -303,7 +256,7 @@ public class WindowManagerTest {
         /*
          * Don't wait for Timetrigger to fire since this could lead to timing issues in unit tests.
          * Set it to a large value and trigger manually.
-          */
+         */
         TriggerPolicy<Integer, ?> triggerPolicy = new TimeTriggerPolicy<Integer>(Duration.ofDays(1)
                 .toMillis(), windowManager, evictionPolicy, null);
         triggerPolicy.start();
@@ -362,7 +315,6 @@ public class WindowManagerTest {
         assertEquals(seq(4, 6), listener.onActivationNewEvents);
 
     }
-
 
     @Test
     public void testEventTimeBasedWindow() throws Exception {
@@ -835,5 +787,47 @@ public class WindowManagerTest {
             ints.add(new EventImpl<>(i, i, null));
         }
         return ints;
+    }
+
+    private static class Listener implements WindowLifecycleListener<Event<Integer>> {
+        private List<Event<Integer>> onExpiryEvents = Collections.emptyList();
+        private List<Event<Integer>> onActivationEvents = Collections.emptyList();
+        private List<Event<Integer>> onActivationNewEvents = Collections.emptyList();
+        private List<Event<Integer>> onActivationExpiredEvents = Collections.emptyList();
+
+        // all events since last clear
+        private List<List<Event<Integer>>> allOnExpiryEvents = new ArrayList<>();
+        private List<List<Event<Integer>>> allOnActivationEvents = new ArrayList<>();
+        private List<List<Event<Integer>>> allOnActivationNewEvents = new ArrayList<>();
+        private List<List<Event<Integer>>> allOnActivationExpiredEvents = new ArrayList<>();
+
+        @Override
+        public void onExpiry(List<Event<Integer>> events) {
+            onExpiryEvents = events;
+            allOnExpiryEvents.add(events);
+        }
+
+        @Override
+        public void onActivation(List<Event<Integer>> events, List<Event<Integer>> newEvents, List<Event<Integer>>
+                expired, Long timestamp) {
+            onActivationEvents = events;
+            allOnActivationEvents.add(events);
+            onActivationNewEvents = newEvents;
+            allOnActivationNewEvents.add(newEvents);
+            onActivationExpiredEvents = expired;
+            allOnActivationExpiredEvents.add(expired);
+        }
+
+        void clear() {
+            onExpiryEvents = Collections.emptyList();
+            onActivationEvents = Collections.emptyList();
+            onActivationNewEvents = Collections.emptyList();
+            onActivationExpiredEvents = Collections.emptyList();
+
+            allOnExpiryEvents.clear();
+            allOnActivationEvents.clear();
+            allOnActivationNewEvents.clear();
+            allOnActivationExpiredEvents.clear();
+        }
     }
 }

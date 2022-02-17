@@ -34,7 +34,7 @@ public interface StateStoreProvider extends AutoCloseable {
      */
     StateStoreProvider NULL = new StateStoreProvider() {
         @Override
-        public <S extends StateStore> S getStateStore(String tenant, String namespace, String name) {
+        public <T extends StateStore> T getStateStore(String tenant, String namespace, String name) {
             return null;
         }
 
@@ -47,25 +47,25 @@ public interface StateStoreProvider extends AutoCloseable {
     /**
      * Initialize the state store provider.
      *
-     * @param config the config to init the state store provider.
+     * @param config          the config to init the state store provider.
      * @param functionDetails the function details.
      * @throws Exception when failed to init the state store provider.
      */
-    default void init(Map<String, Object> config, FunctionDetails functionDetails) throws Exception {}
+    default void init(Map<String, Object> config, FunctionDetails functionDetails) throws Exception {
+    }
 
     /**
      * Get the state store with the provided store name.
      *
-     * @param tenant the tenant that owns this state store
+     * @param tenant    the tenant that owns this state store
      * @param namespace the namespace that owns this state store
-     * @param name the state store name
-     * @param <S> the type of interface of the store to return
+     * @param name      the state store name
+     * @param <T>       the type of interface of the store to return
      * @return the state store instance.
-     *
      * @throws ClassCastException if the return type isn't a type
-     * or interface of the actual returned store.
+     *                            or interface of the actual returned store.
      */
-    <S extends StateStore> S getStateStore(String tenant, String namespace, String name) throws Exception;
+    <T extends StateStore> T getStateStore(String tenant, String namespace, String name) throws Exception;
 
     @Override
     void close();

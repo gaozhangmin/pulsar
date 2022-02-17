@@ -22,7 +22,6 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -43,10 +42,10 @@ public class MockExecutorControllerTest {
     public void setup() {
         this.executor = mock(ScheduledExecutorService.class);
         this.mockExecutorControl = new MockExecutorController()
-            .controlExecute(executor)
-            .controlSubmit(executor)
-            .controlSchedule(executor)
-            .controlScheduleAtFixedRate(executor, MAX_SCHEDULES);
+                .controlExecute(executor)
+                .controlSubmit(executor)
+                .controlSchedule(executor)
+                .controlScheduleAtFixedRate(executor, MAX_SCHEDULES);
     }
 
     @Test

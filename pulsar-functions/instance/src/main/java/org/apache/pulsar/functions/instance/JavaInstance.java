@@ -41,22 +41,15 @@ import org.apache.pulsar.functions.api.Record;
 @Slf4j
 public class JavaInstance implements AutoCloseable {
 
-    @Data
-    public static class AsyncFuncRequest {
-        private final Record record;
-        private final CompletableFuture processResult;
-    }
-
     @Getter(AccessLevel.PACKAGE)
     private final ContextImpl context;
-    private Function function;
-    private java.util.function.Function javaUtilFunction;
-
     // for Async function max out standing items
     private final InstanceConfig instanceConfig;
     private final ExecutorService executor;
     @Getter
     private final LinkedBlockingQueue<AsyncFuncRequest> pendingAsyncRequests;
+    private Function function;
+    private java.util.function.Function javaUtilFunction;
 
     public JavaInstance(ContextImpl contextImpl, Object userClassObject, InstanceConfig instanceConfig) {
 
@@ -75,7 +68,9 @@ public class JavaInstance implements AutoCloseable {
 
     @VisibleForTesting
     public JavaExecutionResult handleMessage(Record<?> record, Object input) {
-        return handleMessage(record, input, (rec, result) -> {}, cause -> {});
+        return handleMessage(record, input, (rec, result) -> {
+        }, cause -> {
+        });
     }
 
     public JavaExecutionResult handleMessage(Record<?> record, Object input,
@@ -103,7 +98,7 @@ public class JavaInstance implements AutoCloseable {
         if (output instanceof CompletableFuture) {
             // Function is in format: Function<I, CompletableFuture<O>>
             AsyncFuncRequest request = new AsyncFuncRequest(
-                record, (CompletableFuture) output
+                    record, (CompletableFuture) output
             );
             try {
                 pendingAsyncRequests.put(request);
@@ -185,5 +180,11 @@ public class JavaInstance implements AutoCloseable {
 
     public Map<String, Double> getMetrics() {
         return context.getMetrics();
+    }
+
+    @Data
+    public static class AsyncFuncRequest {
+        private final Record record;
+        private final CompletableFuture processResult;
     }
 }

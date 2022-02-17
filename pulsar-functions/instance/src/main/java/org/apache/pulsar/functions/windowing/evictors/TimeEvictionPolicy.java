@@ -65,6 +65,11 @@ public class TimeEvictionPolicy<T> implements EvictionPolicy<T, EvictionContext>
     }
 
     @Override
+    public EvictionContext getContext() {
+        return evictionContext;
+    }
+
+    @Override
     public void setContext(EvictionContext context) {
         EvictionContext prevContext = evictionContext;
         evictionContext = context;
@@ -82,11 +87,6 @@ public class TimeEvictionPolicy<T> implements EvictionPolicy<T, EvictionContext>
                 }
             }
         }
-    }
-
-    @Override
-    public EvictionContext getContext() {
-        return evictionContext;
     }
 
     @Override

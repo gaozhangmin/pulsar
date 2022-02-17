@@ -16,10 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.utils.functioncache;
-
-import org.apache.pulsar.functions.utils.Exceptions;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,13 +25,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.pulsar.functions.utils.Exceptions;
 
 /**
  * An implementation of {@link FunctionCacheManager}.
  */
 public class FunctionCacheManagerImpl implements FunctionCacheManager {
 
-    /** Registered Functions **/
+    /** Registered Functions. **/
     private final Map<String, FunctionCacheEntry> cacheFunctions;
 
     private ClassLoader rootClassLoader;
@@ -54,13 +52,11 @@ public class FunctionCacheManagerImpl implements FunctionCacheManager {
             throw new IllegalArgumentException("FunctionID not set");
         }
 
-        synchronized (cacheFunctions) {
-            FunctionCacheEntry entry = cacheFunctions.get(fid);
-            if (entry == null) {
-                throw new IllegalStateException("No dependencies are registered for function " + fid);
-            }
-            return entry.getClassLoader();
+        FunctionCacheEntry entry = cacheFunctions.get(fid);
+        if (entry == null) {
+            throw new IllegalStateException("No dependencies are registered for function " + fid);
         }
+        return entry.getClassLoader();
     }
 
     @Override
@@ -73,86 +69,80 @@ public class FunctionCacheManagerImpl implements FunctionCacheManager {
             throw new NullPointerException("FunctionID not set");
         }
 
-        synchronized (cacheFunctions) {
-            FunctionCacheEntry entry = cacheFunctions.get(fid);
+        FunctionCacheEntry entry = cacheFunctions.get(fid);
 
-            if (null == entry) {
-                URL[] urls = new URL[requiredJarFiles.size() + requiredClasspaths.size()];
-                int count = 0;
-                try {
-                    // add jar files to urls
-                    for (String jarFile : requiredJarFiles) {
-                        urls[count++] = new File(jarFile).toURI().toURL();
-                    }
+        if (null == entry) {
+            URL[] urls = new URL[requiredJarFiles.size() + requiredClasspaths.size()];
+            int count = 0;
+            try {
+                // add jar files to urls
+                for (String jarFile : requiredJarFiles) {
+                    urls[count++] = new File(jarFile).toURI().toURL();
+                }
 
-                    // add classpaths
-                    for (URL url : requiredClasspaths) {
-                        urls[count++] = url;
-                    }
+                // add classpaths
+                for (URL url : requiredClasspaths) {
+                    urls[count++] = url;
+                }
 
-                    cacheFunctions.put(
+                cacheFunctions.put(
                         fid,
                         new FunctionCacheEntry(
-                            requiredJarFiles,
-                            requiredClasspaths,
-                            urls,
-                            eid, rootClassLoader));
-                } catch (Throwable cause) {
-                    Exceptions.rethrowIOException(cause);
-                }
-            } else {
-                entry.register(
+                                requiredJarFiles,
+                                requiredClasspaths,
+                                urls,
+                                eid, rootClassLoader));
+            } catch (Throwable cause) {
+                Exceptions.rethrowIOException(cause);
+            }
+        } else {
+            entry.register(
                     eid,
                     requiredJarFiles,
                     requiredClasspaths);
-            }
         }
     }
 
     @Override
     public void registerFunctionInstanceWithArchive(String fid, String eid,
-                                                    String narArchive, String narExtractionDirectory) throws IOException {
+                                                    String narArchive, String narExtractionDirectory)
+            throws IOException {
         if (fid == null) {
             throw new NullPointerException("FunctionID not set");
         }
 
-        synchronized (cacheFunctions) {
-            FunctionCacheEntry entry = cacheFunctions.get(fid);
+        FunctionCacheEntry entry = cacheFunctions.get(fid);
 
-            if (null != entry) {
-                entry.register(eid, Collections.singleton(narArchive), Collections.emptyList());
-                return;
-            }
+        if (null != entry) {
+            entry.register(eid, Collections.singleton(narArchive), Collections.emptyList());
+            return;
+        }
 
-            // Create new cache entry
-            try {
-                cacheFunctions.put(fid, new FunctionCacheEntry(narArchive, eid, rootClassLoader, narExtractionDirectory));
-            } catch (Throwable cause) {
-                Exceptions.rethrowIOException(cause);
-            }
+        // Create new cache entry
+        try {
+            cacheFunctions
+                    .put(fid, new FunctionCacheEntry(narArchive, eid, rootClassLoader, narExtractionDirectory));
+        } catch (Throwable cause) {
+            Exceptions.rethrowIOException(cause);
         }
     }
 
     @Override
     public void unregisterFunctionInstance(String fid,
                                            String eid) {
-        synchronized (cacheFunctions) {
-            FunctionCacheEntry entry = cacheFunctions.get(fid);
+        FunctionCacheEntry entry = cacheFunctions.get(fid);
 
-            if (null != entry) {
-                if (entry.unregister(eid)) {
-                    cacheFunctions.remove(fid);
-                    entry.close();
-                }
+        if (null != entry) {
+            if (entry.unregister(eid)) {
+                cacheFunctions.remove(fid);
+                entry.close();
             }
         }
     }
 
     @Override
     public void close() {
-        synchronized (cacheFunctions) {
-            cacheFunctions.values().forEach(FunctionCacheEntry::close);
-        }
+        cacheFunctions.values().forEach(FunctionCacheEntry::close);
     }
 
 

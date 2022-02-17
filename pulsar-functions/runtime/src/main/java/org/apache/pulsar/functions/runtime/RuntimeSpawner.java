@@ -28,10 +28,8 @@ import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.pulsar.common.util.FutureUtil;
 import org.apache.pulsar.functions.instance.InstanceCache;
 import org.apache.pulsar.functions.instance.InstanceConfig;
@@ -116,12 +114,12 @@ public class RuntimeSpawner implements AutoCloseable {
             return FutureUtil.failedFuture(new IllegalStateException("Function runtime is not started yet"));
         }
         return runtime.getFunctionStatus(instanceId).thenApply(f -> {
-           FunctionStatus.Builder builder = FunctionStatus.newBuilder();
-           builder.mergeFrom(f).setNumRestarts(numRestarts).setInstanceId(String.valueOf(instanceId));
+            FunctionStatus.Builder builder = FunctionStatus.newBuilder();
+            builder.mergeFrom(f).setNumRestarts(numRestarts).setInstanceId(String.valueOf(instanceId));
             if (!f.getRunning() && runtimeDeathException != null) {
                 builder.setFailureException(runtimeDeathException.getMessage());
             }
-           return builder.build();
+            return builder.build();
         });
     }
 

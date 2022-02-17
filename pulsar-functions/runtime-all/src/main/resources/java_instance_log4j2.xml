@@ -46,7 +46,8 @@
         <RollingFile>
             <name>RollingFile</name>
             <fileName>${sys:pulsar.function.log.dir}/${sys:pulsar.function.log.file}.log</fileName>
-            <filePattern>${sys:pulsar.function.log.dir}/${sys:pulsar.function.log.file}-%d{MM-dd-yyyy}-%i.log.gz</filePattern>
+            <filePattern>${sys:pulsar.function.log.dir}/${sys:pulsar.function.log.file}-%d{MM-dd-yyyy}-%i.log.gz
+            </filePattern>
             <immediateFlush>true</immediateFlush>
             <PatternLayout>
                 <Pattern>%d{ISO8601_OFFSET_DATE_TIME_HHMM} [%t] %-5level %logger{36} - %msg%n</Pattern>
@@ -79,7 +80,8 @@
         <RollingRandomAccessFile>
             <name>BkRollingFile</name>
             <fileName>${sys:pulsar.function.log.dir}/${sys:pulsar.function.log.file}.bk</fileName>
-            <filePattern>${sys:pulsar.function.log.dir}/${sys:pulsar.function.log.file}.bk-%d{MM-dd-yyyy}-%i.log.gz</filePattern>
+            <filePattern>${sys:pulsar.function.log.dir}/${sys:pulsar.function.log.file}.bk-%d{MM-dd-yyyy}-%i.log.gz
+            </filePattern>
             <immediateFlush>true</immediateFlush>
             <PatternLayout>
                 <Pattern>%d{ISO8601_OFFSET_DATE_TIME_HHMM} [%t] %-5level %logger{36} - %msg%n</Pattern>

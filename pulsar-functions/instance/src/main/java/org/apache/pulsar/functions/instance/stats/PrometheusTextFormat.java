@@ -19,13 +19,12 @@
 package org.apache.pulsar.functions.instance.stats;
 
 import io.prometheus.client.Collector;
-
 import java.io.IOException;
 import java.io.Writer;
 import java.util.Enumeration;
 
 /**
- * Provide Prometheus text format for a collection of metrics, without the HELP string
+ * Provide Prometheus text format for a collection of metrics, without the HELP string.
  */
 public class PrometheusTextFormat {
     /**
@@ -64,17 +63,17 @@ public class PrometheusTextFormat {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             switch (c) {
-            case '\\':
-                writer.append("\\\\");
-                break;
-            case '\"':
-                writer.append("\\\"");
-                break;
-            case '\n':
-                writer.append("\\n");
-                break;
-            default:
-                writer.append(c);
+                case '\\':
+                    writer.append("\\\\");
+                    break;
+                case '\"':
+                    writer.append("\\\"");
+                    break;
+                case '\n':
+                    writer.append("\\n");
+                    break;
+                default:
+                    writer.append(c);
             }
         }
     }

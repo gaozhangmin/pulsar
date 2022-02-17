@@ -19,8 +19,8 @@
     under the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
- xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -82,7 +82,7 @@
                         <configuration>
                             <target>
                                 <!-- shade the AsyncHttpClient ahc-default.properties files -->
-                                <replace token= "org.asynchttpclient."
+                                <replace token="org.asynchttpclient."
                                          value="org.apache.pulsar.shade.org.asynchttpclient."
                                          file="${project.build.directory}/classes/org/asynchttpclient/config/ahc-default.properties"/>
                             </target>
@@ -103,8 +103,10 @@
                         <configuration>
                             <minimizeJar>false</minimizeJar>
                             <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.PluginXmlResourceTransformer" />
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.PluginXmlResourceTransformer"/>
                             </transformers>
                             <filters>
                                 <filter>
@@ -130,11 +132,13 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.jute</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.jute</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.jute
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>javax.servlet</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.servlet</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.servlet
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.junit</pattern>
@@ -154,11 +158,13 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>org.reactivestreams</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.reactivestreams</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.reactivestreams
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.commons</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.commons</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.commons
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>io.swagger</pattern>
@@ -170,11 +176,13 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>org.jctools</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.jctools</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.jctools
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.squareup.okhttp</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.squareup.okhttp</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.squareup.okhttp
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>io.grpc</pattern>
@@ -182,7 +190,8 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>io.perfmark</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.perfmark</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.perfmark
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.joda</pattern>
@@ -190,27 +199,33 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>javax.ws.rs</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.ws.rs</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.ws.rs
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>io.kubernetes</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.kubernetes</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.kubernetes
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>io.opencensus</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.opencensus</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.opencensus
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>net.jpountz</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.net.jpountz</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.net.jpountz
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>commons-configuration</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-configuration</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-configuration
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.tukaani</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.tukaani</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.tukaani
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.github</pattern>
@@ -222,7 +237,9 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.distributedlog</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.distributedlog</shadedPattern>
+                                    <shadedPattern>
+                                        org.apache.pulsar.functions.runtime.shaded.org.apache.distributedlog
+                                    </shadedPattern>
                                 </relocation>
                                 <!-- Jackson cannot be shaded, this is causing java.lang.NoSuchMethodError when calling getThreadLocalYaml-->
                                 <!-- <relocation>
@@ -231,15 +248,18 @@
                                 </relocation> -->
                                 <relocation>
                                     <pattern>org.inferred</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.inferred</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.inferred
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.bookkeeper</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.bookkeeper</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.bookkeeper
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.bookkeeper</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.bookkeeper</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.bookkeeper
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>dlshade</pattern>
@@ -252,47 +272,59 @@
                                 </relocation> -->
                                 <relocation>
                                     <pattern>net.java.dev.jna</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.net.java.dev.jna</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.net.java.dev.jna
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.curator</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.curator</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.curator
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>javax.validation</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.validation</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.validation
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>javax.activation</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.activation</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.activation
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>io.prometheus</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.prometheus</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.prometheus
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.zookeeper</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.zookeeper</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.zookeeper
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>io.jsonwebtoken</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.jsonwebtoken</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.io.jsonwebtoken
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>commons-codec</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-codec</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-codec
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.thoughtworks.paranamer</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.thoughtworks.paranamer</shadedPattern>
+                                    <shadedPattern>
+                                        org.apache.pulsar.functions.runtime.shaded.com.thoughtworks.paranamer
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.codehaus.mojo</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.codehaus.mojo</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.codehaus.mojo
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.github.luben</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.github.luben</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.github.luben
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>jline</pattern>
@@ -300,47 +332,58 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>org.xerial.snappy</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.xerial.snappy</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.xerial.snappy
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>javax.annotation</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.annotation</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.javax.annotation
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.checkerframework</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.checkerframework</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.checkerframework
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.yetus</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.yetus</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.yetus
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>commons-cli</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-cli</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-cli
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>commons-lang</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-lang</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-lang
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.squareup.okio</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.squareup.okio</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.squareup.okio
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.rocksdb</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.rocksdb</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.rocksdb
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.objenesis</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.objenesis</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.objenesis
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.eclipse.jetty</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.eclipse.jetty</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.eclipse.jetty
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.avro</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.avro</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.apache.avro
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>avro.shaded</pattern>
@@ -361,7 +404,8 @@
                                 </relocation> -->
                                 <relocation>
                                     <pattern>org.hamcrest</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.hamcrest</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.org.hamcrest
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>aj.org</pattern>
@@ -369,7 +413,8 @@
                                 </relocation>
                                 <relocation>
                                     <pattern>com.scurrilous</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.scurrilous</shadedPattern>
+                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.com.scurrilous
+                                    </shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>okio</pattern>

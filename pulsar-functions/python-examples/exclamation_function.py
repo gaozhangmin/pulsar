@@ -21,11 +21,12 @@
 
 from pulsar import Function
 
+
 # The classic ExclamationFunction that appends an exclamation at the end
 # of the input
 class ExclamationFunction(Function):
-  def __init__(self):
-    pass
+    def __init__(self):
+        pass
 
-  def process(self, input, context):
-    return input + '!'
+    def process(self, input, context):
+        return input + '!'

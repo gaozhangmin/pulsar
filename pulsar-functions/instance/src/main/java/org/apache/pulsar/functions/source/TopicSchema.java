@@ -46,6 +46,11 @@ public class TopicSchema {
 
     public static final String JSR_310_CONVERSION_ENABLED = "jsr310ConversionEnabled";
     public static final String ALWAYS_ALLOW_NULL = "alwaysAllowNull";
+    public static final String DEFAULT_SERDE = "org.apache.pulsar.functions.api.utils.DefaultSerDe";
+    /**
+     * If there is no other information available, use JSON as default schema type.
+     */
+    private static final SchemaType DEFAULT_SCHEMA_TYPE = SchemaType.JSON;
     private final Map<String, Schema<?>> cachedSchemas = new HashMap<>();
     private final PulsarClient client;
 
@@ -53,12 +58,81 @@ public class TopicSchema {
         this.client = client;
     }
 
-    /**
-     * If there is no other information available, use JSON as default schema type.
-     */
-    private static final SchemaType DEFAULT_SCHEMA_TYPE = SchemaType.JSON;
+    private static SchemaType getDefaultSchemaType(Class<?> clazz) {
+        if (byte[].class.equals(clazz)
+                || ByteBuf.class.equals(clazz)
+                || ByteBuffer.class.equals(clazz)) {
+            return SchemaType.NONE;
+        } else if (GenericObject.class.isAssignableFrom(clazz)) {
+            // the function is taking generic record/object, so we do auto schema detection
+            return SchemaType.AUTO_CONSUME;
+        } else if (String.class.equals(clazz)) {
+            // If type is String, then we use schema type string, otherwise we fallback on default schema
+            return SchemaType.STRING;
+        } else if (isProtobufClass(clazz)) {
+            return SchemaType.PROTOBUF;
+        } else if (KeyValue.class.equals(clazz)) {
+            return SchemaType.KEY_VALUE;
+        } else {
+            return DEFAULT_SCHEMA_TYPE;
+        }
+    }
 
-    public static final String DEFAULT_SERDE = "org.apache.pulsar.functions.api.utils.DefaultSerDe";
+    @SuppressWarnings("unchecked")
+    private static <T> Schema<T> newSchemaInstance(Class<T> clazz, SchemaType type) {
+        return newSchemaInstance(clazz, type, new ConsumerConfig());
+    }
+
+    private static <T> Schema<T> newSchemaInstance(Class<T> clazz, SchemaType type, ConsumerConfig conf) {
+        switch (type) {
+            case NONE:
+                if (ByteBuffer.class.isAssignableFrom(clazz)) {
+                    return (Schema<T>) Schema.BYTEBUFFER;
+                } else {
+                    return (Schema<T>) Schema.BYTES;
+                }
+
+            case AUTO_CONSUME:
+            case AUTO:
+                return (Schema<T>) Schema.AUTO_CONSUME();
+
+            case STRING:
+                return (Schema<T>) Schema.STRING;
+
+            case AVRO:
+                return AvroSchema.of(SchemaDefinition.<T>builder()
+                        .withProperties(new HashMap<>(conf.getSchemaProperties()))
+                        .withPojo(clazz).build());
+
+            case JSON:
+                return JSONSchema.of(SchemaDefinition.<T>builder().withPojo(clazz).build());
+
+            case KEY_VALUE:
+                return (Schema<T>) Schema.KV_BYTES();
+
+            case PROTOBUF:
+                return ProtobufSchema.ofGenericClass(clazz, new HashMap<>());
+
+            case PROTOBUF_NATIVE:
+                return ProtobufNativeSchema.ofGenericClass(clazz, new HashMap<>());
+
+            case AUTO_PUBLISH:
+                return (Schema<T>) Schema.AUTO_PRODUCE_BYTES();
+
+            default:
+                throw new RuntimeException("Unsupported schema type" + type);
+        }
+    }
+
+    private static boolean isProtobufClass(Class<?> pojoClazz) {
+        try {
+            Class<?> protobufBaseClass = Class.forName("com.google.protobuf.GeneratedMessageV3");
+            return protobufBaseClass.isAssignableFrom(pojoClazz);
+        } catch (ClassNotFoundException | NoClassDefFoundError e) {
+            // If function does not have protobuf in classpath then it cannot be protobuf
+            return false;
+        }
+    }
 
     public Schema<?> getSchema(String topic, Object object, String schemaTypeOrClassName, boolean input) {
         return getSchema(topic, object.getClass(), schemaTypeOrClassName, input);
@@ -84,17 +158,19 @@ public class TopicSchema {
         return cachedSchemas.computeIfAbsent(topic, t -> newSchemaInstance(clazz, schemaType));
     }
 
-    public Schema<?> getSchema(String topic, Class<?> clazz, String schemaTypeOrClassName, boolean input, ClassLoader classLoader) {
-        return cachedSchemas.computeIfAbsent(topic, t -> newSchemaInstance(topic, clazz, schemaTypeOrClassName, input, classLoader));
+    public Schema<?> getSchema(String topic, Class<?> clazz, String schemaTypeOrClassName, boolean input,
+                               ClassLoader classLoader) {
+        return cachedSchemas.computeIfAbsent(topic,
+                t -> newSchemaInstance(topic, clazz, schemaTypeOrClassName, input, classLoader));
     }
 
-    public Schema<?> getSchema(String topic, Class<?> clazz, ConsumerConfig conf, boolean input, ClassLoader classLoader) {
+    public Schema<?> getSchema(String topic, Class<?> clazz, ConsumerConfig conf, boolean input,
+                               ClassLoader classLoader) {
         return cachedSchemas.computeIfAbsent(topic, t -> newSchemaInstance(topic, clazz, conf, input, classLoader));
     }
 
-
     /**
-     * If the topic is already created, we should be able to fetch the schema type (avro, json, ...)
+     * If the topic is already created, we should be able to fetch the schema type (avro, json, ...).
      */
     private SchemaType getSchemaTypeOrDefault(String topic, Class<?> clazz) {
         if (GenericObject.class.isAssignableFrom(clazz)) {
@@ -118,89 +194,15 @@ public class TopicSchema {
         }
     }
 
-    private static SchemaType getDefaultSchemaType(Class<?> clazz) {
-        if (byte[].class.equals(clazz)
-            || ByteBuf.class.equals(clazz)
-            || ByteBuffer.class.equals(clazz)) {
-            return SchemaType.NONE;
-        } else if (GenericObject.class.isAssignableFrom(clazz)) {
-            // the function is taking generic record/object, so we do auto schema detection
-            return SchemaType.AUTO_CONSUME;
-        } else if (String.class.equals(clazz)) {
-            // If type is String, then we use schema type string, otherwise we fallback on default schema
-            return SchemaType.STRING;
-        } else if (isProtobufClass(clazz)) {
-            return SchemaType.PROTOBUF;
-        } else if (KeyValue.class.equals(clazz)) {
-            return SchemaType.KEY_VALUE;
-        } else {
-            return DEFAULT_SCHEMA_TYPE;
-        }
-    }
-
     @SuppressWarnings("unchecked")
-    private static <T> Schema<T> newSchemaInstance(Class<T> clazz, SchemaType type) {
-        return newSchemaInstance(clazz, type, new ConsumerConfig());
-    }
-
-    private static <T> Schema<T> newSchemaInstance(Class<T> clazz, SchemaType type, ConsumerConfig conf) {
-        switch (type) {
-        case NONE:
-            if (ByteBuffer.class.isAssignableFrom(clazz)) {
-                return (Schema<T>) Schema.BYTEBUFFER;
-            } else {
-                return (Schema<T>) Schema.BYTES;
-            }
-
-        case AUTO_CONSUME:
-        case AUTO:
-            return (Schema<T>) Schema.AUTO_CONSUME();
-
-        case STRING:
-            return (Schema<T>) Schema.STRING;
-
-        case AVRO:
-            return AvroSchema.of(SchemaDefinition.<T>builder()
-                    .withProperties(new HashMap<>(conf.getSchemaProperties()))
-                    .withPojo(clazz).build());
-
-        case JSON:
-            return JSONSchema.of(SchemaDefinition.<T>builder().withPojo(clazz).build());
-
-        case KEY_VALUE:
-            return (Schema<T>)Schema.KV_BYTES();
-
-        case PROTOBUF:
-            return ProtobufSchema.ofGenericClass(clazz, new HashMap<>());
-
-        case PROTOBUF_NATIVE:
-            return ProtobufNativeSchema.ofGenericClass(clazz, new HashMap<>());
-
-        case AUTO_PUBLISH:
-            return (Schema<T>) Schema.AUTO_PRODUCE_BYTES();
-
-        default:
-            throw new RuntimeException("Unsupported schema type" + type);
-        }
-    }
-
-    private static boolean isProtobufClass(Class<?> pojoClazz) {
-        try {
-            Class<?> protobufBaseClass = Class.forName("com.google.protobuf.GeneratedMessageV3");
-            return protobufBaseClass.isAssignableFrom(pojoClazz);
-        } catch (ClassNotFoundException | NoClassDefFoundError e) {
-            // If function does not have protobuf in classpath then it cannot be protobuf
-            return false;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, String schemaTypeOrClassName, boolean input, ClassLoader classLoader){
+    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, String schemaTypeOrClassName, boolean input,
+                                            ClassLoader classLoader) {
         return newSchemaInstance(topic, clazz, new ConsumerConfig(schemaTypeOrClassName), input, classLoader);
     }
 
     @SuppressWarnings("unchecked")
-    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, ConsumerConfig conf, boolean input, ClassLoader classLoader) {
+    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, ConsumerConfig conf, boolean input,
+                                            ClassLoader classLoader) {
         // The schemaTypeOrClassName can represent multiple thing, either a schema type, a schema class name or a ser-de
         // class name.
         String schemaTypeOrClassName = conf.getSchemaType();
@@ -238,7 +240,8 @@ public class TopicSchema {
 
     @SuppressWarnings("unchecked")
     private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, String schemaTypeOrClassName, boolean input) {
-        return newSchemaInstance(topic, clazz, new ConsumerConfig(schemaTypeOrClassName), input, Thread.currentThread().getContextClassLoader());
+        return newSchemaInstance(topic, clazz, new ConsumerConfig(schemaTypeOrClassName), input,
+                Thread.currentThread().getContextClassLoader());
     }
 
     @SuppressWarnings("unchecked")

@@ -49,15 +49,15 @@ public interface WorkerService {
      * @throws Exception when fail to initialize the worker API service.
      */
     void initAsStandalone(WorkerConfig workerConfig)
-        throws Exception;
+            throws Exception;
 
     /**
      * Initialize the worker service in broker.
      *
-     * @param brokerConfig broker config
-     * @param workerConfig worker config
+     * @param brokerConfig    broker config
+     * @param workerConfig    worker config
      * @param pulsarResources configuration metadata-store
-     * @param internalConf pulsar internal configuration data
+     * @param internalConf    pulsar internal configuration data
      * @throws Exception when failed to initialize the worker service in broker.
      */
     void initInBroker(ServiceConfiguration brokerConfig,
@@ -69,8 +69,8 @@ public interface WorkerService {
      * Start the worker API service.
      *
      * @param authenticationService the authentication service.
-     * @param authorizationService the authorization service.
-     * @param errorNotifier error notifier.
+     * @param authorizationService  the authorization service.
+     * @param errorNotifier         error notifier.
      * @throws Exception when fail to start the worker API service.
      */
     void start(AuthenticationService authenticationService,

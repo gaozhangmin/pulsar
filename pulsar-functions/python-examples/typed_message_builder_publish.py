@@ -21,18 +21,21 @@
 import time
 from pulsar import Function
 
+
 # Example function that uses the built in publish function in the context
 # to publish to a desired topic based on config
 class TypedMessageBuilderPublish(Function):
-  def __init__(self):
-    pass
+    def __init__(self):
+        pass
 
-  def process(self, input, context):
-    publish_topic = "publishtopic"
-    if "publish-topic" in context.get_user_config_map():
-      publish_topic = context.get_user_config_value("publish-topic")
-    context.publish(publish_topic, input + '!',
-                    message_conf={"properties": {k: v for d in [{"input_topic" : context.get_current_message_topic_name()}, context.get_message_properties()] for k, v in d.items()},
-                                  "partition_key": context.get_partition_key(),
-                                  "event_timestamp": int(time.time())})
-    return
+    def process(self, input, context):
+        publish_topic = "publishtopic"
+        if "publish-topic" in context.get_user_config_map():
+            publish_topic = context.get_user_config_value("publish-topic")
+        context.publish(publish_topic, input + '!',
+                        message_conf={"properties": {k: v for d in
+                                                     [{"input_topic": context.get_current_message_topic_name()},
+                                                      context.get_message_properties()] for k, v in d.items()},
+                                      "partition_key": context.get_partition_key(),
+                                      "event_timestamp": int(time.time())})
+        return

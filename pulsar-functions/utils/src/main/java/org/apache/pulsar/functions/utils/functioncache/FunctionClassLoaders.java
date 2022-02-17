@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.utils.functioncache;
 
 import java.net.URL;
@@ -26,6 +25,11 @@ import java.net.URLClassLoader;
  * Class loaders for loading function code.
  */
 public class FunctionClassLoaders {
+
+    public static URLClassLoader create(URL[] urls,
+                                        ClassLoader parent) {
+        return new ParentFirstClassLoader(urls, parent);
+    }
 
     /**
      * Class loader that loads from the parent first and only after that from urls.
@@ -39,11 +43,6 @@ public class FunctionClassLoaders {
         public ParentFirstClassLoader(URL[] urls) {
             this(urls, FunctionClassLoaders.class.getClassLoader());
         }
-    }
-
-    public static URLClassLoader create(URL[] urls,
-                                        ClassLoader parent) {
-        return new ParentFirstClassLoader(urls, parent);
     }
 
 }

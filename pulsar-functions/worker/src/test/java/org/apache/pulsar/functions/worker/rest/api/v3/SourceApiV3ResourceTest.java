@@ -41,7 +41,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -105,7 +104,8 @@ public class SourceApiV3ResourceTest {
     private static final String outputSerdeClassName = TopicSchema.DEFAULT_SERDE;
     private static final String TWITTER_FIRE_HOSE = "org.apache.pulsar.io.twitter.TwitterFireHose";
     private static final int parallelism = 1;
-
+    private static NarClassLoader narClassLoader;
+    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
     private PulsarWorkerService mockedWorkerService;
     private PulsarAdmin mockedPulsarAdmin;
     private Tenants mockedTenants;
@@ -124,9 +124,6 @@ public class SourceApiV3ResourceTest {
     private LeaderService mockedLeaderService;
     private Packages mockedPackages;
     private PulsarFunctionTestTemporaryDirectory tempDirectory;
-
-    private static NarClassLoader narClassLoader;
-    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
 
     @BeforeClass
     public void setupNarClassLoader() throws IOException {
@@ -196,7 +193,8 @@ public class SourceApiV3ResourceTest {
     }
 
     private <T> void mockStatic(Class<T> classStatic, Consumer<MockedStatic<T>> consumer) {
-        final MockedStatic<T> mockedStatic = mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
+        final MockedStatic<T> mockedStatic =
+                mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
         consumer.accept(mockedStatic);
     }
 
@@ -555,10 +553,10 @@ public class SourceApiV3ResourceTest {
         try {
             mockWorkerUtils(ctx -> {
                 ctx.when(() ->
-                                WorkerUtils.uploadFileToBookkeeper(
-                                        anyString(),
-                                        any(File.class),
-                                        any(Namespace.class)))
+                        WorkerUtils.uploadFileToBookkeeper(
+                                anyString(),
+                                any(File.class),
+                                any(Namespace.class)))
                         .thenThrow(new IOException("upload failure"));
 
                 ctx.when(() -> WorkerUtils.dumpToTmpFile(any())).thenCallRealMethod();
@@ -583,7 +581,6 @@ public class SourceApiV3ResourceTest {
 
         registerDefaultSource();
     }
-
 
 
     @Test(timeOut = 20000)
@@ -739,7 +736,8 @@ public class SourceApiV3ResourceTest {
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Update contains no change")
     public void testUpdateSourceMissingPackage() throws Exception {
         try {
-            mockStatic(WorkerUtils.class, ctx -> {});
+            mockStatic(WorkerUtils.class, ctx -> {
+            });
 
             testUpdateSourceMissingArguments(
                     tenant,
@@ -761,7 +759,8 @@ public class SourceApiV3ResourceTest {
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Update contains no change")
     public void testUpdateSourceMissingTopicName() throws Exception {
         try {
-            mockStatic(WorkerUtils.class, ctx -> {});
+            mockStatic(WorkerUtils.class, ctx -> {
+            });
 
             testUpdateSourceMissingArguments(
                     tenant,
@@ -877,8 +876,10 @@ public class SourceApiV3ResourceTest {
             Integer parallelism,
             String expectedError) throws Exception {
 
-        mockStatic(ConnectorUtils.class, c -> {});
-        mockStatic(ClassLoaderUtils.class, c -> {});
+        mockStatic(ConnectorUtils.class, c -> {
+        });
+        mockStatic(ClassLoaderUtils.class, c -> {
+        });
         mockStatic(FunctionCommon.class, ctx -> {
             ctx.when(() -> FunctionCommon.createPkgTempFile()).thenCallRealMethod();
             ctx.when(() -> FunctionCommon.getClassLoaderFromPackage(any(), any(), any(), any())).thenCallRealMethod();
@@ -950,9 +951,11 @@ public class SourceApiV3ResourceTest {
         sourceConfig.setTopicName(outputTopic);
         sourceConfig.setSerdeClassName(outputSerdeClassName);
 
-        mockStatic(ConnectorUtils.class, c -> {});
+        mockStatic(ConnectorUtils.class, c -> {
+        });
 
-        mockStatic(ClassLoaderUtils.class, c -> {});
+        mockStatic(ClassLoaderUtils.class, c -> {
+        });
 
         mockStatic(FunctionCommon.class, ctx -> {
             ctx.when(() -> FunctionCommon.createPkgTempFile()).thenCallRealMethod();
@@ -1036,8 +1039,10 @@ public class SourceApiV3ResourceTest {
         sourceConfig.setParallelism(parallelism);
 
         when(mockedManager.containsFunction(eq(tenant), eq(namespace), eq(source))).thenReturn(true);
-        mockStatic(ConnectorUtils.class, c -> {});
-        mockStatic(ClassLoaderUtils.class, c -> {});
+        mockStatic(ConnectorUtils.class, c -> {
+        });
+        mockStatic(ClassLoaderUtils.class, c -> {
+        });
 
         mockStatic(FunctionCommon.class, ctx -> {
             ctx.when(() -> FunctionCommon.extractFileFromPkgURL(any())).thenCallRealMethod();
@@ -1305,21 +1310,21 @@ public class SourceApiV3ResourceTest {
     @Test
     public void testDeregisterFileSourceBKPackageCleanup() throws IOException {
 
-            String packagePath = "file://foo/connector.jar";
+        String packagePath = "file://foo/connector.jar";
 
-            try (final MockedStatic<WorkerUtils> ctx = Mockito.mockStatic(WorkerUtils.class)) {
+        try (final MockedStatic<WorkerUtils> ctx = Mockito.mockStatic(WorkerUtils.class)) {
 
-                when(mockedManager.containsFunction(eq(tenant), eq(namespace), eq(source))).thenReturn(true);
-                when(mockedManager.getFunctionMetaData(eq(tenant), eq(namespace), eq(source)))
-                        .thenReturn(FunctionMetaData.newBuilder().setPackageLocation(
-                                PackageLocationMetaData.newBuilder().setPackagePath(packagePath).build()).build());
+            when(mockedManager.containsFunction(eq(tenant), eq(namespace), eq(source))).thenReturn(true);
+            when(mockedManager.getFunctionMetaData(eq(tenant), eq(namespace), eq(source)))
+                    .thenReturn(FunctionMetaData.newBuilder().setPackageLocation(
+                            PackageLocationMetaData.newBuilder().setPackagePath(packagePath).build()).build());
 
-                deregisterDefaultSource();
-                // if the source has a file url, we shouldn't try to clean it up
-                ctx.verify(() -> {
-                    WorkerUtils.deleteFromBookkeeper(any(), eq(packagePath));
-                }, times(0));
-            }
+            deregisterDefaultSource();
+            // if the source has a file url, we shouldn't try to clean it up
+            ctx.verify(() -> {
+                WorkerUtils.deleteFromBookkeeper(any(), eq(packagePath));
+            }, times(0));
+        }
     }
 
     //

@@ -18,19 +18,17 @@
  */
 package org.apache.pulsar.functions.runtime.kubernetes;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertNull;
 import com.google.gson.Gson;
 import io.kubernetes.client.custom.Quantity;
 import io.kubernetes.client.openapi.models.V1ResourceRequirements;
 import io.kubernetes.client.openapi.models.V1Toleration;
-import org.testng.annotations.Test;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotEquals;
-import static org.testng.Assert.assertNull;
+import org.testng.annotations.Test;
 
 /**
  * Unit test of {@link BasicKubernetesManifestCustomizerTest}.
@@ -63,7 +61,8 @@ public class BasicKubernetesManifestCustomizerTest {
 
     @Test
     public void TestMergeRuntimeOpts() {
-        Map<String, Object> configs = new Gson().fromJson(KubernetesRuntimeTest.createRuntimeCustomizerConfig(), HashMap.class);
+        Map<String, Object> configs =
+                new Gson().fromJson(KubernetesRuntimeTest.createRuntimeCustomizerConfig(), HashMap.class);
         BasicKubernetesManifestCustomizer customizer = new BasicKubernetesManifestCustomizer();
         customizer.initialize(configs);
         BasicKubernetesManifestCustomizer.RuntimeOpts newOpts = new BasicKubernetesManifestCustomizer.RuntimeOpts();

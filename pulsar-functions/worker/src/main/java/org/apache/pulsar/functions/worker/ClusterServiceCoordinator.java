@@ -16,36 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.worker;
 
 import static org.apache.pulsar.common.util.Runnables.catchingAndLoggingThrowables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Supplier;
-
 @Slf4j
 public class ClusterServiceCoordinator implements AutoCloseable {
-
-    @Getter
-    @Setter
-    private static class TimerTaskInfo {
-        private long interval;
-        private Runnable task;
-
-        public TimerTaskInfo(long interval, Runnable task) {
-            this.interval = interval;
-            this.task = task;
-        }
-    }
 
     private final String workerId;
     private final Map<String, TimerTaskInfo> tasks = new HashMap<>();
@@ -58,7 +44,7 @@ public class ClusterServiceCoordinator implements AutoCloseable {
         this.leaderService = leaderService;
         this.isLeader = isLeader;
         this.executor = Executors.newSingleThreadScheduledExecutor(
-            new ThreadFactoryBuilder().setNameFormat("cluster-service-coordinator-timer").build());
+                new ThreadFactoryBuilder().setNameFormat("cluster-service-coordinator-timer").build());
     }
 
     public void addTask(String taskName, long interval, Runnable task) {
@@ -87,5 +73,17 @@ public class ClusterServiceCoordinator implements AutoCloseable {
         log.info("Stopping Cluster Service Coordinator for worker {}", this.workerId);
         this.executor.shutdown();
         log.info("Stopped Cluster Service Coordinator for worker {}", this.workerId);
+    }
+
+    @Getter
+    @Setter
+    private static class TimerTaskInfo {
+        private long interval;
+        private Runnable task;
+
+        public TimerTaskInfo(long interval, Runnable task) {
+            this.interval = interval;
+            this.task = task;
+        }
     }
 }

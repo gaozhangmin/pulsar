@@ -44,7 +44,7 @@ public class WatermarkTimeEvictionPolicy<T> extends TimeEvictionPolicy<T> {
      * scan early.
      *
      * @param windowLength the window length in milliseconds
-     * @param lag the max event lag in milliseconds
+     * @param lag          the max event lag in milliseconds
      */
     public WatermarkTimeEvictionPolicy(long windowLength, long lag) {
         super(windowLength);

@@ -99,14 +99,17 @@ public class SinkApiV3ResourceTest {
     private static final String namespace = "test-namespace";
     private static final String sink = "test-sink";
     private static final Map<String, String> topicsToSerDeClassName = new HashMap<>();
+    private static final String subscriptionName = "test-subscription";
+    private static final String CASSANDRA_STRING_SINK = "org.apache.pulsar.io.cassandra.CassandraStringSink";
+    private static final int parallelism = 1;
+    private static final String SYSTEM_PROPERTY_NAME_CASSANDRA_NAR_FILE_PATH = "pulsar-io-cassandra.nar.path";
+    private static final String SYSTEM_PROPERTY_NAME_TWITTER_NAR_FILE_PATH = "pulsar-io-twitter.nar.path";
+    private static final String SYSTEM_PROPERTY_NAME_INVALID_NAR_FILE_PATH = "pulsar-io-invalid.nar.path";
+    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
 
     static {
         topicsToSerDeClassName.put("persistent://sample/standalone/ns1/test_src", DEFAULT_SERDE);
     }
-
-    private static final String subscriptionName = "test-subscription";
-    private static final String CASSANDRA_STRING_SINK = "org.apache.pulsar.io.cassandra.CassandraStringSink";
-    private static final int parallelism = 1;
 
     private PulsarWorkerService mockedWorkerService;
     private PulsarAdmin mockedPulsarAdmin;
@@ -126,9 +129,6 @@ public class SinkApiV3ResourceTest {
     private LeaderService mockedLeaderService;
     private Packages mockedPackages;
     private PulsarFunctionTestTemporaryDirectory tempDirectory;
-    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
-
-    private static final String SYSTEM_PROPERTY_NAME_CASSANDRA_NAR_FILE_PATH = "pulsar-io-cassandra.nar.path";
 
     public static File getPulsarIOCassandraNar() {
         return new File(Objects.requireNonNull(System.getProperty(SYSTEM_PROPERTY_NAME_CASSANDRA_NAR_FILE_PATH)
@@ -136,15 +136,11 @@ public class SinkApiV3ResourceTest {
                         + SYSTEM_PROPERTY_NAME_CASSANDRA_NAR_FILE_PATH + " system property"));
     }
 
-    private static final String SYSTEM_PROPERTY_NAME_TWITTER_NAR_FILE_PATH = "pulsar-io-twitter.nar.path";
-
     public static File getPulsarIOTwitterNar() {
         return new File(Objects.requireNonNull(System.getProperty(SYSTEM_PROPERTY_NAME_TWITTER_NAR_FILE_PATH)
                 , "pulsar-io-twitter.nar file location must be specified with "
                         + SYSTEM_PROPERTY_NAME_TWITTER_NAR_FILE_PATH + " system property"));
     }
-
-    private static final String SYSTEM_PROPERTY_NAME_INVALID_NAR_FILE_PATH = "pulsar-io-invalid.nar.path";
 
     public static File getPulsarIOInvalidNar() {
         return new File(Objects.requireNonNull(System.getProperty(SYSTEM_PROPERTY_NAME_INVALID_NAR_FILE_PATH)
@@ -217,9 +213,11 @@ public class SinkApiV3ResourceTest {
     }
 
     private <T> void mockStatic(Class<T> classStatic, Consumer<MockedStatic<T>> consumer) {
-        final MockedStatic<T> mockedStatic = mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
+        final MockedStatic<T> mockedStatic =
+                mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
         consumer.accept(mockedStatic);
     }
+
     private void mockWorkerUtils() {
         mockWorkerUtils(null);
     }
@@ -594,11 +592,11 @@ public class SinkApiV3ResourceTest {
         mockInstanceUtils();
         try {
             mockWorkerUtils(ctx -> {
-                    ctx.when(() -> WorkerUtils.uploadFileToBookkeeper(
-                            anyString(),
-                            any(File.class),
-                            any(Namespace.class)))
-                            .thenThrow(new IOException("upload failure"));
+                ctx.when(() -> WorkerUtils.uploadFileToBookkeeper(
+                        anyString(),
+                        any(File.class),
+                        any(Namespace.class)))
+                        .thenThrow(new IOException("upload failure"));
             });
 
             when(mockedManager.containsFunction(eq(tenant), eq(namespace), eq(sink))).thenReturn(false);
@@ -865,7 +863,8 @@ public class SinkApiV3ResourceTest {
                     .thenReturn(CASSANDRA_STRING_SINK);
         });
 
-        mockStatic(ClassLoaderUtils.class, ctx -> {});
+        mockStatic(ClassLoaderUtils.class, ctx -> {
+        });
 
         mockStatic(FunctionCommon.class, ctx -> {
             ctx.when(() -> FunctionCommon.createPkgTempFile()).thenCallRealMethod();
@@ -938,7 +937,8 @@ public class SinkApiV3ResourceTest {
                     .thenReturn(CASSANDRA_STRING_SINK);
         });
 
-        mockStatic(ClassLoaderUtils.class, ctx -> {});
+        mockStatic(ClassLoaderUtils.class, ctx -> {
+        });
 
         mockStatic(FunctionCommon.class, ctx -> {
             ctx.when(() -> FunctionCommon.createPkgTempFile()).thenCallRealMethod();
@@ -946,7 +946,7 @@ public class SinkApiV3ResourceTest {
             ctx.when(() -> FunctionCommon.getSinkType(any())).thenReturn(String.class);
             ctx.when(() -> FunctionCommon.extractNarClassLoader(any(), any())).thenReturn(mock(NarClassLoader.class));
             ctx.when(() -> FunctionCommon
-                            .convertProcessingGuarantee(eq(FunctionConfig.ProcessingGuarantees.ATLEAST_ONCE)))
+                    .convertProcessingGuarantee(eq(FunctionConfig.ProcessingGuarantees.ATLEAST_ONCE)))
                     .thenReturn(ATLEAST_ONCE);
         });
 
@@ -985,9 +985,9 @@ public class SinkApiV3ResourceTest {
             mockWorkerUtils(ctx -> {
                 ctx.when(() -> WorkerUtils.dumpToTmpFile(any())).thenCallRealMethod();
                 ctx.when(() -> WorkerUtils.uploadFileToBookkeeper(
-                                anyString(),
-                                any(File.class),
-                                any(Namespace.class)))
+                        anyString(),
+                        any(File.class),
+                        any(Namespace.class)))
                         .thenThrow(new IOException("upload failure"));
             });
 
@@ -1030,7 +1030,8 @@ public class SinkApiV3ResourceTest {
                     .thenReturn(CASSANDRA_STRING_SINK);
         });
 
-        mockStatic(ClassLoaderUtils.class, ctx -> {});
+        mockStatic(ClassLoaderUtils.class, ctx -> {
+        });
 
         mockStatic(FunctionCommon.class, ctx -> {
             ctx.when(() -> FunctionCommon.extractFileFromPkgURL(any())).thenCallRealMethod();
@@ -1038,7 +1039,7 @@ public class SinkApiV3ResourceTest {
             ctx.when(() -> FunctionCommon.getSinkType(any())).thenReturn(String.class);
             ctx.when(() -> FunctionCommon.extractNarClassLoader(any(), any())).thenReturn(mock(NarClassLoader.class));
             ctx.when(() -> FunctionCommon
-                            .convertProcessingGuarantee(eq(FunctionConfig.ProcessingGuarantees.ATLEAST_ONCE)))
+                    .convertProcessingGuarantee(eq(FunctionConfig.ProcessingGuarantees.ATLEAST_ONCE)))
                     .thenReturn(ATLEAST_ONCE);
         });
 
@@ -1638,9 +1639,9 @@ public class SinkApiV3ResourceTest {
 
         mockStatic(WorkerUtils.class, ctx -> {
             ctx.when(() -> WorkerUtils.uploadFileToBookkeeper(
-                            anyString(),
-                            any(File.class),
-                            any(Namespace.class)))
+                    anyString(),
+                    any(File.class),
+                    any(Namespace.class)))
                     .thenThrow(new RuntimeException(injectedErrMsg));
 
         });

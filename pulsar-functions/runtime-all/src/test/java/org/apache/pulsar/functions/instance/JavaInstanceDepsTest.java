@@ -16,13 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.instance;
-
-import lombok.Cleanup;
-import lombok.extern.slf4j.Slf4j;
-import org.testng.Assert;
-import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,6 +25,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import lombok.Cleanup;
+import lombok.extern.slf4j.Slf4j;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 @Slf4j
 /**
@@ -53,15 +51,16 @@ public class JavaInstanceDepsTest {
     @Test
     public void testInstanceJarDeps() throws IOException {
         File jar = new File("target/java-instance.jar");
-        
+
         @Cleanup
         ZipInputStream zip = new ZipInputStream(jar.toURI().toURL().openStream());
 
         List<String> notAllowedClasses = new LinkedList<>();
-        while(true) {
+        while (true) {
             ZipEntry e = zip.getNextEntry();
-            if (e == null)
+            if (e == null) {
                 break;
+            }
             String name = e.getName();
             if (name.endsWith(".class") && !name.startsWith("META-INF") && !name.equals("module-info.class")) {
                 // The only classes in the java-instance.jar should be org.apache.pulsar, slf4j, and log4j classes

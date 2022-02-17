@@ -20,10 +20,11 @@
 
 from pulsar import Function
 
+
 # Example function that throws an excpetion
 class UserException(Function):
     def __init__(self):
-      pass
+        pass
 
     def process(self, input, context):
-      raise Exception('this will not work')  
+        raise Exception('this will not work')

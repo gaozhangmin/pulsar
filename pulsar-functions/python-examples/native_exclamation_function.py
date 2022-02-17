@@ -19,4 +19,4 @@
 #
 
 def process(input):
-  return input + '!'
+    return input + '!'

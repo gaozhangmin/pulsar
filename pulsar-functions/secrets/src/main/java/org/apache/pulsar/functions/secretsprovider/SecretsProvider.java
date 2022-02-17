@@ -31,7 +31,8 @@ public interface SecretsProvider {
      *
      * @return
      */
-    default void init(Map<String, String> config) {}
+    default void init(Map<String, String> config) {
+    }
 
     /**
      * Fetches a secret.

@@ -19,7 +19,6 @@
 package org.apache.pulsar.functions.worker.service;
 
 import static org.apache.commons.lang3.StringUtils.isEmpty;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -49,7 +48,7 @@ public class WorkerServiceLoader {
      * @throws IOException when fail to load the worker service or get the definition
      */
     public static WorkerServiceDefinition getWorkerServiceDefinition(String narPath, String narExtractionDirectory)
-        throws IOException {
+            throws IOException {
         try (NarClassLoader ncl = NarClassLoaderBuilder.builder()
                 .narFile(new File(narPath))
                 .extractionDirectory(narExtractionDirectory)
@@ -62,7 +61,7 @@ public class WorkerServiceLoader {
         String configStr = ncl.getServiceDefinition(PULSAR_FN_WORKER_DEFINITION_FILE);
 
         return ObjectMapperFactory.getThreadLocalYaml().readValue(
-            configStr, WorkerServiceDefinition.class
+                configStr, WorkerServiceDefinition.class
         );
     }
 
@@ -84,7 +83,7 @@ public class WorkerServiceLoader {
         WorkerServiceDefinition phDef = getWorkerServiceDefinition(ncl);
         if (StringUtils.isBlank(phDef.getHandlerClass())) {
             throw new IOException("Functions Worker Service Nar Package `" + phDef.getName()
-                + "` does NOT provide a functions worker service implementation");
+                    + "` does NOT provide a functions worker service implementation");
         }
 
         try {
@@ -92,7 +91,7 @@ public class WorkerServiceLoader {
             Object handler = handlerClass.getDeclaredConstructor().newInstance();
             if (!(handler instanceof WorkerService)) {
                 throw new IOException("Class " + phDef.getHandlerClass()
-                    + " does not implement worker service interface");
+                        + " does not implement worker service interface");
             }
             WorkerService ph = (WorkerService) handler;
             return new WorkerServiceWithClassLoader(ph, ncl);
@@ -123,14 +122,14 @@ public class WorkerServiceLoader {
      */
     public static WorkerService load(WorkerConfig workerConfig) {
         return load(
-            workerConfig.getFunctionsWorkerServiceNarPackage(),
-            workerConfig.getNarExtractionDirectory());
+                workerConfig.getFunctionsWorkerServiceNarPackage(),
+                workerConfig.getNarExtractionDirectory());
     }
 
     /**
      * Load the worker services for the given <tt>protocol</tt> list.
      *
-     * @param wsNarPackage worker service nar package
+     * @param wsNarPackage           worker service nar package
      * @param narExtractionDirectory the directory to extract nar directory
      * @return the worker service
      */
@@ -142,14 +141,14 @@ public class WorkerServiceLoader {
         WorkerServiceDefinition definition;
         try {
             definition = getWorkerServiceDefinition(
-                wsNarPackage,
-                narExtractionDirectory
+                    wsNarPackage,
+                    narExtractionDirectory
             );
         } catch (IOException ioe) {
             log.error("Failed to get the worker service definition from {}",
-                wsNarPackage, ioe);
+                    wsNarPackage, ioe);
             throw new RuntimeException("Failed to get the worker service definition from "
-                + wsNarPackage, ioe);
+                    + wsNarPackage, ioe);
         }
 
         WorkerServiceMetadata metadata = new WorkerServiceMetadata();

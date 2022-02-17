@@ -21,7 +21,6 @@ package org.apache.pulsar.functions.windowing;
 import static org.apache.pulsar.functions.windowing.EvictionPolicy.Action.EXPIRE;
 import static org.apache.pulsar.functions.windowing.EvictionPolicy.Action.PROCESS;
 import static org.apache.pulsar.functions.windowing.EvictionPolicy.Action.STOP;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -30,9 +29,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
-
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.pulsar.functions.api.Record;
 
 /**
@@ -54,21 +51,21 @@ public class WindowManager<T> implements TriggerHandler {
     protected static final int EXPIRE_EVENTS_THRESHOLD = 100;
 
     protected final Collection<Event<T>> queue;
-    protected EvictionPolicy<T, ?> evictionPolicy;
-    protected TriggerPolicy<T, ?> triggerPolicy;
     protected final WindowLifecycleListener<Event<T>> windowLifecycleListener;
     private final List<Event<T>> expiredEvents;
     private final Set<Event<T>> prevWindowEvents;
     private final AtomicInteger eventsSinceLastExpiry;
     private final ReentrantLock lock;
+    protected EvictionPolicy<T, ?> evictionPolicy;
+    protected TriggerPolicy<T, ?> triggerPolicy;
 
     /**
-     * Constructs a {@link WindowManager}
+     * Constructs a {@link WindowManager}.
      *
      * @param lifecycleListener the {@link WindowLifecycleListener}
-     * @param queue a collection where the events in the window can be enqueued.
-     * <br/>
-     * <b>Note:</b> This collection has to be thread safe.
+     * @param queue             a collection where the events in the window can be enqueued.
+     *                          <br/>
+     *                          <b>Note:</b> This collection has to be thread safe.
      */
     public WindowManager(WindowLifecycleListener<Event<T>> lifecycleListener, Collection<Event<T>> queue) {
         windowLifecycleListener = lifecycleListener;
@@ -91,14 +88,14 @@ public class WindowManager<T> implements TriggerHandler {
      * Add an event into the window, with the given ts as the tracking ts.
      *
      * @param event the event to track
-     * @param ts the timestamp
+     * @param ts    the timestamp
      */
     public void add(T event, long ts, Record<?> record) {
         add(new EventImpl<>(event, ts, record));
     }
 
     /**
-     * Tracks a window event
+     * Tracks a window event.
      *
      * @param windowEvent the window event to track
      */
@@ -125,10 +122,10 @@ public class WindowManager<T> implements TriggerHandler {
 
         lock.lock();
         try {
-    /*
-     * scan the entire window to handle out of order events in
-     * the case of time based windows.
-     */
+            /*
+             * scan the entire window to handle out of order events in
+             * the case of time based windows.
+             */
             windowEvents = scanEvents(true);
             expired = new ArrayList<>(expiredEvents);
             expiredEvents.clear();
@@ -191,7 +188,7 @@ public class WindowManager<T> implements TriggerHandler {
      * if the event should be evicted or not.
      *
      * @param fullScan if set, will scan the entire queue; if not set, will stop
-     * as soon as an event not satisfying the expiration policy is found
+     *                 as soon as an event not satisfying the expiration policy is found
      * @return the list of events to be processed as a part of the current window
      */
     private List<Event<T>> scanEvents(boolean fullScan) {
@@ -234,7 +231,7 @@ public class WindowManager<T> implements TriggerHandler {
      * between the startTs and endTs.
      *
      * @param startTs the start ts (exclusive)
-     * @param endTs the end ts (inclusive)
+     * @param endTs   the end ts (inclusive)
      * @return the earliest event ts between startTs and endTs
      */
     public long getEarliestEventTs(long startTs, long endTs) {
@@ -269,8 +266,8 @@ public class WindowManager<T> implements TriggerHandler {
      * falling between startTs (exclusive) and endTs (inclusive)
      * at each sliding interval counts.
      *
-     * @param startTs the start timestamp (exclusive)
-     * @param endTs the end timestamp (inclusive)
+     * @param startTs      the start timestamp (exclusive)
+     * @param endTs        the end timestamp (inclusive)
      * @param slidingCount the sliding interval count
      * @return the list of event ts
      */

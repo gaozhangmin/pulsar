@@ -22,15 +22,14 @@ import com.google.common.collect.EvictingQueue;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
+import java.util.Arrays;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.common.util.RateLimiter;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
-
-import java.util.Arrays;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Function stats.
@@ -38,11 +37,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Getter
 @Setter
-public class FunctionStatsManager extends ComponentStatsManager{
+public class FunctionStatsManager extends ComponentStatsManager {
 
     public static final String PULSAR_FUNCTION_METRICS_PREFIX = "pulsar_function_";
 
-    /** Declare metric names **/
+    /** Declare metric names. **/
     public static final String PROCESSED_SUCCESSFULLY_TOTAL = "processed_successfully_total";
     public static final String SYSTEM_EXCEPTIONS_TOTAL = "system_exceptions_total";
     public static final String USER_EXCEPTIONS_TOTAL = "user_exceptions_total";
@@ -60,7 +59,7 @@ public class FunctionStatsManager extends ComponentStatsManager{
     public static final String PROCESS_LATENCY_MS_1min = "process_latency_ms_1min";
     public static final String RECEIVED_TOTAL_1min = "received_total_1min";
 
-    /** Declare Prometheus stats **/
+    /** Declare Prometheus stats. **/
 
     final Counter statTotalProcessedSuccessfully;
 
@@ -97,26 +96,26 @@ public class FunctionStatsManager extends ComponentStatsManager{
     final Gauge sinkExceptions;
 
     // As an optimization
-    private final Counter.Child _statTotalProcessedSuccessfully;
-    private final Counter.Child _statTotalSysExceptions;
-    private final Counter.Child _statTotalUserExceptions;
-    private final Summary.Child _statProcessLatency;
-    private final Gauge.Child _statlastInvocation;
-    private final Counter.Child _statTotalRecordsReceived;
-    private Counter.Child _statTotalProcessedSuccessfully1min;
-    private Counter.Child _statTotalSysExceptions1min;
-    private Counter.Child _statTotalUserExceptions1min;
-    private Summary.Child _statProcessLatency1min;
-    private Counter.Child _statTotalRecordsReceived1min;
-
-    @Getter
-    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestUserExceptions = EvictingQueue.create(10);
-    @Getter
-    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestSystemExceptions = EvictingQueue.create(10);
-
+    private final Counter.Child statTotalProcessedSuccessfullyChild;
+    private final Counter.Child statTotalSysExceptionsChild;
+    private final Counter.Child statTotalUserExceptionsChild;
+    private final Summary.Child statProcessLatencyChild;
+    private final Gauge.Child statlastInvocationChild;
+    private final Counter.Child statTotalRecordsReceivedChild;
     private final RateLimiter userExceptionRateLimiter;
-
     private final RateLimiter sysExceptionRateLimiter;
+    private Counter.Child statTotalProcessedSuccessfullyChild1min;
+    private Counter.Child statTotalSysExceptionsChild1min;
+    private Counter.Child statTotalUserExceptionsChild1min;
+    private Summary.Child statProcessLatencyChild1min;
+    private Counter.Child statTotalRecordsReceivedChild1min;
+    @Getter
+    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestUserExceptions =
+            EvictingQueue.create(10);
+    @Getter
+    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestSystemExceptions =
+            EvictingQueue.create(10);
+    private Long processTimeStart;
 
     public FunctionStatsManager(FunctionCollectorRegistry collectorRegistry,
                                 String[] metricsLabels,
@@ -126,140 +125,140 @@ public class FunctionStatsManager extends ComponentStatsManager{
         statTotalProcessedSuccessfully = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + PROCESSED_SUCCESSFULLY_TOTAL,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESSED_SUCCESSFULLY_TOTAL)
-                .help("Total number of messages processed successfully.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalProcessedSuccessfully = statTotalProcessedSuccessfully.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESSED_SUCCESSFULLY_TOTAL)
+                        .help("Total number of messages processed successfully.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalProcessedSuccessfullyChild = statTotalProcessedSuccessfully.labels(metricsLabels);
 
         statTotalSysExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL)
-                .help("Total number of system exceptions.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalSysExceptions = statTotalSysExceptions.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL)
+                        .help("Total number of system exceptions.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalSysExceptionsChild = statTotalSysExceptions.labels(metricsLabels);
 
         statTotalUserExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + USER_EXCEPTIONS_TOTAL,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + USER_EXCEPTIONS_TOTAL)
-                .help("Total number of user exceptions.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalUserExceptions = statTotalUserExceptions.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + USER_EXCEPTIONS_TOTAL)
+                        .help("Total number of user exceptions.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalUserExceptionsChild = statTotalUserExceptions.labels(metricsLabels);
 
         statProcessLatency = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + PROCESS_LATENCY_MS,
                 Summary.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESS_LATENCY_MS)
-                .help("Process latency in milliseconds.")
-                .quantile(0.5, 0.01)
-                .quantile(0.9, 0.01)
-                .quantile(0.99, 0.01)
-                .quantile(0.999, 0.01)
-                .labelNames(metricsLabelNames)
-                .create());
-        _statProcessLatency = statProcessLatency.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESS_LATENCY_MS)
+                        .help("Process latency in milliseconds.")
+                        .quantile(0.5, 0.01)
+                        .quantile(0.9, 0.01)
+                        .quantile(0.99, 0.01)
+                        .quantile(0.999, 0.01)
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statProcessLatencyChild = statProcessLatency.labels(metricsLabels);
 
         statlastInvocation = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + LAST_INVOCATION,
                 Gauge.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + LAST_INVOCATION)
-                .help("The timestamp of the last invocation of the function.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statlastInvocation = statlastInvocation.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + LAST_INVOCATION)
+                        .help("The timestamp of the last invocation of the function.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statlastInvocationChild = statlastInvocation.labels(metricsLabels);
 
         statTotalRecordsReceived = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + RECEIVED_TOTAL,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + RECEIVED_TOTAL)
-                .help("Total number of messages received from source.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalRecordsReceived = statTotalRecordsReceived.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + RECEIVED_TOTAL)
+                        .help("Total number of messages received from source.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalRecordsReceivedChild = statTotalRecordsReceived.labels(metricsLabels);
 
         statTotalProcessedSuccessfully1min = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + PROCESSED_SUCCESSFULLY_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESSED_SUCCESSFULLY_TOTAL_1min)
-                .help("Total number of messages processed successfully in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalProcessedSuccessfully1min = statTotalProcessedSuccessfully1min.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESSED_SUCCESSFULLY_TOTAL_1min)
+                        .help("Total number of messages processed successfully in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalProcessedSuccessfullyChild1min = statTotalProcessedSuccessfully1min.labels(metricsLabels);
 
         statTotalSysExceptions1min = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL_1min)
-                .help("Total number of system exceptions in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalSysExceptions1min = statTotalSysExceptions1min.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL_1min)
+                        .help("Total number of system exceptions in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalSysExceptionsChild1min = statTotalSysExceptions1min.labels(metricsLabels);
 
         statTotalUserExceptions1min = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + USER_EXCEPTIONS_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + USER_EXCEPTIONS_TOTAL_1min)
-                .help("Total number of user exceptions in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalUserExceptions1min = statTotalUserExceptions1min.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + USER_EXCEPTIONS_TOTAL_1min)
+                        .help("Total number of user exceptions in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalUserExceptionsChild1min = statTotalUserExceptions1min.labels(metricsLabels);
 
         statProcessLatency1min = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + PROCESS_LATENCY_MS_1min,
                 Summary.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESS_LATENCY_MS_1min)
-                .help("Process latency in milliseconds in the last 1 minute.")
-                .quantile(0.5, 0.01)
-                .quantile(0.9, 0.01)
-                .quantile(0.99, 0.01)
-                .quantile(0.999, 0.01)
-                .labelNames(metricsLabelNames)
-                .create());
-        _statProcessLatency1min = statProcessLatency1min.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + PROCESS_LATENCY_MS_1min)
+                        .help("Process latency in milliseconds in the last 1 minute.")
+                        .quantile(0.5, 0.01)
+                        .quantile(0.9, 0.01)
+                        .quantile(0.99, 0.01)
+                        .quantile(0.999, 0.01)
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statProcessLatencyChild1min = statProcessLatency1min.labels(metricsLabels);
 
         statTotalRecordsReceived1min = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + RECEIVED_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + RECEIVED_TOTAL_1min)
-                .help("Total number of messages received from source in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
-        _statTotalRecordsReceived1min = statTotalRecordsReceived1min.labels(metricsLabels);
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + RECEIVED_TOTAL_1min)
+                        .help("Total number of messages received from source in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
+        statTotalRecordsReceivedChild1min = statTotalRecordsReceived1min.labels(metricsLabels);
 
         userExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + "user_exception",
                 Gauge.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + "user_exception")
-                .labelNames(exceptionMetricsLabelNames)
-                .help("Exception from user code.")
-                .create());
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + "user_exception")
+                        .labelNames(EXCEPTION_METRICS_LABEL_NAMES)
+                        .help("Exception from user code.")
+                        .create());
         sysExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + "system_exception",
                 Gauge.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + "system_exception")
-                .labelNames(exceptionMetricsLabelNames)
-                .help("Exception from system code.")
-                .create());
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + "system_exception")
+                        .labelNames(EXCEPTION_METRICS_LABEL_NAMES)
+                        .help("Exception from system code.")
+                        .create());
 
         sourceExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + "source_exception",
                 Gauge.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + "source_exception")
-                .labelNames(exceptionMetricsLabelNames)
-                .help("Exception from source.")
-                .create());
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + "source_exception")
+                        .labelNames(EXCEPTION_METRICS_LABEL_NAMES)
+                        .help("Exception from source.")
+                        .create());
 
         sinkExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + "sink_exception",
                 Gauge.build()
-                .name(PULSAR_FUNCTION_METRICS_PREFIX + "sink_exception")
-                .labelNames(exceptionMetricsLabelNames)
-                .help("Exception from sink.")
-                .create());
+                        .name(PULSAR_FUNCTION_METRICS_PREFIX + "sink_exception")
+                        .labelNames(EXCEPTION_METRICS_LABEL_NAMES)
+                        .help("Exception from sink.")
+                        .create());
 
         userExceptionRateLimiter = RateLimiter.builder()
                 .scheduledExecutorService(scheduledExecutorService)
@@ -307,27 +306,27 @@ public class FunctionStatsManager extends ComponentStatsManager{
 
     @Override
     public void incrTotalReceived() {
-        _statTotalRecordsReceived.inc();
-        _statTotalRecordsReceived1min.inc();
+        statTotalRecordsReceivedChild.inc();
+        statTotalRecordsReceivedChild1min.inc();
     }
 
     @Override
     public void incrTotalProcessedSuccessfully() {
-        _statTotalProcessedSuccessfully.inc();
-        _statTotalProcessedSuccessfully1min.inc();
+        statTotalProcessedSuccessfullyChild.inc();
+        statTotalProcessedSuccessfullyChild1min.inc();
     }
 
     @Override
     public void incrSysExceptions(Throwable sysException) {
-        _statTotalSysExceptions.inc();
-        _statTotalSysExceptions1min.inc();
+        statTotalSysExceptionsChild.inc();
+        statTotalSysExceptionsChild1min.inc();
         addSystemException(sysException);
     }
 
     @Override
     public void incrUserExceptions(Throwable userException) {
-        _statTotalUserExceptions.inc();
-        _statTotalUserExceptions1min.inc();
+        statTotalUserExceptionsChild.inc();
+        statTotalUserExceptionsChild1min.inc();
         addUserException(userException);
     }
 
@@ -342,12 +341,6 @@ public class FunctionStatsManager extends ComponentStatsManager{
     }
 
     @Override
-    public void setLastInvocation(long ts) {
-        _statlastInvocation.set(ts);
-    }
-
-    private Long processTimeStart;
-    @Override
     public void processTimeStart() {
         processTimeStart = System.nanoTime();
     }
@@ -356,124 +349,129 @@ public class FunctionStatsManager extends ComponentStatsManager{
     public void processTimeEnd() {
         if (processTimeStart != null) {
             double endTimeMs = ((double) System.nanoTime() - processTimeStart) / 1.0E6D;
-            _statProcessLatency.observe(endTimeMs);
-            _statProcessLatency1min.observe(endTimeMs);
+            statProcessLatencyChild.observe(endTimeMs);
+            statProcessLatencyChild1min.observe(endTimeMs);
         }
     }
 
     @Override
     public double getTotalProcessedSuccessfully() {
-        return _statTotalProcessedSuccessfully.get();
+        return statTotalProcessedSuccessfullyChild.get();
     }
 
     @Override
     public double getTotalRecordsReceived() {
-        return _statTotalRecordsReceived.get();
+        return statTotalRecordsReceivedChild.get();
     }
 
     @Override
     public double getTotalSysExceptions() {
-        return _statTotalSysExceptions.get();
+        return statTotalSysExceptionsChild.get();
     }
 
     @Override
     public double getTotalUserExceptions() {
-        return _statTotalUserExceptions.get();
+        return statTotalUserExceptionsChild.get();
     }
 
     @Override
     public double getLastInvocation() {
-        return _statlastInvocation.get();
+        return statlastInvocationChild.get();
+    }
+
+    @Override
+    public void setLastInvocation(long ts) {
+        statlastInvocationChild.set(ts);
     }
 
     public double getAvgProcessLatency() {
-        return _statProcessLatency.get().count <= 0.0
-                ? 0 : _statProcessLatency.get().sum / _statProcessLatency.get().count;
+        return statProcessLatencyChild.get().count <= 0.0
+                ? 0 : statProcessLatencyChild.get().sum / statProcessLatencyChild.get().count;
     }
 
     public double getProcessLatency50P() {
-        return _statProcessLatency.get().quantiles.get(0.5);
+        return statProcessLatencyChild.get().quantiles.get(0.5);
     }
 
     public double getProcessLatency90P() {
-        return _statProcessLatency.get().quantiles.get(0.9);
+        return statProcessLatencyChild.get().quantiles.get(0.9);
     }
 
     public double getProcessLatency99P() {
-        return _statProcessLatency.get().quantiles.get(0.99);
+        return statProcessLatencyChild.get().quantiles.get(0.99);
     }
 
     public double getProcessLatency99_9P() {
-        return _statProcessLatency.get().quantiles.get(0.999);
+        return statProcessLatencyChild.get().quantiles.get(0.999);
     }
 
     @Override
     public double getTotalProcessedSuccessfully1min() {
-        return _statTotalProcessedSuccessfully1min.get();
+        return statTotalProcessedSuccessfullyChild1min.get();
     }
 
     @Override
     public double getTotalRecordsReceived1min() {
-        return _statTotalRecordsReceived1min.get();
+        return statTotalRecordsReceivedChild1min.get();
     }
 
     @Override
     public double getTotalSysExceptions1min() {
-        return _statTotalSysExceptions1min.get();
+        return statTotalSysExceptionsChild1min.get();
     }
 
     @Override
     public double getTotalUserExceptions1min() {
-        return _statTotalUserExceptions1min.get();
+        return statTotalUserExceptionsChild1min.get();
     }
 
     @Override
     public double getAvgProcessLatency1min() {
-        return _statProcessLatency1min.get().count <= 0.0
-                ? 0 : _statProcessLatency1min.get().sum / _statProcessLatency1min.get().count;
+        return statProcessLatencyChild1min.get().count <= 0.0
+                ? 0 : statProcessLatencyChild1min.get().sum / statProcessLatencyChild1min.get().count;
     }
 
     @Override
     public EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSourceExceptions() {
-        return EMPTY_QUEUE;
+        return emptyQueue;
     }
 
     @Override
     public EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> getLatestSinkExceptions() {
-        return EMPTY_QUEUE;
+        return emptyQueue;
     }
 
     public double getProcessLatency50P1min() {
-        return _statProcessLatency1min.get().quantiles.get(0.5);
+        return statProcessLatencyChild1min.get().quantiles.get(0.5);
     }
 
     public double getProcessLatency90P1min() {
-        return _statProcessLatency1min.get().quantiles.get(0.9);
+        return statProcessLatencyChild1min.get().quantiles.get(0.9);
     }
 
     public double getProcessLatency99P1min() {
-        return _statProcessLatency1min.get().quantiles.get(0.99);
+        return statProcessLatencyChild1min.get().quantiles.get(0.99);
     }
 
     public double getProcessLatency99_9P1min() {
-        return _statProcessLatency1min.get().quantiles.get(0.999);
+        return statProcessLatencyChild1min.get().quantiles.get(0.999);
     }
 
     @Override
     public void reset() {
         statTotalProcessedSuccessfully1min.clear();
-        _statTotalProcessedSuccessfully1min = statTotalProcessedSuccessfully1min.labels(metricsLabels);
+        statTotalProcessedSuccessfullyChild1min = statTotalProcessedSuccessfully1min.labels(metricsLabels);
 
         statTotalSysExceptions1min.clear();
-        _statTotalSysExceptions1min = statTotalSysExceptions1min.labels(metricsLabels);
+        statTotalSysExceptionsChild1min = statTotalSysExceptions1min.labels(metricsLabels);
 
         statTotalUserExceptions1min.clear();
-        _statTotalUserExceptions1min = statTotalUserExceptions1min.labels(metricsLabels);
+        statTotalUserExceptionsChild1min = statTotalUserExceptions1min.labels(metricsLabels);
 
         statProcessLatency1min.clear();
-        _statProcessLatency1min = statProcessLatency1min.labels(metricsLabels);
+        statProcessLatencyChild1min = statProcessLatency1min.labels(metricsLabels);
 
         statTotalRecordsReceived1min.clear();
-        _statTotalRecordsReceived1min = statTotalRecordsReceived1min.labels(metricsLabels);
+        statTotalRecordsReceivedChild1min = statTotalRecordsReceived1min.labels(metricsLabels);
     }
 }

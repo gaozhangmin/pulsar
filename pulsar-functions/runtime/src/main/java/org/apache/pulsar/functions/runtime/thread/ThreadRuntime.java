@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.runtime.thread;
 
 import java.io.File;
@@ -26,7 +25,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.broker.PulsarServerException;
@@ -36,6 +34,7 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.common.nar.FileUtils;
 import org.apache.pulsar.functions.instance.InstanceConfig;
 import org.apache.pulsar.functions.instance.InstanceUtils;
+import org.apache.pulsar.functions.instance.JavaInstanceRunnable;
 import org.apache.pulsar.functions.instance.stats.FunctionCollectorRegistry;
 import org.apache.pulsar.functions.proto.Function;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
@@ -44,7 +43,6 @@ import org.apache.pulsar.functions.runtime.Runtime;
 import org.apache.pulsar.functions.secretsprovider.SecretsProvider;
 import org.apache.pulsar.functions.utils.FunctionCommon;
 import org.apache.pulsar.functions.utils.functioncache.FunctionCacheManager;
-import org.apache.pulsar.functions.instance.JavaInstanceRunnable;
 import org.apache.pulsar.functions.worker.ConnectorsManager;
 
 /**
@@ -53,14 +51,9 @@ import org.apache.pulsar.functions.worker.ConnectorsManager;
 @Slf4j
 public class ThreadRuntime implements Runtime {
 
-    // The thread that invokes the function
-    private Thread fnThread;
-
     private static final int THREAD_SHUTDOWN_TIMEOUT_MILLIS = 10_000;
-
     @Getter
     private final InstanceConfig instanceConfig;
-    private JavaInstanceRunnable javaInstanceRunnable;
     private final ThreadGroup threadGroup;
     private final FunctionCacheManager fnCache;
     private final String jarFile;
@@ -73,6 +66,9 @@ public class ThreadRuntime implements Runtime {
     private final FunctionCollectorRegistry collectorRegistry;
     private final String narExtractionDirectory;
     private final Optional<ConnectorsManager> connectorsManager;
+    // The thread that invokes the function
+    private Thread fnThread;
+    private JavaInstanceRunnable javaInstanceRunnable;
 
     ThreadRuntime(InstanceConfig instanceConfig,
                   FunctionCacheManager fnCache,
@@ -129,9 +125,9 @@ public class ThreadRuntime implements Runtime {
     }
 
     private static ClassLoader loadJars(String jarFile,
-                                 InstanceConfig instanceConfig,
-                                 String narExtractionDirectory,
-                                 FunctionCacheManager fnCache) throws Exception {
+                                        InstanceConfig instanceConfig,
+                                        String narExtractionDirectory,
+                                        FunctionCacheManager fnCache) throws Exception {
         if (jarFile == null) {
             return Thread.currentThread().getContextClassLoader();
         }
@@ -180,7 +176,8 @@ public class ThreadRuntime implements Runtime {
     public void start() throws Exception {
 
         // extract class loader for function
-        ClassLoader functionClassLoader = getFunctionClassLoader(instanceConfig, jarFile, narExtractionDirectory, fnCache, connectorsManager);
+        ClassLoader functionClassLoader =
+                getFunctionClassLoader(instanceConfig, jarFile, narExtractionDirectory, fnCache, connectorsManager);
 
         // re-initialize JavaInstanceRunnable so that variables in constructor can be re-initialized
         this.javaInstanceRunnable = new JavaInstanceRunnable(
@@ -228,7 +225,10 @@ public class ThreadRuntime implements Runtime {
                 // kill the thread
                 fnThread.join(THREAD_SHUTDOWN_TIMEOUT_MILLIS, 0);
                 if (fnThread.isAlive()) {
-                    log.warn("The function instance thread is still alive after {} milliseconds. Giving up waiting and moving forward to close function.", THREAD_SHUTDOWN_TIMEOUT_MILLIS);
+                    log.warn(
+                            "The function instance thread is still alive after {} milliseconds. "
+                                    + "Giving up waiting and moving forward to close function.",
+                            THREAD_SHUTDOWN_TIMEOUT_MILLIS);
                 }
             } catch (InterruptedException e) {
                 // ignore this

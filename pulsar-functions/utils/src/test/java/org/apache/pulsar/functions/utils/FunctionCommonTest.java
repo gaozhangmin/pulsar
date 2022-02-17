@@ -16,20 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.utils;
-
-import org.apache.pulsar.client.impl.MessageIdImpl;
-import org.apache.pulsar.common.util.FutureUtil;
-import org.testng.Assert;
-import org.testng.annotations.Test;
-
-import java.io.File;
-import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import java.io.File;
+import java.util.UUID;
+import org.apache.pulsar.client.impl.MessageIdImpl;
+import org.apache.pulsar.common.util.FutureUtil;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 /**
  * Unit test of {@link Exceptions}.
@@ -57,7 +54,8 @@ public class FunctionCommonTest {
     @Test
     public void testValidateHttpFileUrl() throws Exception {
 
-        String jarHttpUrl = "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
+        String jarHttpUrl =
+                "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
         FunctionCommon.extractClassLoader(jarHttpUrl);
 
         jarHttpUrl = "http://_invalidurl_.com";
@@ -72,7 +70,8 @@ public class FunctionCommonTest {
 
     @Test
     public void testDownloadFile() throws Exception {
-        String jarHttpUrl = "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
+        String jarHttpUrl =
+                "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
         String testDir = FunctionCommonTest.class.getProtectionDomain().getCodeSource().getLocation().getPath();
         File pkgFile = new File(testDir, UUID.randomUUID().toString());
         FunctionCommon.downloadFromHttpUrl(jarHttpUrl, pkgFile);

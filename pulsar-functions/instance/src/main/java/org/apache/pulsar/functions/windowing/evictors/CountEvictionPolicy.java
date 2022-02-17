@@ -18,11 +18,10 @@
  */
 package org.apache.pulsar.functions.windowing.evictors;
 
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.pulsar.functions.windowing.Event;
 import org.apache.pulsar.functions.windowing.EvictionContext;
 import org.apache.pulsar.functions.windowing.EvictionPolicy;
-
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * An eviction policy that tracks event counts and can
@@ -67,13 +66,13 @@ public class CountEvictionPolicy<T> implements EvictionPolicy<T, Long> {
     }
 
     @Override
-    public void setContext(EvictionContext context) {
-        this.context = context;
+    public EvictionContext getContext() {
+        return context;
     }
 
     @Override
-    public EvictionContext getContext() {
-        return context;
+    public void setContext(EvictionContext context) {
+        this.context = context;
     }
 
     @Override

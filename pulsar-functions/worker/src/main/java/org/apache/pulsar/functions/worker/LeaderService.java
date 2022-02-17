@@ -18,6 +18,7 @@
  */
 package org.apache.pulsar.functions.worker;
 
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.ConsumerEventListener;
@@ -27,11 +28,11 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.client.impl.ConsumerImpl;
 
-import java.util.function.Supplier;
-
 @Slf4j
 public class LeaderService implements AutoCloseable, ConsumerEventListener {
 
+    static final String COORDINATION_TOPIC_SUBSCRIPTION = "participants";
+    private static final String WORKER_IDENTIFIER = "id";
     private final String consumerName;
     private final FunctionAssignmentTailer functionAssignmentTailer;
     private final ErrorNotifier errorNotifier;
@@ -39,14 +40,10 @@ public class LeaderService implements AutoCloseable, ConsumerEventListener {
     private final FunctionRuntimeManager functionRuntimeManager;
     private final FunctionMetaDataManager functionMetaDataManager;
     private final MembershipManager membershipManager;
-    private ConsumerImpl<byte[]> consumer;
     private final WorkerConfig workerConfig;
     private final PulsarClient pulsarClient;
+    private ConsumerImpl<byte[]> consumer;
     private boolean isLeader = false;
-
-    static final String COORDINATION_TOPIC_SUBSCRIPTION = "participants";
-
-    private static String WORKER_IDENTIFIER = "id";
 
     public LeaderService(WorkerService workerService,
                          PulsarClient pulsarClient,
@@ -91,7 +88,9 @@ public class LeaderService implements AutoCloseable, ConsumerEventListener {
     @Override
     public void becameActive(Consumer<?> consumer, int partitionId) {
         synchronized (this) {
-            if (isLeader) return;
+            if (isLeader) {
+                return;
+            }
             log.info("Worker {} became the leader.", consumerName);
             try {
 
@@ -103,12 +102,14 @@ public class LeaderService implements AutoCloseable, ConsumerEventListener {
 
                 // attempt to acquire exclusive publishers to both the metadata topic and assignments topic
                 // we should keep trying to acquire exclusive producers as long as we are still the leader
-                Supplier<Boolean> checkIsStillLeader = () -> membershipManager.getLeader().getWorkerId().equals(workerConfig.getWorkerId());
+                Supplier<Boolean> checkIsStillLeader =
+                        () -> membershipManager.getLeader().getWorkerId().equals(workerConfig.getWorkerId());
                 Producer<byte[]> scheduleManagerExclusiveProducer = null;
                 Producer<byte[]> functionMetaDataManagerExclusiveProducer = null;
                 try {
                     scheduleManagerExclusiveProducer = schedulerManager.acquireExclusiveWrite(checkIsStillLeader);
-                    functionMetaDataManagerExclusiveProducer = functionMetaDataManager.acquireExclusiveWrite(checkIsStillLeader);
+                    functionMetaDataManagerExclusiveProducer =
+                            functionMetaDataManager.acquireExclusiveWrite(checkIsStillLeader);
                 } catch (WorkerUtils.NotLeaderAnymore e) {
                     log.info("Worker {} is not leader anymore. Exiting becoming leader routine.", consumer);
                     if (scheduleManagerExclusiveProducer != null) {

@@ -18,7 +18,16 @@
  */
 package org.apache.pulsar.functions.utils;
 
+import static org.apache.pulsar.common.functions.FunctionConfig.ProcessingGuarantees.EFFECTIVELY_ONCE;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.expectThrows;
 import com.google.gson.Gson;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
@@ -34,17 +43,6 @@ import org.apache.pulsar.io.core.BatchSourceTriggerer;
 import org.apache.pulsar.io.core.SourceContext;
 import org.testng.annotations.Test;
 
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Consumer;
-
-import static org.apache.pulsar.common.functions.FunctionConfig.ProcessingGuarantees.EFFECTIVELY_ONCE;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.expectThrows;
-
 /**
  * Unit test of {@link SourceConfigUtilsTest}.
  */
@@ -52,36 +50,11 @@ public class SourceConfigUtilsTest {
 
     private ConnectorDefinition defn;
 
-    @Data
-    @Accessors(chain = true)
-    @NoArgsConstructor
-    public static class TestSourceConfig {
-        @ConfigValidationAnnotations.NotNull
-        private String configParameter;
-    }
-
-    class TestTriggerer implements BatchSourceTriggerer {
-
-        @Override
-        public void init(Map<String, Object> config, SourceContext sourceContext) throws Exception {
-
-        }
-
-        @Override
-        public void start(Consumer<String> trigger) {
-
-        }
-
-        @Override
-        public void stop() {
-
-        }
-    }
-
     @Test
-    public void testConvertBackFidelity() throws IOException  {
+    public void testConvertBackFidelity() throws IOException {
         SourceConfig sourceConfig = createSourceConfig();
-        Function.FunctionDetails functionDetails = SourceConfigUtils.convert(sourceConfig, new SourceConfigUtils.ExtractedSourceDetails(null, null));
+        Function.FunctionDetails functionDetails =
+                SourceConfigUtils.convert(sourceConfig, new SourceConfigUtils.ExtractedSourceDetails(null, null));
         SourceConfig convertedConfig = SourceConfigUtils.convertFromDetails(functionDetails);
 
         // add default resources
@@ -93,9 +66,10 @@ public class SourceConfigUtilsTest {
     }
 
     @Test
-    public void testConvertBackFidelityWithBatch() throws IOException  {
+    public void testConvertBackFidelityWithBatch() throws IOException {
         SourceConfig sourceConfig = createSourceConfigWithBatch();
-        Function.FunctionDetails functionDetails = SourceConfigUtils.convert(sourceConfig, new SourceConfigUtils.ExtractedSourceDetails(null, null));
+        Function.FunctionDetails functionDetails =
+                SourceConfigUtils.convert(sourceConfig, new SourceConfigUtils.ExtractedSourceDetails(null, null));
         SourceConfig convertedConfig = SourceConfigUtils.convertFromDetails(functionDetails);
 
         // add default resources
@@ -281,7 +255,8 @@ public class SourceConfigUtilsTest {
                 mergedConfig.getBatchSourceConfig().getDiscoveryTriggererConfig().get("something"),
                 "different"
         );
-        mergedConfig.getBatchSourceConfig().setDiscoveryTriggererConfig(sourceConfig.getBatchSourceConfig().getDiscoveryTriggererConfig());
+        mergedConfig.getBatchSourceConfig()
+                .setDiscoveryTriggererConfig(sourceConfig.getBatchSourceConfig().getDiscoveryTriggererConfig());
         assertEquals(
                 new Gson().toJson(sourceConfig),
                 new Gson().toJson(mergedConfig)
@@ -299,8 +274,10 @@ public class SourceConfigUtilsTest {
         // Bad config
         sourceConfig.getConfigs().put("configParameter", null);
         Exception e = expectThrows(IllegalArgumentException.class,
-                () -> SourceConfigUtils.validateSourceConfig(sourceConfig, SourceConfigUtilsTest.TestSourceConfig.class));
-        assertTrue(e.getMessage().contains("Could not validate source config: Field 'configParameter' cannot be null!"));
+                () -> SourceConfigUtils
+                        .validateSourceConfig(sourceConfig, SourceConfigUtilsTest.TestSourceConfig.class));
+        assertTrue(
+                e.getMessage().contains("Could not validate source config: Field 'configParameter' cannot be null!"));
     }
 
     @Test
@@ -391,5 +368,31 @@ public class SourceConfigUtilsTest {
             throw new RuntimeException("Something wrong with the test", e);
         }
         return sourceConfig;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    @NoArgsConstructor
+    public static class TestSourceConfig {
+        @ConfigValidationAnnotations.NotNull
+        private String configParameter;
+    }
+
+    class TestTriggerer implements BatchSourceTriggerer {
+
+        @Override
+        public void init(Map<String, Object> config, SourceContext sourceContext) throws Exception {
+
+        }
+
+        @Override
+        public void start(Consumer<String> trigger) {
+
+        }
+
+        @Override
+        public void stop() {
+
+        }
     }
 }

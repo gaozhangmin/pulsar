@@ -20,6 +20,12 @@ package org.apache.pulsar.functions.windowing.triggers;
 
 import static org.apache.pulsar.common.util.Runnables.catchingAndLoggingThrowables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.ThreadContext;
 import org.apache.pulsar.functions.api.Context;
@@ -30,13 +36,6 @@ import org.apache.pulsar.functions.windowing.TriggerHandler;
 import org.apache.pulsar.functions.windowing.TriggerPolicy;
 import org.apache.pulsar.functions.windowing.WindowUtils;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-
 /**
  * Invokes {@link TriggerHandler#onTrigger()} after the duration.
  */
@@ -44,11 +43,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class TimeTriggerPolicy<T> implements TriggerPolicy<T, Void> {
 
-    private long duration;
     private final TriggerHandler handler;
     private final EvictionPolicy<T, ?> evictionPolicy;
-    private ScheduledFuture<?> executorFuture;
     private final ScheduledExecutorService executor;
+    private long duration;
+    private ScheduledFuture<?> executorFuture;
     private Context context;
 
     public TimeTriggerPolicy(long millis, TriggerHandler handler, EvictionPolicy<T, ?>

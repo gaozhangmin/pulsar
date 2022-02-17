@@ -117,7 +117,7 @@ public class WatermarkTimeTriggerPolicy<T> implements TriggerPolicy<T, Long> {
      * of the next aligned window, i.e. the ts when the window should fire.
      *
      * @param startTs the start timestamp (excluding)
-     * @param endTs the end timestamp (including)
+     * @param endTs   the end timestamp (including)
      * @return the aligned window end ts for the next window or Long.MAX_VALUE if there
      * are no more events to be processed.
      */

@@ -20,35 +20,36 @@
 
 # DEPENDENCIES:  unittest2,mock
 
-from secretsprovider import ClearTextSecretsProvider
-from secretsprovider import EnvironmentBasedSecretsProvider
-
 import log
 import os
 import unittest
+from secretsprovider import ClearTextSecretsProvider
+from secretsprovider import EnvironmentBasedSecretsProvider
+
 
 class TestContextImpl(unittest.TestCase):
 
-  def setUp(self):
-    log.init_logger("INFO", "foo", os.environ.get("PULSAR_HOME") + "/conf/functions-logging/console_logging_config.ini")
+    def setUp(self):
+        log.init_logger("INFO", "foo",
+                        os.environ.get("PULSAR_HOME") + "/conf/functions-logging/console_logging_config.ini")
 
-  def test_cleartext_secretsprovider(self):
-    provider = ClearTextSecretsProvider()
-    secret = provider.provide_secret("secretName", "secretPath")
-    self.assertEqual(secret, "secretPath")
-    secret = provider.provide_secret("secretName", "")
-    self.assertEqual(secret, "")
-    secret = provider.provide_secret("secretName", None)
-    self.assertEqual(secret, None)
+    def test_cleartext_secretsprovider(self):
+        provider = ClearTextSecretsProvider()
+        secret = provider.provide_secret("secretName", "secretPath")
+        self.assertEqual(secret, "secretPath")
+        secret = provider.provide_secret("secretName", "")
+        self.assertEqual(secret, "")
+        secret = provider.provide_secret("secretName", None)
+        self.assertEqual(secret, None)
 
-  def test_environment_secretsprovider(self):
-    provider = EnvironmentBasedSecretsProvider()
-    secret = provider.provide_secret("secretName", "secretPath")
-    self.assertEqual(secret, None)
-    os.environ["secretName"] = "secretValue"
-    secret = provider.provide_secret("secretName", "")
-    self.assertEqual(secret, "secretValue")
-    secret = provider.provide_secret("secretName", None)
-    self.assertEqual(secret, "secretValue")
-    secret = provider.provide_secret("secretName", "somethingelse")
-    self.assertEqual(secret, "secretValue")
+    def test_environment_secretsprovider(self):
+        provider = EnvironmentBasedSecretsProvider()
+        secret = provider.provide_secret("secretName", "secretPath")
+        self.assertEqual(secret, None)
+        os.environ["secretName"] = "secretValue"
+        secret = provider.provide_secret("secretName", "")
+        self.assertEqual(secret, "secretValue")
+        secret = provider.provide_secret("secretName", None)
+        self.assertEqual(secret, "secretValue")
+        secret = provider.provide_secret("secretName", "somethingelse")
+        self.assertEqual(secret, "secretValue")

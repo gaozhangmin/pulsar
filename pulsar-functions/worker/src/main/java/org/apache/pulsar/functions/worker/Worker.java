@@ -37,12 +37,12 @@ public class Worker {
 
     private final WorkerConfig workerConfig;
     private final WorkerService workerService;
+    private final OrderedExecutor orderedExecutor =
+            OrderedExecutor.newBuilder().numThreads(8).name("zk-cache-ordered").build();
+    private final ErrorNotifier errorNotifier;
     private WorkerServer server;
-
-    private final OrderedExecutor orderedExecutor = OrderedExecutor.newBuilder().numThreads(8).name("zk-cache-ordered").build();
     private PulsarResources pulsarResources;
     private MetadataStoreExtended configMetadataStore;
-    private final ErrorNotifier errorNotifier;
 
     public Worker(WorkerConfig workerConfig) {
         this.workerConfig = workerConfig;
@@ -66,7 +66,6 @@ public class Worker {
     }
 
 
-
     private AuthorizationService getAuthorizationService() throws PulsarServerException {
 
         if (this.workerConfig.isAuthorizationEnabled()) {
@@ -81,7 +80,7 @@ public class Worker {
             }
             pulsarResources = new PulsarResources(null, configMetadataStore);
             return new AuthorizationService(getServiceConfiguration(), this.pulsarResources);
-            }
+        }
         return null;
     }
 
@@ -95,7 +94,7 @@ public class Worker {
                 this.server.stop();
             }
             workerService.stop();
-        } catch(Exception e) {
+        } catch (Exception e) {
             log.warn("Failed to gracefully stop worker service ", e);
         }
 

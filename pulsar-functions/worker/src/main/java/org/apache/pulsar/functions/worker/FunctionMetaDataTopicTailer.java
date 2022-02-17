@@ -21,14 +21,13 @@ package org.apache.pulsar.functions.worker;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.api.MessageId;
+import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Reader;
 import org.apache.pulsar.client.api.ReaderBuilder;
-import org.apache.pulsar.client.api.PulsarClientException;
 
 @Slf4j
 public class FunctionMetaDataTopicTailer
@@ -54,6 +53,19 @@ public class FunctionMetaDataTopicTailer
         tailerThread.setName("function-metadata-tailer-thread");
         this.errorNotifier = errorNotifier;
         exitOnEndOfTopic = false;
+    }
+
+    public static Reader createReader(WorkerConfig workerConfig, ReaderBuilder readerBuilder,
+                                      MessageId startMessageId) throws PulsarClientException {
+        ReaderBuilder builder = readerBuilder
+                .topic(workerConfig.getFunctionMetadataTopic())
+                .startMessageId(startMessageId)
+                .readerName(workerConfig.getWorkerId() + "-function-metadata-tailer")
+                .subscriptionRolePrefix(workerConfig.getWorkerId() + "-function-metadata-tailer");
+        if (workerConfig.getUseCompactedMetadataTopic()) {
+            builder = builder.readCompacted(true);
+        }
+        return builder.create();
     }
 
     public void start() {
@@ -120,18 +132,5 @@ public class FunctionMetaDataTopicTailer
             log.error("Failed to stop function metadata tailer", e);
         }
         log.info("Stopped function metadata tailer");
-    }
-
-    public static Reader createReader(WorkerConfig workerConfig, ReaderBuilder readerBuilder,
-                                      MessageId startMessageId) throws PulsarClientException {
-        ReaderBuilder builder = readerBuilder
-                .topic(workerConfig.getFunctionMetadataTopic())
-                .startMessageId(startMessageId)
-                .readerName(workerConfig.getWorkerId() + "-function-metadata-tailer")
-                .subscriptionRolePrefix(workerConfig.getWorkerId() + "-function-metadata-tailer");
-        if (workerConfig.getUseCompactedMetadataTopic()) {
-            builder = builder.readCompacted(true);
-        }
-        return builder.create();
     }
 }

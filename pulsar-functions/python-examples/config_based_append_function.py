@@ -21,14 +21,15 @@
 
 from pulsar import Function
 
+
 # Function that appends something to incoming input based on config supplied
 class ConfigBasedAppendFunction(Function):
-  def __init__(self):
-    pass
+    def __init__(self):
+        pass
 
-  def process(self, input, context):
-    key = "config-key"
-    append_value = "!"
-    if key in context.get_user_config_map():
-      append_value = context.get_user_config_value(key)
-    return input + str(append_value)
+    def process(self, input, context):
+        key = "config-key"
+        append_value = "!"
+        if key in context.get_user_config_map():
+            append_value = context.get_user_config_value(key)
+        return input + str(append_value)

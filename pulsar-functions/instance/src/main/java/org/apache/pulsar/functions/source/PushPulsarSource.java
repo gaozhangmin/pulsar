@@ -16,20 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.source;
 
+import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.functions.api.Record;
 import org.apache.pulsar.io.core.SourceContext;
 
-import java.util.Map;
-import java.util.concurrent.LinkedBlockingQueue;
-
 public abstract class PushPulsarSource<T> extends PulsarSource<T> {
 
-    private LinkedBlockingQueue<Record<T>> queue;
     private static final int DEFAULT_QUEUE_LENGTH = 1000;
+    private LinkedBlockingQueue<Record<T>> queue;
 
     public PushPulsarSource(PulsarClient pulsarClient,
                             PulsarSourceConfig pulsarSourceConfig,
@@ -47,11 +45,11 @@ public abstract class PushPulsarSource<T> extends PulsarSource<T> {
     /**
      * Open connector with configuration.
      *
-     * @param config initialization config
+     * @param config        initialization config
      * @param sourceContext environment where the source connector is running
      * @throws Exception IO type exceptions when opening a connector
      */
-    abstract public void open(Map<String, Object> config, SourceContext sourceContext) throws Exception;
+    public abstract void open(Map<String, Object> config, SourceContext sourceContext) throws Exception;
 
     /**
      * Attach a consumer function to this Source. This is invoked by the implementation
@@ -69,7 +67,8 @@ public abstract class PushPulsarSource<T> extends PulsarSource<T> {
 
     /**
      * Get length of the queue that records are push onto
-     * Users can override this method to customize the queue length
+     * Users can override this method to customize the queue length.
+     *
      * @return queue length
      */
     public int getQueueLength() {

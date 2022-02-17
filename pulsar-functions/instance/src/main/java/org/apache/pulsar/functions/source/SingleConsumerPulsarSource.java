@@ -18,7 +18,11 @@
  */
 package org.apache.pulsar.functions.source;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.annotations.VisibleForTesting;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.ConsumerBuilder;
@@ -28,12 +32,6 @@ import org.apache.pulsar.common.util.Reflections;
 import org.apache.pulsar.functions.api.Record;
 import org.apache.pulsar.io.core.SourceContext;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
-import static com.google.common.base.Preconditions.checkArgument;
-
 @Slf4j
 public class SingleConsumerPulsarSource<T> extends PulsarSource<T> {
 
@@ -42,8 +40,8 @@ public class SingleConsumerPulsarSource<T> extends PulsarSource<T> {
     private final Map<String, String> properties;
     private final ClassLoader functionClassLoader;
     private final TopicSchema topicSchema;
-    private Consumer<T> consumer;
     private final List<Consumer<T>> inputConsumers = new LinkedList<>();
+    private Consumer<T> consumer;
 
     public SingleConsumerPulsarSource(PulsarClient pulsarClient,
                                       SingleConsumerPulsarSourceConfig pulsarSourceConfig,
@@ -67,10 +65,11 @@ public class SingleConsumerPulsarSource<T> extends PulsarSource<T> {
         checkArgument(!Void.class.equals(typeArg), "Input type of Pulsar Function cannot be Void");
 
         String topic = pulsarSourceConfig.getTopic();
-        PulsarSourceConsumerConfig<T> pulsarSourceConsumerConfig
-                = buildPulsarSourceConsumerConfig(topic, pulsarSourceConfig.getConsumerConfig(), typeArg);
+        PulsarSourceConsumerConfig<T> pulsarSourceConsumerConfig =
+                buildPulsarSourceConsumerConfig(topic, pulsarSourceConfig.getConsumerConfig(), typeArg);
 
-        log.info("Creating consumer for topic : {}, schema : {}, schemaInfo: {}", topic, pulsarSourceConsumerConfig.getSchema(), pulsarSourceConsumerConfig.getSchema().getSchemaInfo());
+        log.info("Creating consumer for topic : {}, schema : {}, schemaInfo: {}", topic,
+                pulsarSourceConsumerConfig.getSchema(), pulsarSourceConsumerConfig.getSchema().getSchemaInfo());
 
         ConsumerBuilder<T> cb = createConsumeBuilder(topic, pulsarSourceConsumerConfig);
         consumer = cb.subscribeAsync().join();
@@ -95,7 +94,7 @@ public class SingleConsumerPulsarSource<T> extends PulsarSource<T> {
 
     @Override
     public void close() throws Exception {
-        if (consumer != null ) {
+        if (consumer != null) {
             consumer.close();
         }
     }

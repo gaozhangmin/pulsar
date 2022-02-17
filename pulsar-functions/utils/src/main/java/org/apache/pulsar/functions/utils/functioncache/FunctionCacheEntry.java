@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.utils.functioncache;
 
 import java.io.File;
@@ -29,10 +28,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.pulsar.common.nar.NarClassLoaderBuilder;
 
 /**
@@ -62,8 +59,8 @@ public class FunctionCacheEntry implements AutoCloseable {
         this.classLoader = FunctionClassLoaders.create(libraryURLs, rootClassLoader);
 
         this.classpaths = requiredClasspaths.stream()
-            .map(URL::toString)
-            .collect(Collectors.toSet());
+                .map(URL::toString)
+                .collect(Collectors.toSet());
         this.jarFiles = new HashSet<>(requiredJarFiles);
         this.executionHolders = new HashSet<>(Collections.singleton(initialInstanceId));
     }
@@ -89,20 +86,20 @@ public class FunctionCacheEntry implements AutoCloseable {
                          Collection<String> requiredJarFiles,
                          Collection<URL> requiredClassPaths) {
         if (jarFiles.size() != requiredJarFiles.size()
-            || !new HashSet<>(requiredJarFiles).containsAll(jarFiles)) {
+                || !new HashSet<>(requiredJarFiles).containsAll(jarFiles)) {
             throw new IllegalStateException(
-                "The function registration references a different set of jar files than "
-                + " previous registrations for this function : old = " + jarFiles
-                + ", new = " + requiredJarFiles);
+                    "The function registration references a different set of jar files than "
+                            + " previous registrations for this function : old = " + jarFiles
+                            + ", new = " + requiredJarFiles);
         }
 
         if (classpaths.size() != requiredClassPaths.size()
-            || !requiredClassPaths.stream().map(URL::toString).collect(Collectors.toSet())
+                || !requiredClassPaths.stream().map(URL::toString).collect(Collectors.toSet())
                 .containsAll(classpaths)) {
             throw new IllegalStateException(
-                "The function registration references a different set of classpaths than "
-                + " previous registrations for this function : old = " + classpaths
-                + ", new = " + requiredClassPaths);
+                    "The function registration references a different set of classpaths than "
+                            + " previous registrations for this function : old = " + classpaths
+                            + ", new = " + requiredClassPaths);
         }
 
         this.executionHolders.add(eid);
@@ -119,7 +116,7 @@ public class FunctionCacheEntry implements AutoCloseable {
             classLoader.close();
         } catch (IOException e) {
             log.warn("Failed to release function code class loader for "
-                + Arrays.toString(jarFiles.toArray()));
+                    + Arrays.toString(jarFiles.toArray()));
         }
     }
 }

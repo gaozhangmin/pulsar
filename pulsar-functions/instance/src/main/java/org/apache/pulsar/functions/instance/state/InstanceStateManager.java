@@ -19,7 +19,6 @@
 package org.apache.pulsar.functions.instance.state;
 
 import static com.google.common.base.Preconditions.checkArgument;
-
 import com.google.common.annotations.VisibleForTesting;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -45,7 +44,7 @@ public class InstanceStateManager implements StateManager {
         final String storeName = store.fqsn();
 
         checkArgument(!stores.containsKey(storeName),
-            String.format("Store %s has already been registered.", storeName));
+                String.format("Store %s has already been registered.", storeName));
 
         stores.put(storeName, store);
     }

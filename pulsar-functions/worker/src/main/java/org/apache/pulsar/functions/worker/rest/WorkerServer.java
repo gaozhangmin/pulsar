@@ -19,11 +19,16 @@
 package org.apache.pulsar.functions.worker.rest;
 
 import io.prometheus.client.jetty.JettyStatisticsCollector;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Optional;
+import javax.servlet.DispatcherType;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.broker.authentication.AuthenticationService;
 import org.apache.pulsar.broker.web.AuthenticationFilter;
-import org.apache.pulsar.broker.web.RateLimitingFilter;
 import org.apache.pulsar.broker.web.JettyRequestLogFactory;
+import org.apache.pulsar.broker.web.RateLimitingFilter;
 import org.apache.pulsar.broker.web.WebExecutorThreadPool;
 import org.apache.pulsar.common.util.SecurityUtility;
 import org.apache.pulsar.functions.worker.WorkerConfig;
@@ -45,21 +50,14 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
 
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Optional;
-
-import javax.servlet.DispatcherType;
-
 @Slf4j
 public class WorkerServer {
 
+    private static final String MATCH_ALL = "/*";
+    private static final int MAX_CONCURRENT_REQUESTS = 1024;
     private final WorkerConfig workerConfig;
     private final WorkerService workerService;
     private final AuthenticationService authenticationService;
-    private static final String MATCH_ALL = "/*";
-    private static final int MAX_CONCURRENT_REQUESTS = 1024;
     private final WebExecutorThreadPool webServerExecutor;
     private Server server;
 
@@ -72,73 +70,6 @@ public class WorkerServer {
         this.authenticationService = authenticationService;
         this.webServerExecutor = new WebExecutorThreadPool(this.workerConfig.getNumHttpServerThreads(), "function-web");
         init();
-    }
-
-    public void start() throws Exception {
-        server.start();
-        log.info("Worker Server started at {}", server.getURI());
-    }
-
-    private void init() {
-        server = new Server(webServerExecutor);
-
-        List<ServerConnector> connectors = new ArrayList<>();
-        httpConnector = new ServerConnector(server, 1, 1);
-        httpConnector.setPort(this.workerConfig.getWorkerPort());
-        connectors.add(httpConnector);
-
-        List<Handler> handlers = new ArrayList<>(4);
-        handlers.add(newServletContextHandler("/admin",
-            new ResourceConfig(Resources.getApiV2Resources()), workerService, authenticationService));
-        handlers.add(newServletContextHandler("/admin/v2",
-            new ResourceConfig(Resources.getApiV2Resources()), workerService, authenticationService));
-        handlers.add(newServletContextHandler("/admin/v3",
-            new ResourceConfig(Resources.getApiV3Resources()), workerService, authenticationService));
-        // don't require auth for metrics or config routes
-        handlers.add(newServletContextHandler("/",
-            new ResourceConfig(Resources.getRootResources()), workerService,
-            workerConfig.isAuthenticateMetricsEndpoint(), authenticationService));
-
-        RequestLogHandler requestLogHandler = new RequestLogHandler();
-        requestLogHandler.setRequestLog(JettyRequestLogFactory.createRequestLogger());
-        handlers.add(0, new ContextHandlerCollection());
-        handlers.add(requestLogHandler);
-
-        ContextHandlerCollection contexts = new ContextHandlerCollection();
-        contexts.setHandlers(handlers.toArray(new Handler[handlers.size()]));
-        HandlerCollection handlerCollection = new HandlerCollection();
-        handlerCollection.setHandlers(new Handler[] { contexts, new DefaultHandler(), requestLogHandler });
-
-        // Metrics handler
-        StatisticsHandler stats = new StatisticsHandler();
-        stats.setHandler(handlerCollection);
-        try {
-            new JettyStatisticsCollector(stats).register();
-        } catch (IllegalArgumentException e) {
-            // Already registered. Eg: in unit tests
-        }
-        handlers.add(stats);
-        server.setHandler(stats);
-
-        if (this.workerConfig.getTlsEnabled()) {
-            try {
-                SslContextFactory sslCtxFactory = SecurityUtility.createSslContextFactory(
-                        this.workerConfig.isTlsAllowInsecureConnection(), this.workerConfig.getTlsTrustCertsFilePath(),
-                        this.workerConfig.getTlsCertificateFilePath(), this.workerConfig.getTlsKeyFilePath(),
-                        this.workerConfig.isTlsRequireTrustedClientCertOnConnect(),
-                        true,
-                        this.workerConfig.getTlsCertRefreshCheckDurationSec());
-                httpsConnector = new ServerConnector(server, 1, 1, sslCtxFactory);
-                httpsConnector.setPort(this.workerConfig.getWorkerPortTls());
-                connectors.add(httpsConnector);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        // Limit number of concurrent HTTP connections to avoid getting out of file descriptors
-        connectors.forEach(c -> c.setAcceptQueueSize(MAX_CONCURRENT_REQUESTS / connectors.size()));
-        server.setConnectors(connectors.toArray(new ServerConnector[connectors.size()]));
     }
 
     public static ServletContextHandler newServletContextHandler(String contextPath,
@@ -177,6 +108,73 @@ public class WorkerServer {
         }
 
         return contextHandler;
+    }
+
+    public void start() throws Exception {
+        server.start();
+        log.info("Worker Server started at {}", server.getURI());
+    }
+
+    private void init() {
+        server = new Server(webServerExecutor);
+
+        List<ServerConnector> connectors = new ArrayList<>();
+        httpConnector = new ServerConnector(server, 1, 1);
+        httpConnector.setPort(this.workerConfig.getWorkerPort());
+        connectors.add(httpConnector);
+
+        List<Handler> handlers = new ArrayList<>(4);
+        handlers.add(newServletContextHandler("/admin",
+                new ResourceConfig(Resources.getApiV2Resources()), workerService, authenticationService));
+        handlers.add(newServletContextHandler("/admin/v2",
+                new ResourceConfig(Resources.getApiV2Resources()), workerService, authenticationService));
+        handlers.add(newServletContextHandler("/admin/v3",
+                new ResourceConfig(Resources.getApiV3Resources()), workerService, authenticationService));
+        // don't require auth for metrics or config routes
+        handlers.add(newServletContextHandler("/",
+                new ResourceConfig(Resources.getRootResources()), workerService,
+                workerConfig.isAuthenticateMetricsEndpoint(), authenticationService));
+
+        RequestLogHandler requestLogHandler = new RequestLogHandler();
+        requestLogHandler.setRequestLog(JettyRequestLogFactory.createRequestLogger());
+        handlers.add(0, new ContextHandlerCollection());
+        handlers.add(requestLogHandler);
+
+        ContextHandlerCollection contexts = new ContextHandlerCollection();
+        contexts.setHandlers(handlers.toArray(new Handler[handlers.size()]));
+        HandlerCollection handlerCollection = new HandlerCollection();
+        handlerCollection.setHandlers(new Handler[]{contexts, new DefaultHandler(), requestLogHandler});
+
+        // Metrics handler
+        StatisticsHandler stats = new StatisticsHandler();
+        stats.setHandler(handlerCollection);
+        try {
+            new JettyStatisticsCollector(stats).register();
+        } catch (IllegalArgumentException e) {
+            // Already registered. Eg: in unit tests
+        }
+        handlers.add(stats);
+        server.setHandler(stats);
+
+        if (this.workerConfig.getTlsEnabled()) {
+            try {
+                SslContextFactory sslCtxFactory = SecurityUtility.createSslContextFactory(
+                        this.workerConfig.isTlsAllowInsecureConnection(), this.workerConfig.getTlsTrustCertsFilePath(),
+                        this.workerConfig.getTlsCertificateFilePath(), this.workerConfig.getTlsKeyFilePath(),
+                        this.workerConfig.isTlsRequireTrustedClientCertOnConnect(),
+                        true,
+                        this.workerConfig.getTlsCertRefreshCheckDurationSec());
+                httpsConnector = new ServerConnector(server, 1, 1, sslCtxFactory);
+                httpsConnector.setPort(this.workerConfig.getWorkerPortTls());
+                connectors.add(httpsConnector);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        // Limit number of concurrent HTTP connections to avoid getting out of file descriptors
+        connectors.forEach(c -> c.setAcceptQueueSize(MAX_CONCURRENT_REQUESTS / connectors.size()));
+        server.setConnectors(connectors.toArray(new ServerConnector[connectors.size()]));
     }
 
     public void stop() {

@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.utils;
 
 import java.io.IOException;
@@ -48,7 +47,7 @@ public class Exceptions {
         return sw.toString();
     }
 
-    public static boolean areExceptionsPresentInChain(Throwable error, Class ... types) {
+    public static boolean areExceptionsPresentInChain(Throwable error, Class... types) {
         while (error != null) {
             for (Class type : types) {
                 if (type.isInstance(error)) {

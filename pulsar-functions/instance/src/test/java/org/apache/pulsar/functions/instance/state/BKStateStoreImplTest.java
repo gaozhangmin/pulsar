@@ -18,18 +18,6 @@
  */
 package org.apache.pulsar.functions.instance.state;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import org.apache.bookkeeper.api.kv.Table;
-import org.apache.bookkeeper.api.kv.options.Options;
-import org.apache.bookkeeper.api.kv.result.DeleteResult;
-import org.apache.bookkeeper.common.concurrent.FutureUtils;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
-import java.nio.ByteBuffer;
-import java.util.concurrent.CompletableFuture;
-
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
@@ -40,6 +28,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.AssertJUnit.assertEquals;
 import static org.testng.AssertJUnit.assertTrue;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import java.nio.ByteBuffer;
+import java.util.concurrent.CompletableFuture;
+import org.apache.bookkeeper.api.kv.Table;
+import org.apache.bookkeeper.api.kv.options.Options;
+import org.apache.bookkeeper.api.kv.result.DeleteResult;
+import org.apache.bookkeeper.common.concurrent.FutureUtils;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 /**
  * Unit test {@link BKStateStoreImpl}.
@@ -58,8 +56,8 @@ public class BKStateStoreImplTest {
     public void setup() {
         this.mockTable = mock(Table.class);
         this.stateContext = new BKStateStoreImpl(
-            TENANT, NS, NAME,
-            mockTable);
+                TENANT, NS, NAME,
+                mockTable);
     }
 
     @Test
@@ -73,22 +71,22 @@ public class BKStateStoreImplTest {
     @Test
     public void testIncr() throws Exception {
         when(mockTable.increment(any(ByteBuf.class), anyLong()))
-            .thenReturn(FutureUtils.Void());
+                .thenReturn(FutureUtils.Void());
         stateContext.incrCounter("test-key", 10L);
         verify(mockTable, times(1)).increment(
-            eq(Unpooled.copiedBuffer("test-key", UTF_8)),
-            eq(10L)
+                eq(Unpooled.copiedBuffer("test-key", UTF_8)),
+                eq(10L)
         );
     }
 
     @Test
     public void testPut() throws Exception {
         when(mockTable.put(any(ByteBuf.class), any(ByteBuf.class)))
-            .thenReturn(FutureUtils.Void());
+                .thenReturn(FutureUtils.Void());
         stateContext.put("test-key", ByteBuffer.wrap("test-value".getBytes(UTF_8)));
         verify(mockTable, times(1)).put(
-            eq(Unpooled.copiedBuffer("test-key", UTF_8)),
-            eq(Unpooled.copiedBuffer("test-value", UTF_8))
+                eq(Unpooled.copiedBuffer("test-key", UTF_8)),
+                eq(Unpooled.copiedBuffer("test-value", UTF_8))
         );
     }
 
@@ -108,21 +106,21 @@ public class BKStateStoreImplTest {
     public void testGetValue() throws Exception {
         ByteBuf returnedValue = Unpooled.copiedBuffer("test-value", UTF_8);
         when(mockTable.get(any(ByteBuf.class)))
-            .thenReturn(FutureUtils.value(returnedValue));
+                .thenReturn(FutureUtils.value(returnedValue));
         ByteBuffer result = stateContext.get("test-key");
         assertEquals("test-value", new String(result.array(), UTF_8));
         verify(mockTable, times(1)).get(
-            eq(Unpooled.copiedBuffer("test-key", UTF_8))
+                eq(Unpooled.copiedBuffer("test-key", UTF_8))
         );
     }
 
     @Test
     public void testGetAmount() throws Exception {
         when(mockTable.getNumber(any(ByteBuf.class)))
-            .thenReturn(FutureUtils.value(10L));
+                .thenReturn(FutureUtils.value(10L));
         assertEquals(10L, stateContext.getCounter("test-key"));
         verify(mockTable, times(1)).getNumber(
-            eq(Unpooled.copiedBuffer("test-key", UTF_8))
+                eq(Unpooled.copiedBuffer("test-key", UTF_8))
         );
     }
 

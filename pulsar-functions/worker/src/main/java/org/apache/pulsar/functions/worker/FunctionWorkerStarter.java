@@ -30,19 +30,6 @@ import org.apache.pulsar.common.util.CmdGenerateDocs;
 @Slf4j
 public class FunctionWorkerStarter {
 
-    private static class WorkerArguments {
-        @Parameter(
-            names = { "-c", "--conf" },
-            description = "Configuration File for Function Worker")
-        private String configFile;
-
-        @Parameter(names = {"-h", "--help"}, description = "Show this help message")
-        private boolean help = false;
-
-        @Parameter(names = {"-g", "--generate-docs"}, description = "Generate docs")
-        private boolean generateDocs = false;
-    }
-
     public static void main(String[] args) throws Exception {
         WorkerArguments workerArguments = new WorkerArguments();
         JCommander commander = new JCommander(workerArguments);
@@ -83,5 +70,18 @@ public class FunctionWorkerStarter {
             log.info("Stopping function worker service...");
             worker.stop();
         }));
+    }
+
+    private static class WorkerArguments {
+        @Parameter(
+                names = {"-c", "--conf"},
+                description = "Configuration File for Function Worker")
+        private String configFile;
+
+        @Parameter(names = {"-h", "--help"}, description = "Show this help message")
+        private boolean help = false;
+
+        @Parameter(names = {"-g", "--generate-docs"}, description = "Generate docs")
+        private boolean generateDocs = false;
     }
 }

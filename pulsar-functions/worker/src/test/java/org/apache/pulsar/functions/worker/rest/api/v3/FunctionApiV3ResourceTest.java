@@ -30,9 +30,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
-
 import com.google.common.collect.Lists;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -48,18 +46,16 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Consumer;
-
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
-
 import org.apache.distributedlog.api.namespace.Namespace;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
-import org.apache.pulsar.client.admin.Packages;
-import org.apache.pulsar.client.admin.PulsarAdminException;
-import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.Functions;
 import org.apache.pulsar.client.admin.Namespaces;
+import org.apache.pulsar.client.admin.Packages;
+import org.apache.pulsar.client.admin.PulsarAdmin;
+import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.client.admin.Tenants;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.policies.data.TenantInfoImpl;
@@ -101,34 +97,21 @@ import org.testng.annotations.Test;
  */
 public class FunctionApiV3ResourceTest {
 
-    private static final class TestFunction implements Function<String, String> {
-
-        @Override
-        public String process(String input, Context context) {
-            return input;
-        }
-    }
-
-    private static final class WrongFunction implements Consumer<String> {
-        @Override
-        public void accept(String s) {
-
-        }
-    }
-
     private static final String tenant = "test-tenant";
     private static final String namespace = "test-namespace";
     private static final String function = "test-function";
     private static final String outputTopic = "test-output-topic";
     private static final String outputSerdeClassName = TopicSchema.DEFAULT_SERDE;
     private static final String className = TestFunction.class.getName();
-    private SubscriptionType subscriptionType = SubscriptionType.FAILOVER;
     private static final Map<String, String> topicsToSerDeClassName = new HashMap<>();
+    private static final int parallelism = 1;
+    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
+
     static {
         topicsToSerDeClassName.put("persistent://sample/standalone/ns1/test_src", TopicSchema.DEFAULT_SERDE);
     }
-    private static final int parallelism = 1;
 
+    private SubscriptionType subscriptionType = SubscriptionType.FAILOVER;
     private PulsarWorkerService mockedWorkerService;
     private PulsarAdmin mockedPulsarAdmin;
     private Tenants mockedTenants;
@@ -147,7 +130,25 @@ public class FunctionApiV3ResourceTest {
     private LeaderService mockedLeaderService;
     private Packages mockedPackages;
     private PulsarFunctionTestTemporaryDirectory tempDirectory;
-    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
+
+    public static FunctionConfig createDefaultFunctionConfig() {
+        FunctionConfig functionConfig = new FunctionConfig();
+        functionConfig.setTenant(tenant);
+        functionConfig.setNamespace(namespace);
+        functionConfig.setName(function);
+        functionConfig.setClassName(className);
+        functionConfig.setParallelism(parallelism);
+        functionConfig.setCustomSerdeInputs(topicsToSerDeClassName);
+        functionConfig.setOutput(outputTopic);
+        functionConfig.setOutputSerdeClassName(outputSerdeClassName);
+        functionConfig.setRuntime(FunctionConfig.Runtime.JAVA);
+        return functionConfig;
+    }
+
+    public static FunctionDetails createDefaultFunctionDetails() {
+        FunctionConfig functionConfig = createDefaultFunctionConfig();
+        return FunctionConfigUtils.convert(functionConfig, null);
+    }
 
     @BeforeMethod
     public void setup() throws Exception {
@@ -165,7 +166,8 @@ public class FunctionApiV3ResourceTest {
         this.mockedFunctions = mock(Functions.class);
         this.mockedPackages = mock(Packages.class);
         this.mockedLeaderService = mock(LeaderService.class);
-        this.mockedFunctionMetadata = FunctionMetaData.newBuilder().setFunctionDetails(createDefaultFunctionDetails()).build();
+        this.mockedFunctionMetadata =
+                FunctionMetaData.newBuilder().setFunctionDetails(createDefaultFunctionDetails()).build();
         namespaceList.add(tenant + "/" + namespace);
 
         this.mockedWorkerService = mock(PulsarWorkerService.class);
@@ -189,11 +191,11 @@ public class FunctionApiV3ResourceTest {
 
         // worker config
         WorkerConfig workerConfig = new WorkerConfig()
-            .setWorkerId("test")
-            .setWorkerPort(8080)
-            .setFunctionMetadataTopicName("pulsar/functions")
-            .setNumFunctionPackageReplicas(3)
-            .setPulsarServiceUrl("pulsar://localhost:6650/");
+                .setWorkerId("test")
+                .setWorkerPort(8080)
+                .setFunctionMetadataTopicName("pulsar/functions")
+                .setNumFunctionPackageReplicas(3)
+                .setPulsarServiceUrl("pulsar://localhost:6650/");
         tempDirectory = PulsarFunctionTestTemporaryDirectory.create(getClass().getSimpleName());
         tempDirectory.useTemporaryDirectoriesForWorkerConfig(workerConfig);
         when(mockedWorkerService.getWorkerConfig()).thenReturn(workerConfig);
@@ -211,7 +213,8 @@ public class FunctionApiV3ResourceTest {
     }
 
     private <T> void mockStatic(Class<T> classStatic, Consumer<MockedStatic<T>> consumer) {
-        final MockedStatic<T> mockedStatic = mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
+        final MockedStatic<T> mockedStatic =
+                mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
         consumer.accept(mockedStatic);
     }
 
@@ -254,7 +257,7 @@ public class FunctionApiV3ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -264,18 +267,18 @@ public class FunctionApiV3ResourceTest {
     public void testRegisterFunctionMissingNamespace() {
         try {
             testRegisterFunctionMissingArguments(
-                tenant,
-                null,
-                function,
-                mockedInputStream,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
+                    tenant,
+                    null,
+                    function,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
                     outputSerdeClassName,
-                className,
-                parallelism,
+                    className,
+                    parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -284,22 +287,22 @@ public class FunctionApiV3ResourceTest {
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Function name is not provided")
     public void testRegisterFunctionMissingFunctionName() {
         try {
-        testRegisterFunctionMissingArguments(
-            tenant,
-            namespace,
-            null,
-            mockedInputStream,
-            topicsToSerDeClassName,
-            mockedFormData,
-            outputTopic,
-                outputSerdeClassName,
-            className,
-            parallelism,
-                null);
-    } catch (RestException re){
-        assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
-        throw re;
-    }
+            testRegisterFunctionMissingArguments(
+                    tenant,
+                    namespace,
+                    null,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
+                    outputSerdeClassName,
+                    className,
+                    parallelism,
+                    null);
+        } catch (RestException re) {
+            assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
+            throw re;
+        }
     }
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Function Package is not provided")
@@ -317,7 +320,7 @@ public class FunctionApiV3ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -338,7 +341,7 @@ public class FunctionApiV3ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -348,18 +351,18 @@ public class FunctionApiV3ResourceTest {
     public void testRegisterFunctionMissingPackageDetails() {
         try {
             testRegisterFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                mockedInputStream,
-                topicsToSerDeClassName,
-                null,
-                outputTopic,
+                    tenant,
+                    namespace,
+                    function,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    null,
+                    outputTopic,
                     outputSerdeClassName,
-                className,
-                parallelism,
+                    className,
+                    parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -380,7 +383,7 @@ public class FunctionApiV3ResourceTest {
                     null,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -401,7 +404,7 @@ public class FunctionApiV3ResourceTest {
                     "UnknownClass",
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -411,18 +414,18 @@ public class FunctionApiV3ResourceTest {
     public void testRegisterFunctionWrongParallelism() {
         try {
             testRegisterFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                mockedInputStream,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
-                outputSerdeClassName,
-                className,
-                -2,
-                null);
-        } catch (RestException re){
+                    tenant,
+                    namespace,
+                    function,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
+                    outputSerdeClassName,
+                    className,
+                    -2,
+                    null);
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -444,28 +447,29 @@ public class FunctionApiV3ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
     }
 
-    @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Output topic " + function + "-output-topic/test:" + " is invalid")
+    @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Output topic " + function +
+            "-output-topic/test:" + " is invalid")
     public void testRegisterFunctionWrongOutputTopic() {
         try {
             testRegisterFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                mockedInputStream,
-                topicsToSerDeClassName,
-                mockedFormData,
-                function + "-output-topic/test:",
-                outputSerdeClassName,
-                className,
-                parallelism,
-                null);
-        } catch (RestException re){
+                    tenant,
+                    namespace,
+                    function,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    function + "-output-topic/test:",
+                    outputSerdeClassName,
+                    className,
+                    parallelism,
+                    null);
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -475,18 +479,18 @@ public class FunctionApiV3ResourceTest {
     public void testRegisterFunctionHttpUrl() {
         try {
             testRegisterFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                null,
-                topicsToSerDeClassName,
-                null,
-                outputTopic,
-                outputSerdeClassName,
-                className,
-                parallelism,
-                "http://localhost:1234/test");
-        } catch (RestException re){
+                    tenant,
+                    namespace,
+                    function,
+                    null,
+                    topicsToSerDeClassName,
+                    null,
+                    outputTopic,
+                    outputSerdeClassName,
+                    className,
+                    parallelism,
+                    "http://localhost:1234/test");
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -507,7 +511,7 @@ public class FunctionApiV3ResourceTest {
                     WrongFunction.class.getName(),
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -599,13 +603,13 @@ public class FunctionApiV3ResourceTest {
     private void registerDefaultFunctionWithPackageUrl(String packageUrl) {
         FunctionConfig functionConfig = createDefaultFunctionConfig();
         resource.registerFunction(
-            tenant,
-            namespace,
-            function,
-            mockedInputStream,
-            mockedFormData,
-            packageUrl,
-            functionConfig,
+                tenant,
+                namespace,
+                function,
+                mockedInputStream,
+                mockedFormData,
+                packageUrl,
+                functionConfig,
                 null, null);
     }
 
@@ -632,7 +636,8 @@ public class FunctionApiV3ResourceTest {
                                     any(File.class),
                                     any(Namespace.class));
                         }
-                ).thenThrow(new IOException("upload failure"));;
+                ).thenThrow(new IOException("upload failure"));
+                ;
             });
 
             when(mockedManager.containsFunction(eq(tenant), eq(namespace), eq(function))).thenReturn(false);
@@ -667,7 +672,7 @@ public class FunctionApiV3ResourceTest {
     public void testRegisterFunctionFailedWithWrongPackageName() throws PulsarAdminException {
         try {
             doThrow(new PulsarAdminException("package name is invalid"))
-                .when(mockedPackages).download(anyString(), anyString());
+                    .when(mockedPackages).download(anyString(), anyString());
             registerDefaultFunctionWithPackageUrl("function://");
         } catch (RestException e) {
             // expected exception
@@ -739,16 +744,16 @@ public class FunctionApiV3ResourceTest {
     public void testUpdateFunctionMissingTenant() throws Exception {
         try {
             testUpdateFunctionMissingArguments(
-                null,
-                namespace,
-                function,
-                mockedInputStream,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
+                    null,
+                    namespace,
+                    function,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
                     outputSerdeClassName,
-                className,
-                parallelism,
+                    className,
+                    parallelism,
                     "Tenant is not provided");
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -760,16 +765,16 @@ public class FunctionApiV3ResourceTest {
     public void testUpdateFunctionMissingNamespace() throws Exception {
         try {
             testUpdateFunctionMissingArguments(
-                tenant,
-                null,
-                function,
-                mockedInputStream,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
+                    tenant,
+                    null,
+                    function,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
                     outputSerdeClassName,
-                className,
-                parallelism,
+                    className,
+                    parallelism,
                     "Namespace is not provided");
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -781,16 +786,16 @@ public class FunctionApiV3ResourceTest {
     public void testUpdateFunctionMissingFunctionName() throws Exception {
         try {
             testUpdateFunctionMissingArguments(
-                tenant,
-                namespace,
-                null,
-                mockedInputStream,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
+                    tenant,
+                    namespace,
+                    null,
+                    mockedInputStream,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
                     outputSerdeClassName,
-                className,
-                parallelism,
+                    className,
+                    parallelism,
                     "Function name is not provided");
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -803,16 +808,16 @@ public class FunctionApiV3ResourceTest {
         try {
             mockWorkerUtils();
             testUpdateFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                null,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
+                    tenant,
+                    namespace,
+                    function,
+                    null,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
                     outputSerdeClassName,
-                className,
-                parallelism,
+                    className,
+                    parallelism,
                     "Update contains no change");
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -849,16 +854,16 @@ public class FunctionApiV3ResourceTest {
             mockWorkerUtils();
 
             testUpdateFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                null,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
+                    tenant,
+                    namespace,
+                    function,
+                    null,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
                     outputSerdeClassName,
-                null,
-                parallelism,
+                    null,
+                    parallelism,
                     "Update contains no change");
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -872,17 +877,17 @@ public class FunctionApiV3ResourceTest {
             mockWorkerUtils();
 
             testUpdateFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                null,
-                topicsToSerDeClassName,
-                mockedFormData,
-                outputTopic,
-                outputSerdeClassName,
-                null,
-                parallelism + 1,
-                null);
+                    tenant,
+                    namespace,
+                    function,
+                    null,
+                    topicsToSerDeClassName,
+                    mockedFormData,
+                    outputTopic,
+                    outputSerdeClassName,
+                    null,
+                    parallelism + 1,
+                    null);
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
@@ -894,17 +899,17 @@ public class FunctionApiV3ResourceTest {
         mockWorkerUtils();
 
         testUpdateFunctionMissingArguments(
-            tenant,
-            namespace,
-            function,
-            null,
-            topicsToSerDeClassName,
-            mockedFormData,
-            "DifferentOutput",
-            outputSerdeClassName,
-            null,
-            parallelism,
-            null);
+                tenant,
+                namespace,
+                function,
+                null,
+                topicsToSerDeClassName,
+                mockedFormData,
+                "DifferentOutput",
+                outputSerdeClassName,
+                null,
+                parallelism,
+                null);
     }
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Input Topics cannot be altered")
@@ -915,17 +920,17 @@ public class FunctionApiV3ResourceTest {
             Map<String, String> someOtherInput = new HashMap<>();
             someOtherInput.put("DifferentTopic", TopicSchema.DEFAULT_SERDE);
             testUpdateFunctionMissingArguments(
-                tenant,
-                namespace,
-                function,
-                null,
-                someOtherInput,
-                mockedFormData,
-                outputTopic,
-                outputSerdeClassName,
-                null,
-                parallelism,
-                "Input Topics cannot be altered");
+                    tenant,
+                    namespace,
+                    function,
+                    null,
+                    someOtherInput,
+                    mockedFormData,
+                    outputTopic,
+                    outputSerdeClassName,
+                    null,
+                    parallelism,
+                    "Input Topics cannot be altered");
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
@@ -979,13 +984,13 @@ public class FunctionApiV3ResourceTest {
         }
 
         resource.updateFunction(
-            tenant,
-            namespace,
-            function,
-            inputStream,
-            details,
-            null,
-            functionConfig,
+                tenant,
+                namespace,
+                function,
+                inputStream,
+                details,
+                null,
+                functionConfig,
                 null, null, null);
 
     }
@@ -1007,13 +1012,13 @@ public class FunctionApiV3ResourceTest {
         functionConfig.setOutputSerdeClassName(outputSerdeClassName);
 
         resource.updateFunction(
-            tenant,
-            namespace,
-            function,
-            mockedInputStream,
-            mockedFormData,
-            packageUrl,
-            functionConfig,
+                tenant,
+                namespace,
+                function,
+                mockedInputStream,
+                mockedFormData,
+                packageUrl,
+                functionConfig,
                 null, null, null);
     }
 
@@ -1081,13 +1086,13 @@ public class FunctionApiV3ResourceTest {
         when(mockedManager.containsFunction(eq(tenant), eq(namespace), eq(function))).thenReturn(true);
 
         resource.updateFunction(
-            tenant,
-            namespace,
-            function,
-            null,
-            null,
-            filePackageUrl,
-            functionConfig,
+                tenant,
+                namespace,
+                function,
+                null,
+                null,
+                filePackageUrl,
+                functionConfig,
                 null, null, null);
 
     }
@@ -1138,7 +1143,7 @@ public class FunctionApiV3ResourceTest {
         when(mockedManager.containsFunction(eq(tenant), eq(namespace), eq(function))).thenReturn(true);
         try {
             doThrow(new PulsarAdminException("package name is invalid"))
-                .when(mockedPackages).download(anyString(), anyString());
+                    .when(mockedPackages).download(anyString(), anyString());
             registerDefaultFunctionWithPackageUrl("function://");
         } catch (RestException e) {
             // expected exception
@@ -1155,9 +1160,9 @@ public class FunctionApiV3ResourceTest {
         try {
 
             testDeregisterFunctionMissingArguments(
-                null,
-                namespace,
-                function
+                    null,
+                    namespace,
+                    function
             );
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -1169,9 +1174,9 @@ public class FunctionApiV3ResourceTest {
     public void testDeregisterFunctionMissingNamespace() {
         try {
             testDeregisterFunctionMissingArguments(
-                tenant,
-                null,
-                function
+                    tenant,
+                    null,
+                    function
             );
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -1182,10 +1187,10 @@ public class FunctionApiV3ResourceTest {
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Function name is not provided")
     public void testDeregisterFunctionMissingFunctionName() {
         try {
-             testDeregisterFunctionMissingArguments(
-                tenant,
-                namespace,
-                null
+            testDeregisterFunctionMissingArguments(
+                    tenant,
+                    namespace,
+                    null
             );
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -1199,17 +1204,17 @@ public class FunctionApiV3ResourceTest {
             String function
     ) {
         resource.deregisterFunction(
-            tenant,
-            namespace,
-            function,
+                tenant,
+                namespace,
+                function,
                 null, null);
     }
 
     private void deregisterDefaultFunction() {
         resource.deregisterFunction(
-            tenant,
-            namespace,
-            function,
+                tenant,
+                namespace,
+                function,
                 null, null);
     }
 
@@ -1255,8 +1260,7 @@ public class FunctionApiV3ResourceTest {
                     .when(mockedManager).updateFunctionOnLeader(any(FunctionMetaData.class), Mockito.anyBoolean());
 
             deregisterDefaultFunction();
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.INTERNAL_SERVER_ERROR);
             throw re;
         }
@@ -1270,12 +1274,11 @@ public class FunctionApiV3ResourceTest {
     public void testGetFunctionMissingTenant() {
         try {
             testGetFunctionMissingArguments(
-                null,
-                namespace,
-                function
+                    null,
+                    namespace,
+                    function
             );
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -1285,12 +1288,11 @@ public class FunctionApiV3ResourceTest {
     public void testGetFunctionMissingNamespace() {
         try {
             testGetFunctionMissingArguments(
-                tenant,
-                null,
-                function
+                    tenant,
+                    null,
+                    function
             );
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -1300,12 +1302,11 @@ public class FunctionApiV3ResourceTest {
     public void testGetFunctionMissingFunctionName() {
         try {
             testGetFunctionMissingArguments(
-                tenant,
-                namespace,
-                null
+                    tenant,
+                    namespace,
+                    null
             );
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -1317,18 +1318,18 @@ public class FunctionApiV3ResourceTest {
             String function
     ) {
         resource.getFunctionInfo(
-            tenant,
-            namespace,
-            function,null,null
+                tenant,
+                namespace,
+                function, null, null
         );
 
     }
 
     private FunctionConfig getDefaultFunctionInfo() {
         return resource.getFunctionInfo(
-            tenant,
-            namespace,
-            function,
+                tenant,
+                namespace,
+                function,
                 null,
                 null
         );
@@ -1364,11 +1365,11 @@ public class FunctionApiV3ResourceTest {
                 .setSource(SourceSpec.newBuilder().setSubscriptionType(subscriptionType)
                         .putAllTopicsToSerDeClassName(topicsToSerDeClassName)).build();
         FunctionMetaData metaData = FunctionMetaData.newBuilder()
-            .setCreateTime(System.currentTimeMillis())
-            .setFunctionDetails(functionDetails)
-            .setPackageLocation(PackageLocationMetaData.newBuilder().setPackagePath("/path/to/package"))
-            .setVersion(1234)
-            .build();
+                .setCreateTime(System.currentTimeMillis())
+                .setFunctionDetails(functionDetails)
+                .setPackageLocation(PackageLocationMetaData.newBuilder().setPackagePath("/path/to/package"))
+                .setVersion(1234)
+                .build();
         when(mockedManager.getFunctionMetaData(eq(tenant), eq(namespace), eq(function))).thenReturn(metaData);
 
         FunctionConfig functionConfig = getDefaultFunctionInfo();
@@ -1385,8 +1386,8 @@ public class FunctionApiV3ResourceTest {
     public void testListFunctionsMissingTenant() {
         try {
             testListFunctionsMissingArguments(
-                null,
-                namespace
+                    null,
+                    namespace
             );
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -1398,8 +1399,8 @@ public class FunctionApiV3ResourceTest {
     public void testListFunctionsMissingNamespace() {
         try {
             testListFunctionsMissingArguments(
-                tenant,
-                null
+                    tenant,
+                    null
             );
         } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
@@ -1412,16 +1413,16 @@ public class FunctionApiV3ResourceTest {
             String namespace
     ) {
         resource.listFunctions(
-            tenant,
-            namespace,null,null
+                tenant,
+                namespace, null, null
         );
 
     }
 
     private List<String> listDefaultFunctions() {
         return resource.listFunctions(
-            tenant,
-            namespace,null,null
+                tenant,
+                namespace, null, null
         );
     }
 
@@ -1474,14 +1475,15 @@ public class FunctionApiV3ResourceTest {
 
     @Test
     public void testDownloadFunctionHttpUrl() throws Exception {
-        String jarHttpUrl = "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
+        String jarHttpUrl =
+                "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
         String testDir = FunctionApiV3ResourceTest.class.getProtectionDomain().getCodeSource().getLocation().getPath();
         PulsarWorkerService worker = mock(PulsarWorkerService.class);
         doReturn(true).when(worker).isInitialized();
         WorkerConfig config = mock(WorkerConfig.class);
         when(config.isAuthorizationEnabled()).thenReturn(false);
         when(worker.getWorkerConfig()).thenReturn(config);
-        FunctionsImpl function = new FunctionsImpl(()-> worker);
+        FunctionsImpl function = new FunctionsImpl(() -> worker);
         StreamingOutput streamOutput = function.downloadFunction(jarHttpUrl, null, null);
         File pkgFile = new File(testDir, UUID.randomUUID().toString());
         OutputStream output = new FileOutputStream(pkgFile);
@@ -1516,7 +1518,8 @@ public class FunctionApiV3ResourceTest {
 
     @Test
     public void testDownloadFunctionBuiltin() throws Exception {
-        mockStatic(WorkerUtils.class, ctx -> {});
+        mockStatic(WorkerUtils.class, ctx -> {
+        });
 
         URL fileUrl = getClass().getClassLoader().getResource("test_worker_config.yml");
         File file = Paths.get(fileUrl.toURI()).toFile();
@@ -1610,7 +1613,8 @@ public class FunctionApiV3ResourceTest {
         functionConfig.setCustomSerdeInputs(topicsToSerDeClassName);
         functionConfig.setOutput(outputTopic);
         functionConfig.setOutputSerdeClassName(outputSerdeClassName);
-        resource.registerFunction(actualTenant, actualNamespace, actualName, null, null, filePackageUrl, functionConfig, null, null);
+        resource.registerFunction(actualTenant, actualNamespace, actualName, null, null, filePackageUrl, functionConfig,
+                null, null);
     }
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Function language runtime is either not set or cannot be determined")
@@ -1636,22 +1640,18 @@ public class FunctionApiV3ResourceTest {
 
     }
 
-    public static FunctionConfig createDefaultFunctionConfig() {
-        FunctionConfig functionConfig = new FunctionConfig();
-        functionConfig.setTenant(tenant);
-        functionConfig.setNamespace(namespace);
-        functionConfig.setName(function);
-        functionConfig.setClassName(className);
-        functionConfig.setParallelism(parallelism);
-        functionConfig.setCustomSerdeInputs(topicsToSerDeClassName);
-        functionConfig.setOutput(outputTopic);
-        functionConfig.setOutputSerdeClassName(outputSerdeClassName);
-        functionConfig.setRuntime(FunctionConfig.Runtime.JAVA);
-        return functionConfig;
+    private static final class TestFunction implements Function<String, String> {
+
+        @Override
+        public String process(String input, Context context) {
+            return input;
+        }
     }
 
-    public static FunctionDetails createDefaultFunctionDetails() {
-        FunctionConfig functionConfig = createDefaultFunctionConfig();
-        return FunctionConfigUtils.convert(functionConfig, null);
+    private static final class WrongFunction implements Consumer<String> {
+        @Override
+        public void accept(String s) {
+
+        }
     }
 }

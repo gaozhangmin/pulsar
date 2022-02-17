@@ -59,15 +59,14 @@ import org.apache.pulsar.functions.utils.FunctionCommon;
  */
 @Slf4j
 public class FunctionMetaDataManager implements AutoCloseable {
+    private static final String versionTag = "version";
     // Represents the global state
     // tenant -> namespace -> (function name, FunctionRuntimeInfo)
     final Map<String, Map<String, Map<String, FunctionMetaData>>> functionMetaDataMap = new ConcurrentHashMap<>();
-
     private final SchedulerManager schedulerManager;
     private final WorkerConfig workerConfig;
     private final PulsarClient pulsarClient;
     private final ErrorNotifier errorNotifier;
-
     private FunctionMetaDataTopicTailer functionMetaDataTopicTailer;
     // The producer of the metadata topic when we are the leader.
     // Note that this variable serves a double duty. A non-null value
@@ -75,9 +74,6 @@ public class FunctionMetaDataManager implements AutoCloseable {
     private Producer exclusiveLeaderProducer;
     @Getter
     private volatile MessageId lastMessageSeen = MessageId.earliest;
-
-    private static final String versionTag = "version";
-
     @Getter
     private CompletableFuture<Void> isInitialized = new CompletableFuture<>();
 
@@ -138,9 +134,10 @@ public class FunctionMetaDataManager implements AutoCloseable {
     }
 
     /**
-     * Get the function metadata for a function
-     * @param tenant the tenant the function belongs to
-     * @param namespace the namespace the function belongs to
+     * Get the function metadata for a function.
+     *
+     * @param tenant       the tenant the function belongs to
+     * @param namespace    the namespace the function belongs to
      * @param functionName the function name
      * @return FunctionMetaData that contains the function metadata
      */
@@ -149,7 +146,8 @@ public class FunctionMetaDataManager implements AutoCloseable {
     }
 
     /**
-     * Get a list of all the meta for every function
+     * Get a list of all the meta for every function.
+     *
      * @return list of function metadata
      */
     public synchronized List<FunctionMetaData> getAllFunctionMetaData() {
@@ -163,8 +161,9 @@ public class FunctionMetaDataManager implements AutoCloseable {
     }
 
     /**
-     * List all the functions in a namespace
-     * @param tenant the tenant the namespace belongs to
+     * List all the functions in a namespace.
+     *
+     * @param tenant    the tenant the namespace belongs to
      * @param namespace the namespace
      * @return a list of function names
      */
@@ -185,9 +184,10 @@ public class FunctionMetaDataManager implements AutoCloseable {
     }
 
     /**
-     * Check if the function exists
-     * @param tenant tenant that the function belongs to
-     * @param namespace namespace that the function belongs to
+     * Check if the function exists.
+     *
+     * @param tenant       tenant that the function belongs to
+     * @param namespace    namespace that the function belongs to
      * @param functionName name of function
      * @return true if function exists and false if it does not
      */
@@ -198,9 +198,10 @@ public class FunctionMetaDataManager implements AutoCloseable {
     /**
      * Called by the worker when we are in the leader mode.  In this state, we update our in-memory
      * data structures and then write to the metadata topic.
+     *
      * @param functionMetaData The function metadata in question
-     * @param delete Is this a delete operation
-     * @throws IllegalStateException if we are not the leader
+     * @param delete           Is this a delete operation
+     * @throws IllegalStateException    if we are not the leader
      * @throws IllegalArgumentException if the request is out of date.
      */
     public synchronized void updateFunctionOnLeader(FunctionMetaData functionMetaData, boolean delete)
@@ -271,6 +272,7 @@ public class FunctionMetaDataManager implements AutoCloseable {
     /**
      * Acquires a exclusive producer.  This method cannot return null.  It can only return a valid exclusive producer
      * or throw NotLeaderAnymore exception.
+     *
      * @param isLeader if the worker is still the leader
      * @return A valid exclusive producer
      * @throws WorkerUtils.NotLeaderAnymore if the worker is no longer the leader.
@@ -332,6 +334,7 @@ public class FunctionMetaDataManager implements AutoCloseable {
      * This is called by the MetaData tailer. It updates the in-memory cache.
      * It eats up any exception thrown by processUpdate/processDeregister since
      * that's just part of the state machine
+     *
      * @param message The message read from metadata topic that needs to be processed
      */
     public void processMetaDataTopicMessage(Message<byte[]> message) throws IOException {
@@ -428,7 +431,8 @@ public class FunctionMetaDataManager implements AutoCloseable {
                     log.debug("{}/{}/{} Ignoring outdated request version: {}", tenant, namespace, functionName,
                             version);
                 }
-                throw new IllegalArgumentException("Delete request ignored because it is out of date. Please try again.");
+                throw new IllegalArgumentException(
+                        "Delete request ignored because it is out of date. Please try again.");
             }
         }
 
@@ -455,7 +459,8 @@ public class FunctionMetaDataManager implements AutoCloseable {
                 setFunctionMetaData(updateRequestFs);
                 needsScheduling = true;
             } else {
-                throw new IllegalArgumentException("Update request ignored because it is out of date. Please try again.");
+                throw new IllegalArgumentException(
+                        "Update request ignored because it is out of date. Please try again.");
             }
         }
 
@@ -470,7 +475,7 @@ public class FunctionMetaDataManager implements AutoCloseable {
 
     private boolean isRequestOutdated(String tenant, String namespace, String functionName, long version) {
         // avoid NPE
-        if(!containsFunctionMetaData(tenant, namespace, functionName)){
+        if (!containsFunctionMetaData(tenant, namespace, functionName)) {
             return false;
         }
         FunctionMetaData currentFunctionMetaData = this.functionMetaDataMap.get(tenant)

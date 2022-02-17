@@ -19,7 +19,6 @@
 package org.apache.pulsar.functions.api.utils;
 
 import static org.testng.Assert.assertEquals;
-
 import java.io.Serializable;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -30,15 +29,6 @@ import org.testng.annotations.Test;
  */
 public class JavaSerDeTest {
 
-    @Data
-    @AllArgsConstructor
-    private static class TestObject implements Serializable {
-
-        private int intField;
-        private String stringField;
-
-    }
-
     @Test
     public void testSerDe() {
         TestObject to = new TestObject(1234, "test-serde-java-object");
@@ -47,6 +37,15 @@ public class JavaSerDeTest {
         TestObject deserializeTo = (TestObject) JavaSerDe.of().deserialize(data);
 
         assertEquals(to, deserializeTo);
+    }
+
+    @Data
+    @AllArgsConstructor
+    private static class TestObject implements Serializable {
+
+        private int intField;
+        private String stringField;
+
     }
 
 }

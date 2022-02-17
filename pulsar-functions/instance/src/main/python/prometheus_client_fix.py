@@ -20,7 +20,6 @@
 from __future__ import unicode_literals
 
 import threading
-
 from prometheus_client import core
 from prometheus_client.exposition import MetricsHandler
 
@@ -46,6 +45,7 @@ class _ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
     # Enabling daemon threads virtually makes ``_ThreadingSimpleServer`` the
     # same as Python 3.7's ``ThreadingHTTPServer``.
     daemon_threads = True
+
 
 def start_http_server(port, addr='', registry=core.REGISTRY):
     """Starts an HTTP server for prometheus metrics as a daemon thread"""

@@ -16,23 +16,38 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.runtime.kubernetes;
 
+import static org.apache.pulsar.functions.runtime.RuntimeUtils.FUNCTIONS_INSTANCE_CLASSPATH;
+import static org.apache.pulsar.functions.utils.FunctionCommon.roundDecimal;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.spy;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertThrows;
+import static org.testng.Assert.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.protobuf.util.JsonFormat;
+import io.kubernetes.client.custom.Quantity;
 import io.kubernetes.client.openapi.apis.AppsV1Api;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
-import io.kubernetes.client.custom.Quantity;
 import io.kubernetes.client.openapi.models.V1Container;
 import io.kubernetes.client.openapi.models.V1PodSpec;
 import io.kubernetes.client.openapi.models.V1ResourceRequirements;
 import io.kubernetes.client.openapi.models.V1Service;
 import io.kubernetes.client.openapi.models.V1StatefulSet;
 import io.kubernetes.client.openapi.models.V1Toleration;
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.apache.pulsar.common.util.ObjectMapperFactory;
 import org.apache.pulsar.functions.instance.InstanceConfig;
@@ -51,24 +66,6 @@ import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
-
-import java.lang.reflect.Type;
-import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
-import static org.apache.pulsar.functions.runtime.RuntimeUtils.FUNCTIONS_INSTANCE_CLASSPATH;
-import static org.apache.pulsar.functions.utils.FunctionCommon.roundDecimal;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.spy;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotEquals;
-import static org.testng.Assert.assertThrows;
-import static org.testng.Assert.assertTrue;
 
 /**
  * Unit test of {@link ThreadRuntime}.
@@ -90,70 +87,6 @@ public class KubernetesRuntimeTest {
                 ConsumerSpec.newBuilder().setSerdeClassName("").setIsRegexPattern(false).build());
     }
 
-    public class TestKubernetesCustomManifestCustomizer implements KubernetesManifestCustomizer {
-
-        @Override
-        public V1StatefulSet customizeStatefulSet(Function.FunctionDetails funcDetails, V1StatefulSet statefulSet) {
-            assertEquals(funcDetails.getCustomRuntimeOptions(), "custom-service-account");
-            statefulSet.getSpec().getTemplate().getSpec().serviceAccountName("my-service-account");
-            return statefulSet;
-        }
-
-        @Override
-        public void initialize(Map<String, Object> config) {
-
-        }
-    }
-
-    class TestSecretProviderConfigurator implements SecretsProviderConfigurator {
-
-        @Override
-        public void init(Map<String, String> config) {
-
-        }
-
-        @Override
-        public String getSecretsProviderClassName(FunctionDetails functionDetails) {
-            if (!StringUtils.isEmpty(functionDetails.getSecretsMap())) {
-                if (functionDetails.getRuntime() == FunctionDetails.Runtime.JAVA) {
-                    return ClearTextSecretsProvider.class.getName();
-                } else {
-                    return "secretsprovider.ClearTextSecretsProvider";
-                }
-            } else {
-                return null;
-            }
-        }
-
-        @Override
-        public Map<String, String> getSecretsProviderConfig(FunctionDetails functionDetails) {
-            HashMap<String, String> map = new HashMap<>();
-            map.put("Somevalue", "myvalue");
-            return map;
-        }
-
-        @Override
-        public void configureKubernetesRuntimeSecretsProvider(V1PodSpec podSpec, String functionsContainerName, FunctionDetails functionDetails) {
-
-        }
-
-        @Override
-        public void configureProcessRuntimeSecretsProvider(ProcessBuilder processBuilder, FunctionDetails functionDetails) {
-
-        }
-
-        @Override
-        public Type getSecretObjectType() {
-            return null;
-        }
-
-        @Override
-        public void doAdmissionChecks(AppsV1Api appsV1Api, CoreV1Api coreV1Api, String jobNamespace, String jobName, FunctionDetails functionDetails) {
-
-        }
-    }
-
-    private KubernetesRuntimeFactory factory;
     private final String userJarFile;
     private final String pulsarRootDir;
     private final String javaInstanceJarFile;
@@ -162,7 +95,7 @@ public class KubernetesRuntimeTest {
     private final String pulsarAdminUrl;
     private final String stateStorageServiceUrl;
     private final String logDirectory;
-
+    private KubernetesRuntimeFactory factory;
     public KubernetesRuntimeTest() throws Exception {
         this.userJarFile = "UserJar.jar";
         this.pulsarRootDir = "/pulsar";
@@ -174,11 +107,49 @@ public class KubernetesRuntimeTest {
         this.logDirectory = "logs/functions";
     }
 
+    public static JsonObject createRuntimeCustomizerConfig() {
+        JsonObject configObj = new JsonObject();
+        configObj.addProperty("jobNamespace", "custom-ns");
+        configObj.addProperty("jobName", "custom-name");
+
+        JsonObject extraAnn = new JsonObject();
+        extraAnn.addProperty("annotation", "test");
+        configObj.add("extraAnnotations", extraAnn);
+
+        JsonObject extraLabel = new JsonObject();
+        extraLabel.addProperty("label", "test");
+        configObj.add("extraLabels", extraLabel);
+
+        JsonObject nodeLabels = new JsonObject();
+        nodeLabels.addProperty("selector", "test");
+        configObj.add("nodeSelectorLabels", nodeLabels);
+
+        JsonArray tolerations = new JsonArray();
+        JsonObject toleration = new JsonObject();
+        toleration.addProperty("key", "test");
+        toleration.addProperty("value", "test");
+        toleration.addProperty("effect", "test");
+        tolerations.add(toleration);
+        configObj.add("tolerations", tolerations);
+
+        JsonObject resourceRequirements = new JsonObject();
+        JsonObject requests = new JsonObject();
+        JsonObject limits = new JsonObject();
+        requests.addProperty("cpu", "1");
+        requests.addProperty("memory", "4G");
+        limits.addProperty("cpu", "2");
+        limits.addProperty("memory", "8G");
+        resourceRequirements.add("requests", requests);
+        resourceRequirements.add("limits", limits);
+        configObj.add("resourceRequirements", resourceRequirements);
+        return configObj;
+    }
+
     @BeforeClass
     public void setup() {
         System.setProperty(FUNCTIONS_INSTANCE_CLASSPATH, "/pulsar/lib/*");
     }
-    
+
     @AfterMethod(alwaysRun = true)
     public void tearDown() {
         if (null != this.factory) {
@@ -227,28 +198,35 @@ public class KubernetesRuntimeTest {
         workerConfig.setAuthenticationEnabled(false);
         workerConfig.setDownloadDirectory(downloadDirectory);
 
-        manifestCustomizer.ifPresent(runtimeCustomizer -> runtimeCustomizer.initialize(Optional.ofNullable(workerConfig.getRuntimeCustomizerConfig()).orElse(Collections.emptyMap())));
+        manifestCustomizer.ifPresent(runtimeCustomizer -> runtimeCustomizer.initialize(
+                Optional.ofNullable(workerConfig.getRuntimeCustomizerConfig()).orElse(Collections.emptyMap())));
 
-        factory.initialize(workerConfig, null, new TestSecretProviderConfigurator(), Mockito.mock(ConnectorsManager.class), Optional.empty(), manifestCustomizer);
+        factory.initialize(workerConfig, null, new TestSecretProviderConfigurator(),
+                Mockito.mock(ConnectorsManager.class), Optional.empty(), manifestCustomizer);
         return factory;
     }
 
     KubernetesRuntimeFactory createKubernetesRuntimeFactory(String extraDepsDir, int percentMemoryPadding,
                                                             double cpuOverCommitRatio, double memoryOverCommitRatio,
-                                                            Optional<RuntimeCustomizer> manifestCustomizer) throws Exception {
-        return createKubernetesRuntimeFactory(extraDepsDir, percentMemoryPadding, cpuOverCommitRatio, memoryOverCommitRatio, manifestCustomizer, null);
+                                                            Optional<RuntimeCustomizer> manifestCustomizer)
+            throws Exception {
+        return createKubernetesRuntimeFactory(extraDepsDir, percentMemoryPadding, cpuOverCommitRatio,
+                memoryOverCommitRatio, manifestCustomizer, null);
     }
 
     KubernetesRuntimeFactory createKubernetesRuntimeFactory(String extraDepsDir, int percentMemoryPadding,
-                                                            double cpuOverCommitRatio, double memoryOverCommitRatio) throws Exception {
-        return createKubernetesRuntimeFactory(extraDepsDir, percentMemoryPadding, cpuOverCommitRatio, memoryOverCommitRatio, Optional.empty());
+                                                            double cpuOverCommitRatio, double memoryOverCommitRatio)
+            throws Exception {
+        return createKubernetesRuntimeFactory(extraDepsDir, percentMemoryPadding, cpuOverCommitRatio,
+                memoryOverCommitRatio, Optional.empty());
     }
 
     FunctionDetails createFunctionDetails(FunctionDetails.Runtime runtime, boolean addSecrets) {
         return createFunctionDetails(runtime, addSecrets, (fb) -> fb);
     }
 
-    FunctionDetails createFunctionDetails(FunctionDetails.Runtime runtime, boolean addSecrets, java.util.function.Function<FunctionDetails.Builder, FunctionDetails.Builder> customize) {
+    FunctionDetails createFunctionDetails(FunctionDetails.Runtime runtime, boolean addSecrets,
+                                          java.util.function.Function<FunctionDetails.Builder, FunctionDetails.Builder> customize) {
         FunctionDetails.Builder functionDetailsBuilder = FunctionDetails.newBuilder();
         functionDetailsBuilder.setRuntime(runtime);
         functionDetailsBuilder.setTenant(TEST_TENANT);
@@ -311,8 +289,10 @@ public class KubernetesRuntimeTest {
         Function.Resources resources = Function.Resources.newBuilder().setRam(ram).build();
 
         V1Container containerSpec = container.getFunctionContainer(Collections.emptyList(), resources);
-        Assert.assertEquals(containerSpec.getResources().getLimits().get("memory").getNumber().longValue(), expectedRamWithPadding);
-        Assert.assertEquals(containerSpec.getResources().getRequests().get("memory").getNumber().longValue(), expectedRamWithPadding);
+        Assert.assertEquals(containerSpec.getResources().getLimits().get("memory").getNumber().longValue(),
+                expectedRamWithPadding);
+        Assert.assertEquals(containerSpec.getResources().getRequests().get("memory").getNumber().longValue(),
+                expectedRamWithPadding);
     }
 
     @Test
@@ -348,18 +328,18 @@ public class KubernetesRuntimeTest {
     public void testResources() throws Exception {
 
         // test overcommit
-    	testResources(1, 1000, 1.0, 1.0);
-    	testResources(1, 1000, 2.0, 1.0);
-    	testResources(1, 1000, 1.0, 2.0);
-    	testResources(1, 1000, 1.5, 1.5);
-    	testResources(1, 1000, 1.3, 1.0);
+        testResources(1, 1000, 1.0, 1.0);
+        testResources(1, 1000, 2.0, 1.0);
+        testResources(1, 1000, 1.0, 2.0);
+        testResources(1, 1000, 1.5, 1.5);
+        testResources(1, 1000, 1.3, 1.0);
 
         // test cpu rounding
-    	testResources(1.0 / 1.5, 1000, 1.3, 1.0);
+        testResources(1.0 / 1.5, 1000, 1.3, 1.0);
     }
 
     private void testResources(double userCpuRequest, long userMemoryRequest, double cpuOverCommitRatio,
-            double memoryOverCommitRatio) throws Exception {
+                               double memoryOverCommitRatio) throws Exception {
 
         Function.Resources resources = Function.Resources.newBuilder()
                 .setRam(userMemoryRequest).setCpu(userCpuRequest).setDisk(10000L).build();
@@ -370,21 +350,27 @@ public class KubernetesRuntimeTest {
         List<String> args = container.getProcessArgs();
 
         // check padding and xmx
-        long heap = Long.parseLong(args.stream().filter(s -> s.startsWith("-Xmx")).collect(Collectors.toList()).get(0).replace("-Xmx", ""));
+        long heap = Long.parseLong(args.stream().filter(s -> s.startsWith("-Xmx")).collect(Collectors.toList()).get(0)
+                .replace("-Xmx", ""));
         V1Container containerSpec = container.getFunctionContainer(Collections.emptyList(), resources);
-        assertEquals(containerSpec.getResources().getLimits().get("memory").getNumber().longValue(), Math.round(heap + (heap * 0.1)));
-        assertEquals(containerSpec.getResources().getRequests().get("memory").getNumber().longValue(), Math.round((heap + (heap * 0.1)) / memoryOverCommitRatio));
+        assertEquals(containerSpec.getResources().getLimits().get("memory").getNumber().longValue(),
+                Math.round(heap + (heap * 0.1)));
+        assertEquals(containerSpec.getResources().getRequests().get("memory").getNumber().longValue(),
+                Math.round((heap + (heap * 0.1)) / memoryOverCommitRatio));
 
         // check cpu
-        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(), roundDecimal(resources.getCpu() / cpuOverCommitRatio, 3));
-        assertEquals(containerSpec.getResources().getLimits().get("cpu").getNumber().doubleValue(), roundDecimal(resources.getCpu(), 3));
+        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(),
+                roundDecimal(resources.getCpu() / cpuOverCommitRatio, 3));
+        assertEquals(containerSpec.getResources().getLimits().get("cpu").getNumber().doubleValue(),
+                roundDecimal(resources.getCpu(), 3));
     }
 
     private void verifyJavaInstance(InstanceConfig config, String depsDir, boolean secretsAttached) throws Exception {
         verifyJavaInstance(config, depsDir, secretsAttached, null);
     }
 
-    private void verifyJavaInstance(InstanceConfig config, String depsDir, boolean secretsAttached, String downloadDirectory) throws Exception {
+    private void verifyJavaInstance(InstanceConfig config, String depsDir, boolean secretsAttached,
+                                    String downloadDirectory) throws Exception {
         KubernetesRuntime container = factory.createContainer(config, userJarFile, userJarFile, 30l);
         List<String> args = container.getProcessArgs();
 
@@ -415,7 +401,7 @@ public class KubernetesRuntimeTest {
             metricsPortArg += 3;
         }
 
-        if (StringUtils.isNotEmpty(downloadDirectory)){
+        if (StringUtils.isNotEmpty(downloadDirectory)) {
             jarLocation = downloadDirectory + "/" + userJarFile;
         } else {
             jarLocation = pulsarRootDir + "/" + userJarFile;
@@ -426,23 +412,26 @@ public class KubernetesRuntimeTest {
                 "Actual args : " + StringUtils.join(args, " "));
 
         String pulsarAdminArg = config.isExposePulsarAdminClientEnabled() ?
-                " --web_serviceurl " + pulsarAdminUrl + " --expose_pulsaradmin": "";
+                " --web_serviceurl " + pulsarAdminUrl + " --expose_pulsaradmin" : "";
 
         String expectedArgs = "exec java -cp " + classpath
                 + extraDepsEnv
                 + " -Dpulsar.functions.instance.classpath=/pulsar/lib/*"
                 + " -Dlog4j.configurationFile=kubernetes_instance_log4j2.xml "
-                + "-Dpulsar.function.log.dir=" + logDirectory + "/" + FunctionCommon.getFullyQualifiedName(config.getFunctionDetails())
+                + "-Dpulsar.function.log.dir=" + logDirectory + "/" +
+                FunctionCommon.getFullyQualifiedName(config.getFunctionDetails())
                 + " -Dpulsar.function.log.file=" + config.getFunctionDetails().getName() + "-$SHARD_ID"
                 + " -Dio.netty.tryReflectionSetAccessible=true -Xmx" + String.valueOf(RESOURCES.getRam())
                 + " org.apache.pulsar.functions.instance.JavaInstanceMain"
                 + " --jar " + jarLocation + " --instance_id "
                 + "$SHARD_ID" + " --function_id " + config.getFunctionId()
                 + " --function_version " + config.getFunctionVersion()
-                + " --function_details '" + JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
+                + " --function_details '" +
+                JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
                 + "' --pulsar_serviceurl " + pulsarServiceUrl
                 + pulsarAdminArg
-                + " --max_buffered_tuples 1024 --port " + args.get(portArg) + " --metrics_port " + args.get(metricsPortArg)
+                + " --max_buffered_tuples 1024 --port " + args.get(portArg) + " --metrics_port " +
+                args.get(metricsPortArg)
                 + " --pending_async_requests 200"
                 + " --state_storage_serviceurl " + stateStorageServiceUrl
                 + " --expected_healthcheck_interval -1";
@@ -454,13 +443,16 @@ public class KubernetesRuntimeTest {
 
 
         // check padding and xmx
-        long heap = Long.parseLong(args.stream().filter(s -> s.startsWith("-Xmx")).collect(Collectors.toList()).get(0).replace("-Xmx", ""));
+        long heap = Long.parseLong(args.stream().filter(s -> s.startsWith("-Xmx")).collect(Collectors.toList()).get(0)
+                .replace("-Xmx", ""));
         V1Container containerSpec = container.getFunctionContainer(Collections.emptyList(), RESOURCES);
         assertEquals(heap, RESOURCES.getRam());
-        assertEquals(containerSpec.getResources().getLimits().get("memory").getNumber().longValue(), Math.round(heap + (heap * 0.1)));
+        assertEquals(containerSpec.getResources().getLimits().get("memory").getNumber().longValue(),
+                Math.round(heap + (heap * 0.1)));
 
         // check cpu
-        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(), RESOURCES.getCpu());
+        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(),
+                RESOURCES.getCpu());
         assertEquals(containerSpec.getResources().getLimits().get("cpu").getNumber().doubleValue(), RESOURCES.getCpu());
     }
 
@@ -484,7 +476,8 @@ public class KubernetesRuntimeTest {
         verifyPythonInstance(config, extraDepsDir, false);
     }
 
-    private void verifyPythonInstance(InstanceConfig config, String extraDepsDir, boolean secretsAttached) throws Exception {
+    private void verifyPythonInstance(InstanceConfig config, String extraDepsDir, boolean secretsAttached)
+            throws Exception {
         KubernetesRuntime container = factory.createContainer(config, userJarFile, userJarFile, 30l);
         List<String> args = container.getProcessArgs();
 
@@ -523,9 +516,11 @@ public class KubernetesRuntimeTest {
                 + " --instance_id " + "$SHARD_ID"
                 + " --function_id " + config.getFunctionId()
                 + " --function_version " + config.getFunctionVersion()
-                + " --function_details '" + JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
+                + " --function_details '" +
+                JsonFormat.printer().omittingInsignificantWhitespace().print(config.getFunctionDetails())
                 + "' --pulsar_serviceurl " + pulsarServiceUrl
-                + " --max_buffered_tuples 1024 --port " + args.get(portArg) + " --metrics_port " + args.get(metricsPortArg)
+                + " --max_buffered_tuples 1024 --port " + args.get(portArg) + " --metrics_port " +
+                args.get(metricsPortArg)
                 + " --state_storage_serviceurl bk://localhost:4181"
                 + " --expected_healthcheck_interval -1";
         if (secretsAttached) {
@@ -541,12 +536,13 @@ public class KubernetesRuntimeTest {
                 Math.round(RESOURCES.getRam() + (RESOURCES.getRam() * 0.1)));
 
         // check cpu
-        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(), RESOURCES.getCpu());
+        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(),
+                RESOURCES.getCpu());
         assertEquals(containerSpec.getResources().getLimits().get("cpu").getNumber().doubleValue(), RESOURCES.getCpu());
     }
-    
+
     @Test
-    public void testCreateJobName() throws Exception {    
+    public void testCreateJobName() throws Exception {
         verifyCreateJobNameWithBackwardCompatibility();
         verifyCreateJobNameWithUpperCaseFunctionName();
         verifyCreateJobNameWithDotFunctionName();
@@ -566,7 +562,8 @@ public class KubernetesRuntimeTest {
         functionDetailsBuilder.setRuntime(FunctionDetails.Runtime.JAVA);
         functionDetailsBuilder.setTenant("tenant");
         // use long namespace to make sure label is truncated to 63 max characters for k8s requirements
-        functionDetailsBuilder.setNamespace(String.format("%-100s", "namespace:$second.part:third@test_0").replace(" ", "0"));
+        functionDetailsBuilder
+                .setNamespace(String.format("%-100s", "namespace:$second.part:third@test_0").replace(" ", "0"));
         functionDetailsBuilder.setName("$function_name!");
         JsonObject configObj = new JsonObject();
         configObj.addProperty("jobNamespace", "custom-ns");
@@ -580,7 +577,8 @@ public class KubernetesRuntimeTest {
         V1StatefulSet spec = container.createStatefulSet();
 
         assertEquals(spec.getMetadata().getLabels().get("tenant"), "tenant");
-        assertEquals(spec.getMetadata().getLabels().get("namespace"), String.format("%-63s", "namespace--second.part-third-test_0").replace(" ", "0"));
+        assertEquals(spec.getMetadata().getLabels().get("namespace"),
+                String.format("%-63s", "namespace--second.part-third-test_0").replace(" ", "0"));
         assertEquals(spec.getMetadata().getLabels().get("name"), "0function_name0");
     }
 
@@ -615,7 +613,8 @@ public class KubernetesRuntimeTest {
 
     private void verifyCreateJobNameWithBackwardCompatibility() throws Exception {
         final FunctionDetails functionDetails = createFunctionDetails(TEST_NAME);
-        final String bcJobName = bcCreateJobName(functionDetails.getTenant(), functionDetails.getNamespace(), functionDetails.getName());
+        final String bcJobName =
+                bcCreateJobName(functionDetails.getTenant(), functionDetails.getNamespace(), functionDetails.getName());
         final String jobName = KubernetesRuntime.createJobName(functionDetails, null);
         assertEquals(bcJobName, jobName);
         KubernetesRuntime.doChecks(functionDetails, null);
@@ -648,28 +647,28 @@ public class KubernetesRuntimeTest {
         assertEquals(jobName, "pf-tenant-namespace-test-function-name-b5a215ad");
         KubernetesRuntime.doChecks(functionDetails, null);
     }
-    
+
     private void verifyCreateJobNameWithOverriddenK8sPodName() throws Exception {
         final FunctionDetails functionDetails = createFunctionDetails("clazz.testfunction");
         final String jobName = KubernetesRuntime.createJobName(functionDetails, "custom-k8s-pod-name");
         assertEquals(jobName, "custom-k8s-pod-name-dedfc7cf");
         KubernetesRuntime.doChecks(functionDetails, "custom-k8s-pod-name");
     }
-    
+
     private void verifyCreateJobNameWithOverriddenK8sPodNameWithInvalidMarks() throws Exception {
         final FunctionDetails functionDetails = createFunctionDetails("clazz.testfunction");
         final String jobName = KubernetesRuntime.createJobName(functionDetails, "invalid_pod*name");
         assertEquals(jobName, "invalid-pod-name-af8c3a6c");
         KubernetesRuntime.doChecks(functionDetails, "invalid_pod*name");
     }
-    
+
     private void verifyCreateJobNameWithOverriddenK8sPodNameNoCollisionWithSameName() throws Exception {
         final String CUSTOM_JOB_NAME = "custom-name";
         final String FUNCTION_NAME = "clazz.testfunction";
-        
-    	final FunctionDetails functionDetails1 = createFunctionDetails(FUNCTION_NAME);
+
+        final FunctionDetails functionDetails1 = createFunctionDetails(FUNCTION_NAME);
         final String jobName1 = KubernetesRuntime.createJobName(functionDetails1, CUSTOM_JOB_NAME);
-        
+
         // create a second function with the same name, but in different tenant/namespace to make sure collision does not
         // happen. If tenant, namespace, and function name are the same kubernetes handles collision issues
         FunctionDetails.Builder functionDetailsBuilder = FunctionDetails.newBuilder();
@@ -679,7 +678,7 @@ public class KubernetesRuntimeTest {
         functionDetailsBuilder.setName(FUNCTION_NAME);
         final FunctionDetails functionDetails2 = functionDetailsBuilder.build();
         final String jobName2 = KubernetesRuntime.createJobName(functionDetails2, CUSTOM_JOB_NAME);
-        
+
         // create a third function with different name but in same tenant/namespace to make sure
         // collision does not happen. If tenant, namespace, and function name are the same kubernetes handles collision issues
         final FunctionDetails functionDetails3 = createFunctionDetails(FUNCTION_NAME + "-extra");
@@ -690,15 +689,15 @@ public class KubernetesRuntimeTest {
 
         assertEquals(jobName2, CUSTOM_JOB_NAME + "-c66edfe1");
         KubernetesRuntime.doChecks(functionDetails2, CUSTOM_JOB_NAME);
-        
+
         assertEquals(jobName3, CUSTOM_JOB_NAME + "-0fc9c728");
         KubernetesRuntime.doChecks(functionDetails3, CUSTOM_JOB_NAME);
     }
-    
+
     private void verifyCreateJobNameWithNameOverMaxCharLimit() throws Exception {
         final FunctionDetails functionDetails = createFunctionDetails("clazz.testfunction");
-        assertThrows(RuntimeException.class, () -> KubernetesRuntime.doChecks(functionDetails, 
-        		"custom-k8s-pod-name-over-kuberenetes-max-character-limit-123456789"));
+        assertThrows(RuntimeException.class, () -> KubernetesRuntime.doChecks(functionDetails,
+                "custom-k8s-pod-name-over-kuberenetes-max-character-limit-123456789"));
     }
 
     private void verifyCreateJobNameWithCollisionalFunctionName() throws Exception {
@@ -739,8 +738,8 @@ public class KubernetesRuntimeTest {
 
         V1Service serviceSpec = container.createService();
         assertEquals(serviceSpec.getMetadata().getNamespace(), "default");
-        assertEquals(serviceSpec.getMetadata().getName(), "pf-" + TEST_TENANT + "-" + 
-        		TEST_NAMESPACE + "-" + TEST_NAME);
+        assertEquals(serviceSpec.getMetadata().getName(), "pf-" + TEST_TENANT + "-" +
+                TEST_NAMESPACE + "-" + TEST_NAME);
     }
 
     @Test
@@ -751,7 +750,8 @@ public class KubernetesRuntimeTest {
             return fb.setCustomRuntimeOptions(configObj.toString());
         }));
 
-        factory = createKubernetesRuntimeFactory(null, 10, 1.0, 1.0, Optional.of(new BasicKubernetesManifestCustomizer()));
+        factory = createKubernetesRuntimeFactory(null, 10, 1.0, 1.0,
+                Optional.of(new BasicKubernetesManifestCustomizer()));
 
         verifyJavaInstance(config, pulsarRootDir + "/instances/deps", false);
         KubernetesRuntime container = factory.createContainer(config, userJarFile, userJarFile, 30l);
@@ -777,10 +777,10 @@ public class KubernetesRuntimeTest {
             V1ResourceRequirements resources = c.getResources();
             Map<String, Quantity> limits = resources.getLimits();
             Map<String, Quantity> requests = resources.getRequests();
-            assertEquals(requests.get("cpu").getNumber(), new BigDecimal(1) );
-            assertEquals(limits.get("cpu").getNumber(), new BigDecimal(2) );
-            assertEquals(requests.get("memory").getNumber(), new BigDecimal(4000000000L) );
-            assertEquals(limits.get("memory").getNumber(), new BigDecimal(8000000000L) );
+            assertEquals(requests.get("cpu").getNumber(), new BigDecimal(1));
+            assertEquals(limits.get("cpu").getNumber(), new BigDecimal(2));
+            assertEquals(requests.get("memory").getNumber(), new BigDecimal(4000000000L));
+            assertEquals(limits.get("memory").getNumber(), new BigDecimal(8000000000L));
         });
 
     }
@@ -792,7 +792,8 @@ public class KubernetesRuntimeTest {
             return fb.setCustomRuntimeOptions("custom-service-account");
         }));
 
-        factory = createKubernetesRuntimeFactory(null, 10, 1.0, 1.0, Optional.of(new TestKubernetesCustomManifestCustomizer()));
+        factory = createKubernetesRuntimeFactory(null, 10, 1.0, 1.0,
+                Optional.of(new TestKubernetesCustomManifestCustomizer()));
 
         verifyJavaInstance(config, pulsarRootDir + "/instances/deps", false);
         KubernetesRuntime container = factory.createContainer(config, userJarFile, userJarFile, 30l);
@@ -813,7 +814,7 @@ public class KubernetesRuntimeTest {
         KubernetesRuntime container = factory.createContainer(config, userJarFile, userJarFile, 30l);
         V1StatefulSet spec = container.createStatefulSet();
         String expectedDownloadCommand = "pulsar-admin --admin-url http://localhost:8080 packages download "
-            + "function://public/default/test@v1 --path " + pulsarRootDir + "/" + userJarFile;
+                + "function://public/default/test@v1 --path " + pulsarRootDir + "/" + userJarFile;
         String containerCommand = spec.getSpec().getTemplate().getSpec().getContainers().get(0).getCommand().get(2);
         assertTrue(containerCommand.contains(expectedDownloadCommand));
     }
@@ -897,7 +898,8 @@ public class KubernetesRuntimeTest {
                 Math.round(RESOURCES.getRam() + (RESOURCES.getRam() * 0.1)));
 
         // check cpu
-        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(), RESOURCES.getCpu());
+        assertEquals(containerSpec.getResources().getRequests().get("cpu").getNumber().doubleValue(),
+                RESOURCES.getCpu());
         assertEquals(containerSpec.getResources().getLimits().get("cpu").getNumber().doubleValue(), RESOURCES.getCpu());
     }
 
@@ -922,7 +924,8 @@ public class KubernetesRuntimeTest {
     KubernetesRuntimeFactory createKubernetesRuntimeFactory(String extraDepsDir, int percentMemoryPadding,
                                                             double cpuOverCommitRatio, double memoryOverCommitRatio,
                                                             String manifestCustomizerClassName,
-                                                            Map<String, Object> runtimeCustomizerConfig) throws Exception {
+                                                            Map<String, Object> runtimeCustomizerConfig)
+            throws Exception {
         KubernetesRuntimeFactory factory = spy(new KubernetesRuntimeFactory());
         doNothing().when(factory).setupClient();
 
@@ -962,51 +965,15 @@ public class KubernetesRuntimeTest {
 
         Optional<RuntimeCustomizer> manifestCustomizer = Optional.empty();
         if (!org.apache.commons.lang3.StringUtils.isEmpty(workerConfig.getRuntimeCustomizerClassName())) {
-            manifestCustomizer = Optional.of(RuntimeCustomizer.getRuntimeCustomizer(workerConfig.getRuntimeCustomizerClassName()));
-            manifestCustomizer.get().initialize(Optional.ofNullable(workerConfig.getRuntimeCustomizerConfig()).orElse(Collections.emptyMap()));
+            manifestCustomizer =
+                    Optional.of(RuntimeCustomizer.getRuntimeCustomizer(workerConfig.getRuntimeCustomizerClassName()));
+            manifestCustomizer.get().initialize(
+                    Optional.ofNullable(workerConfig.getRuntimeCustomizerConfig()).orElse(Collections.emptyMap()));
         }
 
         factory.initialize(workerConfig, null, new TestSecretProviderConfigurator(),
                 Mockito.mock(ConnectorsManager.class), Optional.empty(), manifestCustomizer);
         return factory;
-    }
-
-    public static JsonObject createRuntimeCustomizerConfig() {
-        JsonObject configObj = new JsonObject();
-        configObj.addProperty("jobNamespace", "custom-ns");
-        configObj.addProperty("jobName", "custom-name");
-
-        JsonObject extraAnn = new JsonObject();
-        extraAnn.addProperty("annotation", "test");
-        configObj.add("extraAnnotations", extraAnn);
-
-        JsonObject extraLabel = new JsonObject();
-        extraLabel.addProperty("label", "test");
-        configObj.add("extraLabels", extraLabel);
-
-        JsonObject nodeLabels = new JsonObject();
-        nodeLabels.addProperty("selector", "test");
-        configObj.add("nodeSelectorLabels", nodeLabels);
-
-        JsonArray tolerations = new JsonArray();
-        JsonObject toleration = new JsonObject();
-        toleration.addProperty("key", "test");
-        toleration.addProperty("value", "test");
-        toleration.addProperty("effect", "test");
-        tolerations.add(toleration);
-        configObj.add("tolerations", tolerations);
-
-        JsonObject resourceRequirements = new JsonObject();
-        JsonObject requests = new JsonObject();
-        JsonObject limits = new JsonObject();
-        requests.addProperty("cpu", "1");
-        requests.addProperty("memory", "4G");
-        limits.addProperty("cpu", "2");
-        limits.addProperty("memory", "8G");
-        resourceRequirements.add("requests", requests);
-        resourceRequirements.add("limits", limits);
-        configObj.add("resourceRequirements", resourceRequirements);
-        return configObj;
     }
 
     @Test
@@ -1042,14 +1009,13 @@ public class KubernetesRuntimeTest {
             V1ResourceRequirements resources = c.getResources();
             Map<String, Quantity> limits = resources.getLimits();
             Map<String, Quantity> requests = resources.getRequests();
-            assertEquals(requests.get("cpu").getNumber(), new BigDecimal(1) );
-            assertEquals(limits.get("cpu").getNumber(), new BigDecimal(2) );
-            assertEquals(requests.get("memory").getNumber(), new BigDecimal(4000000000L) );
-            assertEquals(limits.get("memory").getNumber(), new BigDecimal(8000000000L) );
+            assertEquals(requests.get("cpu").getNumber(), new BigDecimal(1));
+            assertEquals(limits.get("cpu").getNumber(), new BigDecimal(2));
+            assertEquals(requests.get("memory").getNumber(), new BigDecimal(4000000000L));
+            assertEquals(limits.get("memory").getNumber(), new BigDecimal(8000000000L));
         });
 
     }
-
 
     @Test
     public void testBasicKubernetesManifestCustomizerWithRuntimeCustomizerConfigOverwrite() throws Exception {
@@ -1090,10 +1056,10 @@ public class KubernetesRuntimeTest {
             V1ResourceRequirements resources = c.getResources();
             Map<String, Quantity> limits = resources.getLimits();
             Map<String, Quantity> requests = resources.getRequests();
-            assertEquals(requests.get("cpu").getNumber(), new BigDecimal(1) );
-            assertEquals(limits.get("cpu").getNumber(), new BigDecimal(2) );
-            assertEquals(requests.get("memory").getNumber(), new BigDecimal(4000000000L) );
-            assertEquals(limits.get("memory").getNumber(), new BigDecimal(8000000000L) );
+            assertEquals(requests.get("cpu").getNumber(), new BigDecimal(1));
+            assertEquals(limits.get("cpu").getNumber(), new BigDecimal(2));
+            assertEquals(requests.get("memory").getNumber(), new BigDecimal(4000000000L));
+            assertEquals(limits.get("memory").getNumber(), new BigDecimal(8000000000L));
         });
 
     }
@@ -1144,5 +1110,71 @@ public class KubernetesRuntimeTest {
                 + "function://public/default/test@v1 --path " + factory.getDownloadDirectory() + "/" + userJarFile;
         String containerCommand = spec.getSpec().getTemplate().getSpec().getContainers().get(0).getCommand().get(2);
         assertTrue(containerCommand.contains(expectedDownloadCommand));
+    }
+
+    public class TestKubernetesCustomManifestCustomizer implements KubernetesManifestCustomizer {
+
+        @Override
+        public V1StatefulSet customizeStatefulSet(Function.FunctionDetails funcDetails, V1StatefulSet statefulSet) {
+            assertEquals(funcDetails.getCustomRuntimeOptions(), "custom-service-account");
+            statefulSet.getSpec().getTemplate().getSpec().serviceAccountName("my-service-account");
+            return statefulSet;
+        }
+
+        @Override
+        public void initialize(Map<String, Object> config) {
+
+        }
+    }
+
+    class TestSecretProviderConfigurator implements SecretsProviderConfigurator {
+
+        @Override
+        public void init(Map<String, String> config) {
+
+        }
+
+        @Override
+        public String getSecretsProviderClassName(FunctionDetails functionDetails) {
+            if (!StringUtils.isEmpty(functionDetails.getSecretsMap())) {
+                if (functionDetails.getRuntime() == FunctionDetails.Runtime.JAVA) {
+                    return ClearTextSecretsProvider.class.getName();
+                } else {
+                    return "secretsprovider.ClearTextSecretsProvider";
+                }
+            } else {
+                return null;
+            }
+        }
+
+        @Override
+        public Map<String, String> getSecretsProviderConfig(FunctionDetails functionDetails) {
+            HashMap<String, String> map = new HashMap<>();
+            map.put("Somevalue", "myvalue");
+            return map;
+        }
+
+        @Override
+        public void configureKubernetesRuntimeSecretsProvider(V1PodSpec podSpec, String functionsContainerName,
+                                                              FunctionDetails functionDetails) {
+
+        }
+
+        @Override
+        public void configureProcessRuntimeSecretsProvider(ProcessBuilder processBuilder,
+                                                           FunctionDetails functionDetails) {
+
+        }
+
+        @Override
+        public Type getSecretObjectType() {
+            return null;
+        }
+
+        @Override
+        public void doAdmissionChecks(AppsV1Api appsV1Api, CoreV1Api coreV1Api, String jobNamespace, String jobName,
+                                      FunctionDetails functionDetails) {
+
+        }
     }
 }

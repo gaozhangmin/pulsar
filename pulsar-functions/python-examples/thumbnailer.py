@@ -18,12 +18,13 @@
 # under the License.
 #
 
-from pulsar import Function
 from PIL import Image
+from pulsar import Function
+
 
 class Thumbnailer(Function):
 
-  def process(self, input, context):
-    im = Image.frombytes(input)
-    im.thumbnail(128, 128)
-    return input.tobytes()
+    def process(self, input, context):
+        im = Image.frombytes(input)
+        im.thumbnail(128, 128)
+        return input.tobytes()

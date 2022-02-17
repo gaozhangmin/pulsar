@@ -22,40 +22,47 @@
 
 """secretsprovider.py: Interfaces and definitions for Secret Providers
 """
-from abc import abstractmethod
 import os
+from abc import abstractmethod
+
 
 class SecretsProvider:
-  """Interface for providing secrets information runtime"""
-  @abstractmethod
-  def init(self, config):
-    """Do any kind of initialization"""
-    pass
+    """Interface for providing secrets information runtime"""
 
-  @abstractmethod
-  def provide_secret(self, secret_name, path_to_secret):
-    """Fetches the secret located at the path"""
-    pass
+    @abstractmethod
+    def init(self, config):
+        """Do any kind of initialization"""
+        pass
+
+    @abstractmethod
+    def provide_secret(self, secret_name, path_to_secret):
+        """Fetches the secret located at the path"""
+        pass
 
 
 """A simple implementation that represents storing secrets in clear text """
+
+
 class ClearTextSecretsProvider(SecretsProvider):
-  def __init__(self):
-    pass
+    def __init__(self):
+        pass
 
-  def init(self, config):
-    pass
+    def init(self, config):
+        pass
 
-  def provide_secret(self, secret_name, path_to_secret):
-    return path_to_secret
+    def provide_secret(self, secret_name, path_to_secret):
+        return path_to_secret
+
 
 """Implementation that fetches secrets from environment variables"""
+
+
 class EnvironmentBasedSecretsProvider(SecretsProvider):
-  def __init__(self):
-    pass
+    def __init__(self):
+        pass
 
-  def init(self, config):
-    pass
+    def init(self, config):
+        pass
 
-  def provide_secret(self, secret_name, path_to_secret):
-    return os.environ.get(secret_name)
+    def provide_secret(self, secret_name, path_to_secret):
+        return os.environ.get(secret_name)

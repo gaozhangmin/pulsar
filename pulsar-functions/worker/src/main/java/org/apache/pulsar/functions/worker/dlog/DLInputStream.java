@@ -18,120 +18,119 @@
  */
 package org.apache.pulsar.functions.worker.dlog;
 
+import java.io.IOException;
+import java.io.InputStream;
 import org.apache.distributedlog.DLSN;
 import org.apache.distributedlog.LogRecordWithDLSN;
 import org.apache.distributedlog.api.DistributedLogManager;
 import org.apache.distributedlog.api.LogReader;
 import org.apache.distributedlog.exceptions.EndOfStreamException;
 
-import java.io.IOException;
-import java.io.InputStream;
-
 /**
  * DistributedLog Input Stream.
  */
 public class DLInputStream extends InputStream {
 
-  private LogRecordWithInputStream currentLogRecord = null;
-  private final DistributedLogManager dlm;
-  private LogReader reader;
-  private boolean eos = false;
+    private final DistributedLogManager dlm;
+    private LogRecordWithInputStream currentLogRecord = null;
+    private LogReader reader;
+    private boolean eos = false;
 
-  // Cache the input stream for a log record.
-  private static class LogRecordWithInputStream {
-    private final InputStream payloadStream;
-
-    LogRecordWithInputStream(LogRecordWithDLSN logRecord) {
-      this.payloadStream = logRecord.getPayLoadInputStream();
+    /**
+     * Construct DistributedLog input stream.
+     *
+     * @param dlm the Distributed Log Manager to access the stream
+     */
+    public DLInputStream(DistributedLogManager dlm) throws IOException {
+        this.dlm = dlm;
+        reader = dlm.getInputStream(DLSN.InitialDLSN);
     }
 
-    InputStream getPayLoadInputStream() {
-      return payloadStream;
-    }
+    private static LogRecordWithInputStream nextLogRecord(LogReader reader) throws IOException {
+        LogRecordWithDLSN record = reader.readNext(false);
 
-  }
-
-  /**
-   * Construct DistributedLog input stream.
-   *
-   * @param dlm the Distributed Log Manager to access the stream
-   */
-  public DLInputStream(DistributedLogManager dlm) throws IOException {
-    this.dlm = dlm;
-    reader = dlm.getInputStream(DLSN.InitialDLSN);
-  }
-
-  /**
-   * Get input stream representing next entry in the
-   * ledger.
-   *
-   * @return input stream, or null if no more entries
-   */
-  private LogRecordWithInputStream nextLogRecord() throws IOException {
-    try {
-      return nextLogRecord(reader);
-    } catch (EndOfStreamException e) {
-      eos = true;
-      return null;
-    }
-  }
-
-  private static LogRecordWithInputStream nextLogRecord(LogReader reader) throws IOException {
-    LogRecordWithDLSN record = reader.readNext(false);
-
-    if (null != record) {
-      return new LogRecordWithInputStream(record);
-    } else {
-      record = reader.readNext(false);
-      if (null != record) {
-        return new LogRecordWithInputStream(record);
-      } else {
-        return null;
-      }
-    }
-  }
-
-  @Override
-  public int read() throws IOException {
-    byte[] b = new byte[1];
-    if (read(b, 0, 1) != 1) {
-      return -1;
-    } else {
-      return b[0];
-    }
-  }
-
-  @Override
-  public int read(byte[] b, int off, int len) throws IOException {
-    if (eos) {
-      return -1;
-    }
-
-    int read = 0;
-    if (currentLogRecord == null) {
-      currentLogRecord = nextLogRecord();
-      if (currentLogRecord == null) {
-        return read;
-      }
-    }
-
-    while (read < len) {
-      int thisread = currentLogRecord.getPayLoadInputStream().read(b, off + read, len - read);
-      if (thisread == -1) {
-        currentLogRecord = nextLogRecord();
-        if (currentLogRecord == null) {
-          return read;
+        if (null != record) {
+            return new LogRecordWithInputStream(record);
+        } else {
+            record = reader.readNext(false);
+            if (null != record) {
+                return new LogRecordWithInputStream(record);
+            } else {
+                return null;
+            }
         }
-      } else {
-        read += thisread;
-      }
     }
-    return read;
-  }
 
-  @Override
-  public void close() throws IOException {
-    reader.close();
-    dlm.close();
-  }
+    /**
+     * Get input stream representing next entry in the
+     * ledger.
+     *
+     * @return input stream, or null if no more entries
+     */
+    private LogRecordWithInputStream nextLogRecord() throws IOException {
+        try {
+            return nextLogRecord(reader);
+        } catch (EndOfStreamException e) {
+            eos = true;
+            return null;
+        }
+    }
+
+    @Override
+    public int read() throws IOException {
+        byte[] b = new byte[1];
+        if (read(b, 0, 1) != 1) {
+            return -1;
+        } else {
+            return b[0];
+        }
+    }
+
+    @Override
+    public int read(byte[] b, int off, int len) throws IOException {
+        if (eos) {
+            return -1;
+        }
+
+        int read = 0;
+        if (currentLogRecord == null) {
+            currentLogRecord = nextLogRecord();
+            if (currentLogRecord == null) {
+                return read;
+            }
+        }
+
+        while (read < len) {
+            int thisread = currentLogRecord.getPayLoadInputStream().read(b, off + read, len - read);
+            if (thisread == -1) {
+                currentLogRecord = nextLogRecord();
+                if (currentLogRecord == null) {
+                    return read;
+                }
+            } else {
+                read += thisread;
+            }
+        }
+        return read;
+    }
+
+    @Override
+    public void close() throws IOException {
+        reader.close();
+        dlm.close();
+    }
+
+    // Cache the input stream for a log record.
+    private static class LogRecordWithInputStream {
+        private final InputStream payloadStream;
+
+        LogRecordWithInputStream(LogRecordWithDLSN logRecord) {
+            this.payloadStream = logRecord.getPayLoadInputStream();
+        }
+
+        InputStream getPayLoadInputStream() {
+            return payloadStream;
+        }
+
+    }
 }

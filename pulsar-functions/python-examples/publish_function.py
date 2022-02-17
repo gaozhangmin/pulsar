@@ -21,15 +21,16 @@
 
 from pulsar import Function
 
+
 # Example function that uses the built in publish function in the context
 # to publish to a desired topic based on config
 class PublishFunction(Function):
-  def __init__(self):
-    pass
+    def __init__(self):
+        pass
 
-  def process(self, input, context):
-    publish_topic = "publishtopic"
-    if "publish-topic" in context.get_user_config_map():
-      publish_topic = context.get_user_config_value("publish-topic")
-    context.publish(publish_topic, input + '!')
-    return
+    def process(self, input, context):
+        publish_topic = "publishtopic"
+        if "publish-topic" in context.get_user_config_map():
+            publish_topic = context.get_user_config_value("publish-topic")
+        context.publish(publish_topic, input + '!')
+        return

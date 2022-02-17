@@ -30,12 +30,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-
 import com.google.common.collect.Lists;
 import com.google.gson.Gson;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -50,17 +48,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
-
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
-
 import org.apache.distributedlog.api.namespace.Namespace;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
-import org.apache.pulsar.client.admin.PulsarAdminException;
-import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.Functions;
 import org.apache.pulsar.client.admin.Namespaces;
+import org.apache.pulsar.client.admin.PulsarAdmin;
+import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.client.admin.Tenants;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.policies.data.TenantInfoImpl;
@@ -101,27 +97,21 @@ import org.testng.annotations.Test;
  */
 public class FunctionApiV2ResourceTest {
 
-    private static final class TestFunction implements Function<String, String> {
-
-        @Override
-        public String process(String input, Context context) {
-            return input;
-        }
-    }
-
     private static final String tenant = "test-tenant";
     private static final String namespace = "test-namespace";
     private static final String function = "test-function";
     private static final String outputTopic = "test-output-topic";
     private static final String outputSerdeClassName = TopicSchema.DEFAULT_SERDE;
     private static final String className = TestFunction.class.getName();
-    private SubscriptionType subscriptionType = SubscriptionType.FAILOVER;
     private static final Map<String, String> topicsToSerDeClassName = new HashMap<>();
+    private static final int parallelism = 1;
+    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
+
     static {
         topicsToSerDeClassName.put("persistent://sample/standalone/ns1/test_src", TopicSchema.DEFAULT_SERDE);
     }
-    private static final int parallelism = 1;
 
+    private SubscriptionType subscriptionType = SubscriptionType.FAILOVER;
     private PulsarWorkerService mockedWorkerService;
     private PulsarAdmin mockedPulsarAdmin;
     private Tenants mockedTenants;
@@ -139,7 +129,25 @@ public class FunctionApiV2ResourceTest {
     private FunctionMetaData mockedFunctionMetadata;
     private LeaderService mockedLeaderService;
     private PulsarFunctionTestTemporaryDirectory tempDirectory;
-    private static Map<String, MockedStatic> mockStaticContexts = new HashMap<>();
+
+    public static FunctionConfig createDefaultFunctionConfig() {
+        FunctionConfig functionConfig = new FunctionConfig();
+        functionConfig.setTenant(tenant);
+        functionConfig.setNamespace(namespace);
+        functionConfig.setName(function);
+        functionConfig.setClassName(className);
+        functionConfig.setParallelism(parallelism);
+        functionConfig.setCustomSerdeInputs(topicsToSerDeClassName);
+        functionConfig.setOutput(outputTopic);
+        functionConfig.setOutputSerdeClassName(outputSerdeClassName);
+        functionConfig.setRuntime(FunctionConfig.Runtime.JAVA);
+        return functionConfig;
+    }
+
+    public static FunctionDetails createDefaultFunctionDetails() {
+        FunctionConfig functionConfig = createDefaultFunctionConfig();
+        return FunctionConfigUtils.convert(functionConfig, null);
+    }
 
     @BeforeMethod
     public void setup() throws Exception {
@@ -156,7 +164,8 @@ public class FunctionApiV2ResourceTest {
         this.mockedNamespaces = mock(Namespaces.class);
         this.mockedFunctions = mock(Functions.class);
         this.mockedLeaderService = mock(LeaderService.class);
-        this.mockedFunctionMetadata = FunctionMetaData.newBuilder().setFunctionDetails(createDefaultFunctionDetails()).build();
+        this.mockedFunctionMetadata =
+                FunctionMetaData.newBuilder().setFunctionDetails(createDefaultFunctionDetails()).build();
         namespaceList.add(tenant + "/" + namespace);
 
         this.mockedWorkerService = mock(PulsarWorkerService.class);
@@ -203,7 +212,8 @@ public class FunctionApiV2ResourceTest {
     }
 
     private <T> void mockStatic(Class<T> classStatic, Consumer<MockedStatic<T>> consumer) {
-        final MockedStatic<T> mockedStatic = mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
+        final MockedStatic<T> mockedStatic =
+                mockStaticContexts.computeIfAbsent(classStatic.getName(), name -> Mockito.mockStatic(classStatic));
         consumer.accept(mockedStatic);
     }
 
@@ -212,6 +222,7 @@ public class FunctionApiV2ResourceTest {
             ctx.when(() -> WorkerUtils.dumpToTmpFile(any())).thenCallRealMethod();
         });
     }
+
     private void mockWorkerUtils(Consumer<MockedStatic<WorkerUtils>> consumer) {
         mockStatic(WorkerUtils.class, ctx -> {
             ctx.when(() -> WorkerUtils.dumpToTmpFile(any())).thenCallRealMethod();
@@ -221,16 +232,16 @@ public class FunctionApiV2ResourceTest {
         });
     }
 
+    //
+    // Register Functions
+    //
+
     private void mockInstanceUtils() {
         mockStatic(InstanceUtils.class, ctx -> {
             ctx.when(() -> InstanceUtils.calculateSubjectType(any()))
                     .thenReturn(FunctionDetails.ComponentType.FUNCTION);
         });
     }
-
-    //
-    // Register Functions
-    //
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Tenant is not provided")
     public void testRegisterFunctionMissingTenant() {
@@ -247,7 +258,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -268,7 +279,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -289,7 +300,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -310,7 +321,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -331,7 +342,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -352,7 +363,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -373,7 +384,7 @@ public class FunctionApiV2ResourceTest {
                     null,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -394,7 +405,7 @@ public class FunctionApiV2ResourceTest {
                     "UnknownClass",
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -415,7 +426,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     -2,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -437,13 +448,14 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
     }
 
-    @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Output topic " + function + "-output-topic/test:" + " is invalid")
+    @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Output topic " + function +
+            "-output-topic/test:" + " is invalid")
     public void testRegisterFunctionWrongOutputTopic() {
         try {
             testRegisterFunctionMissingArguments(
@@ -458,7 +470,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     null);
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -479,7 +491,7 @@ public class FunctionApiV2ResourceTest {
                     className,
                     parallelism,
                     "http://localhost:1234/test");
-        } catch (RestException re){
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -577,15 +589,14 @@ public class FunctionApiV2ResourceTest {
         }
     }
 
-
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "upload failure")
     public void testRegisterFunctionUploadFailure() throws Exception {
         try {
             mockWorkerUtils(ctx -> {
                 ctx.when(() -> WorkerUtils.uploadFileToBookkeeper(
-                                anyString(),
-                                any(File.class),
-                                any(Namespace.class)))
+                        anyString(),
+                        any(File.class),
+                        any(Namespace.class)))
                         .thenThrow(new IOException("upload failure"));
             });
 
@@ -668,7 +679,9 @@ public class FunctionApiV2ResourceTest {
         }
     }
 
-
+    //
+    // Update Functions
+    //
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Function registration interrupted")
     public void testRegisterFunctionInterrupted() throws Exception {
@@ -685,10 +698,6 @@ public class FunctionApiV2ResourceTest {
             throw re;
         }
     }
-
-    //
-    // Update Functions
-    //
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Tenant is not provided")
     public void testUpdateFunctionMissingTenant() throws Exception {
@@ -991,7 +1000,7 @@ public class FunctionApiV2ResourceTest {
     public void testUpdateFunctionUploadFailure() throws Exception {
         try {
             mockWorkerUtils(ctx -> {
-                ctx.when(() ->  WorkerUtils.uploadFileToBookkeeper(
+                ctx.when(() -> WorkerUtils.uploadFileToBookkeeper(
                         anyString(),
                         any(File.class),
                         any(Namespace.class)))
@@ -1071,6 +1080,10 @@ public class FunctionApiV2ResourceTest {
         }
     }
 
+    //
+    // deregister function
+    //
+
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Function registeration interrupted")
     public void testUpdateFunctionInterrupted() throws Exception {
         try {
@@ -1086,10 +1099,6 @@ public class FunctionApiV2ResourceTest {
             throw re;
         }
     }
-
-    //
-    // deregister function
-    //
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Tenant is not provided")
     public void testDeregisterFunctionMissingTenant() {
@@ -1187,6 +1196,10 @@ public class FunctionApiV2ResourceTest {
         }
     }
 
+    //
+    // Get Function Info
+    //
+
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Function deregisteration interrupted")
     public void testDeregisterFunctionInterrupted() throws Exception {
         try {
@@ -1196,16 +1209,11 @@ public class FunctionApiV2ResourceTest {
                     .when(mockedManager).updateFunctionOnLeader(any(FunctionMetaData.class), anyBoolean());
 
             deregisterDefaultFunction();
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.INTERNAL_SERVER_ERROR);
             throw re;
         }
     }
-
-    //
-    // Get Function Info
-    //
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Tenant is not provided")
     public void testGetFunctionMissingTenant() throws IOException {
@@ -1215,8 +1223,7 @@ public class FunctionApiV2ResourceTest {
                     namespace,
                     function
             );
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -1230,8 +1237,7 @@ public class FunctionApiV2ResourceTest {
                     null,
                     function
             );
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -1245,8 +1251,7 @@ public class FunctionApiV2ResourceTest {
                     namespace,
                     null
             );
-        }
-        catch (RestException re) {
+        } catch (RestException re) {
             assertEquals(re.getResponse().getStatusInfo(), Response.Status.BAD_REQUEST);
             throw re;
         }
@@ -1287,6 +1292,10 @@ public class FunctionApiV2ResourceTest {
         }
     }
 
+    //
+    // List Functions
+    //
+
     @Test
     public void testGetFunctionSuccess() throws IOException {
         mockInstanceUtils();
@@ -1318,10 +1327,6 @@ public class FunctionApiV2ResourceTest {
                 functionDetails,
                 actual);
     }
-
-    //
-    // List Functions
-    //
 
     @Test(expectedExceptions = RestException.class, expectedExceptionsMessageRegExp = "Tenant is not provided")
     public void testListFunctionsMissingTenant() {
@@ -1388,7 +1393,8 @@ public class FunctionApiV2ResourceTest {
 
     @Test
     public void testDownloadFunctionHttpUrl() throws Exception {
-        String jarHttpUrl = "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
+        String jarHttpUrl =
+                "https://repo1.maven.org/maven2/org/apache/pulsar/pulsar-common/2.4.2/pulsar-common-2.4.2.jar";
         String testDir = FunctionApiV2ResourceTest.class.getProtectionDomain().getCodeSource().getLocation().getPath();
         FunctionsImplV2 function = new FunctionsImplV2(() -> mockedWorkerService);
         StreamingOutput streamOutput = (StreamingOutput) function.downloadFunction(jarHttpUrl, null).getEntity();
@@ -1408,7 +1414,8 @@ public class FunctionApiV2ResourceTest {
         String fileLocation = file.getAbsolutePath().replace('\\', '/');
         String testDir = FunctionApiV2ResourceTest.class.getProtectionDomain().getCodeSource().getLocation().getPath();
         FunctionsImplV2 function = new FunctionsImplV2(() -> mockedWorkerService);
-        StreamingOutput streamOutput = (StreamingOutput) function.downloadFunction("file:///" + fileLocation, null).getEntity();
+        StreamingOutput streamOutput =
+                (StreamingOutput) function.downloadFunction("file:///" + fileLocation, null).getEntity();
         File pkgFile = new File(testDir, UUID.randomUUID().toString());
         OutputStream output = new FileOutputStream(pkgFile);
         streamOutput.write(output);
@@ -1442,7 +1449,7 @@ public class FunctionApiV2ResourceTest {
             resource.registerFunction(tenant, namespace, function, null, null, filePackageUrl,
                     JsonFormat.printer().print(FunctionConfigUtils.convert(functionConfig, null)), null);
         } catch (InvalidProtocolBufferException e) {
-           throw new RuntimeException(e);
+            throw new RuntimeException(e);
         }
 
     }
@@ -1480,22 +1487,11 @@ public class FunctionApiV2ResourceTest {
         }
     }
 
-    public static FunctionConfig createDefaultFunctionConfig() {
-        FunctionConfig functionConfig = new FunctionConfig();
-        functionConfig.setTenant(tenant);
-        functionConfig.setNamespace(namespace);
-        functionConfig.setName(function);
-        functionConfig.setClassName(className);
-        functionConfig.setParallelism(parallelism);
-        functionConfig.setCustomSerdeInputs(topicsToSerDeClassName);
-        functionConfig.setOutput(outputTopic);
-        functionConfig.setOutputSerdeClassName(outputSerdeClassName);
-        functionConfig.setRuntime(FunctionConfig.Runtime.JAVA);
-        return functionConfig;
-    }
+    private static final class TestFunction implements Function<String, String> {
 
-    public static FunctionDetails createDefaultFunctionDetails() {
-        FunctionConfig functionConfig = createDefaultFunctionConfig();
-        return FunctionConfigUtils.convert(functionConfig, null);
+        @Override
+        public String process(String input, Context context) {
+            return input;
+        }
     }
 }

@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.utils.functioncache;
 
 import java.io.IOException;
@@ -49,16 +48,16 @@ public interface FunctionCacheManager extends AutoCloseable {
     default void registerFunction(String fid,
                                   List<String> requiredJarFiles,
                                   List<URL> requiredClasspaths)
-        throws IOException {
+            throws IOException {
         registerFunctionInstance(fid, null, requiredJarFiles,
-            requiredClasspaths);
+                requiredClasspaths);
     }
 
     void registerFunctionInstance(String fid,
                                   String eid,
                                   List<String> requiredJarFiles,
                                   List<URL> requiredClasspaths)
-        throws IOException;
+            throws IOException;
 
     void registerFunctionInstanceWithArchive(String fid, String eid,
                                              String narArchive,

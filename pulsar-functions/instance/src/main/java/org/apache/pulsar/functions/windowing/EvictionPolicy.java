@@ -23,9 +23,61 @@ package org.apache.pulsar.functions.windowing;
  * an event should be evicted from the window or not.
  *
  * @param <T> the type of event that is tracked.
- * @param <S> the type of state that is used
+ * @param <X> the type of state that is used
  */
-public interface EvictionPolicy<T, S> {
+public interface EvictionPolicy<T, X> {
+    /**
+     * Decides if an event should be expired from the window, processed in the current
+     * window or kept for later processing.
+     *
+     * @param event the input event
+     * @return the {@link EvictionPolicy.Action} to be taken based on the input event
+     */
+    Action evict(Event<T> event);
+
+    /**
+     * Tracks the event to later decide whether
+     * {@link EvictionPolicy#evict(Event)} should evict it or not.
+     *
+     * @param event the input event to be tracked
+     */
+    void track(Event<T> event);
+
+    /**
+     * Returns the current context that is part of this eviction policy.
+     *
+     * @return the eviction context
+     */
+    EvictionContext getContext();
+
+    /**
+     * Sets a context in the eviction policy that can be used while evicting the events.
+     * E.g. For TimeEvictionPolicy, this could be used to set the reference timestamp.
+     *
+     * @param context the eviction context
+     */
+    void setContext(EvictionContext context);
+
+    /**
+     * Resets the eviction policy.
+     */
+    void reset();
+
+    /**
+     * Return runtime state to be checkpointed by the framework for restoring the eviction policy
+     * in case of failures.
+     *
+     * @return the state
+     */
+    X getState();
+
+    /**
+     * Restore the eviction policy from the state that was earlier checkpointed by the framework.
+     *
+     * @param state the state
+     */
+    void restoreState(X state);
+
     /**
      * The action to be taken when {@link EvictionPolicy#evict(Event)} is invoked.
      */
@@ -49,56 +101,4 @@ public interface EvictionPolicy<T, S> {
          */
         STOP
     }
-
-    /**
-     * Decides if an event should be expired from the window, processed in the current
-     * window or kept for later processing.
-     *
-     * @param event the input event
-     * @return the {@link EvictionPolicy.Action} to be taken based on the input event
-     */
-    Action evict(Event<T> event);
-
-    /**
-     * Tracks the event to later decide whether
-     * {@link EvictionPolicy#evict(Event)} should evict it or not.
-     *
-     * @param event the input event to be tracked
-     */
-    void track(Event<T> event);
-
-    /**
-     * Sets a context in the eviction policy that can be used while evicting the events.
-     * E.g. For TimeEvictionPolicy, this could be used to set the reference timestamp.
-     *
-     * @param context the eviction context
-     */
-    void setContext(EvictionContext context);
-
-    /**
-     * Returns the current context that is part of this eviction policy.
-     *
-     * @return the eviction context
-     */
-    EvictionContext getContext();
-
-    /**
-     * Resets the eviction policy.
-     */
-    void reset();
-
-    /**
-     * Return runtime state to be checkpointed by the framework for restoring the eviction policy
-     * in case of failures.
-     *
-     * @return the state
-     */
-    S getState();
-
-    /**
-     * Restore the eviction policy from the state that was earlier checkpointed by the framework.
-     *
-     * @param state the state
-     */
-    void restoreState(S state);
 }
