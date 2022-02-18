@@ -19,7 +19,6 @@
 package org.apache.pulsar.functions.windowing;
 
 import com.google.gson.Gson;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
@@ -27,16 +26,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
-
 import lombok.extern.slf4j.Slf4j;
-
+import net.jodah.typetools.TypeResolver;
+import org.apache.pulsar.common.functions.WindowConfig;
+import org.apache.pulsar.common.util.Reflections;
 import org.apache.pulsar.functions.api.Context;
 import org.apache.pulsar.functions.api.Function;
 import org.apache.pulsar.functions.api.Record;
 import org.apache.pulsar.functions.api.WindowContext;
 import org.apache.pulsar.functions.api.WindowFunction;
-import org.apache.pulsar.common.util.Reflections;
-import org.apache.pulsar.common.functions.WindowConfig;
 import org.apache.pulsar.functions.windowing.evictors.CountEvictionPolicy;
 import org.apache.pulsar.functions.windowing.evictors.TimeEvictionPolicy;
 import org.apache.pulsar.functions.windowing.evictors.WatermarkCountEvictionPolicy;
@@ -45,8 +43,6 @@ import org.apache.pulsar.functions.windowing.triggers.CountTriggerPolicy;
 import org.apache.pulsar.functions.windowing.triggers.TimeTriggerPolicy;
 import org.apache.pulsar.functions.windowing.triggers.WatermarkCountTriggerPolicy;
 import org.apache.pulsar.functions.windowing.triggers.WatermarkTimeTriggerPolicy;
-
-import net.jodah.typetools.TypeResolver;
 
 @Slf4j
 public class WindowFunctionExecutor<I, O> implements Function<I, O> {
@@ -168,7 +164,7 @@ public class WindowFunctionExecutor<I, O> implements Function<I, O> {
     }
 
     private TriggerPolicy<Record<I>, ?> getTriggerPolicy(WindowConfig windowConfig, WindowManager<Record<I>> manager,
-                                                 EvictionPolicy<Record<I>, ?> evictionPolicy, Context context) {
+                                                         EvictionPolicy<Record<I>, ?> evictionPolicy, Context context) {
         if (windowConfig.getSlidingIntervalCount() != null) {
             if (this.isEventTime()) {
                 return new WatermarkCountTriggerPolicy<>(
@@ -213,8 +209,9 @@ public class WindowFunctionExecutor<I, O> implements Function<I, O> {
             }
 
             @Override
-            public void onActivation(List<Event<Record<I>>> tuples, List<Event<Record<I>>> newTuples, List<Event<Record<I>>>
-                    expiredTuples, Long referenceTime) {
+            public void onActivation(List<Event<Record<I>>> tuples, List<Event<Record<I>>> newTuples,
+                                     List<Event<Record<I>>>
+                                             expiredTuples, Long referenceTime) {
                 processWindow(
                         context,
                         tuples.stream().map(event -> event.get()).collect(Collectors.toList()),
@@ -278,7 +275,7 @@ public class WindowFunctionExecutor<I, O> implements Function<I, O> {
             initialize(context);
         }
 
-        Record<I> record = (Record<I>)context.getCurrentRecord();
+        Record<I> record = (Record<I>) context.getCurrentRecord();
 
         if (isEventTime()) {
             long ts = this.timestampExtractor.extractTimestamp(record.getValue());

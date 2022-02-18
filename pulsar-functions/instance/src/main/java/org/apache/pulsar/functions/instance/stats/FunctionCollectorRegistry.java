@@ -16,14 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.instance.stats;
 
 import io.prometheus.client.Collector;
 import io.prometheus.client.CollectorRegistry;
 
 /**
- * Internal representation of Prometheus Collector Registry
+ * Internal representation of Prometheus Collector Registry.
  */
 public abstract class FunctionCollectorRegistry extends CollectorRegistry {
     public static FunctionCollectorRegistry getDefaultImplementation() {

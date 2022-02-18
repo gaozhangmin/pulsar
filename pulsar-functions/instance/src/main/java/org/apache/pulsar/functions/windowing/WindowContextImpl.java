@@ -18,15 +18,14 @@
  */
 package org.apache.pulsar.functions.windowing;
 
-import org.apache.pulsar.functions.api.Context;
-import org.apache.pulsar.functions.api.WindowContext;
-import org.slf4j.Logger;
-
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.apache.pulsar.functions.api.Context;
+import org.apache.pulsar.functions.api.WindowContext;
+import org.slf4j.Logger;
 
 public class WindowContextImpl implements WindowContext {
 

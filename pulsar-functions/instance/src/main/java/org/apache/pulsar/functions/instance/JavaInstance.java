@@ -75,7 +75,9 @@ public class JavaInstance implements AutoCloseable {
 
     @VisibleForTesting
     public JavaExecutionResult handleMessage(Record<?> record, Object input) {
-        return handleMessage(record, input, (rec, result) -> {}, cause -> {});
+        return handleMessage(record, input, (rec, result) -> {
+        }, cause -> {
+        });
     }
 
     public JavaExecutionResult handleMessage(Record<?> record, Object input,
@@ -103,7 +105,7 @@ public class JavaInstance implements AutoCloseable {
         if (output instanceof CompletableFuture) {
             // Function is in format: Function<I, CompletableFuture<O>>
             AsyncFuncRequest request = new AsyncFuncRequest(
-                record, (CompletableFuture) output
+                    record, (CompletableFuture) output
             );
             try {
                 pendingAsyncRequests.put(request);

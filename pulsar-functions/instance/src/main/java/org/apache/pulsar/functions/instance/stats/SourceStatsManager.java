@@ -21,13 +21,12 @@ package org.apache.pulsar.functions.instance.stats;
 import com.google.common.collect.EvictingQueue;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import lombok.Getter;
-import org.apache.pulsar.common.util.RateLimiter;
-import org.apache.pulsar.functions.proto.InstanceCommunication;
-
 import java.util.Arrays;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import lombok.Getter;
+import org.apache.pulsar.common.util.RateLimiter;
+import org.apache.pulsar.functions.proto.InstanceCommunication;
 
 public class SourceStatsManager extends ComponentStatsManager {
 
@@ -85,114 +84,117 @@ public class SourceStatsManager extends ComponentStatsManager {
     private Counter.Child _statTotalWritten1min;
 
     @Getter
-    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestSystemExceptions = EvictingQueue.create(10);
+    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestSystemExceptions =
+            EvictingQueue.create(10);
     @Getter
-    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestSourceExceptions = EvictingQueue.create(10);
+    private EvictingQueue<InstanceCommunication.FunctionStatus.ExceptionInformation> latestSourceExceptions =
+            EvictingQueue.create(10);
 
     protected final RateLimiter sysExceptionRateLimiter;
 
     protected final RateLimiter sourceExceptionRateLimiter;
 
-    public SourceStatsManager(FunctionCollectorRegistry collectorRegistry, String[] metricsLabels, ScheduledExecutorService
-            scheduledExecutorService) {
+    public SourceStatsManager(FunctionCollectorRegistry collectorRegistry, String[] metricsLabels,
+                              ScheduledExecutorService
+                                      scheduledExecutorService) {
         super(collectorRegistry, metricsLabels, scheduledExecutorService);
 
         statTotalRecordsReceived = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + RECEIVED_TOTAL,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + RECEIVED_TOTAL)
-                .help("Total number of records received from source.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + RECEIVED_TOTAL)
+                        .help("Total number of records received from source.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalRecordsReceived = statTotalRecordsReceived.labels(metricsLabels);
 
         statTotalSysExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL)
-                .help("Total number of system exceptions.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL)
+                        .help("Total number of system exceptions.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalSysExceptions = statTotalSysExceptions.labels(metricsLabels);
 
         statTotalSourceExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + SOURCE_EXCEPTIONS_TOTAL,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + SOURCE_EXCEPTIONS_TOTAL)
-                .help("Total number of source exceptions.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + SOURCE_EXCEPTIONS_TOTAL)
+                        .help("Total number of source exceptions.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalSourceExceptions = statTotalSourceExceptions.labels(metricsLabels);
 
         statTotalWritten = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + WRITTEN_TOTAL,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + WRITTEN_TOTAL)
-                .help("Total number of records written to a Pulsar topic.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + WRITTEN_TOTAL)
+                        .help("Total number of records written to a Pulsar topic.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalWritten = statTotalWritten.labels(metricsLabels);
 
         statlastInvocation = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + LAST_INVOCATION,
                 Gauge.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + LAST_INVOCATION)
-                .help("The timestamp of the last invocation of the source.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + LAST_INVOCATION)
+                        .help("The timestamp of the last invocation of the source.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statlastInvocation = statlastInvocation.labels(metricsLabels);
 
         statTotalRecordsReceived1min = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + RECEIVED_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + RECEIVED_TOTAL_1min)
-                .help("Total number of records received from source in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + RECEIVED_TOTAL_1min)
+                        .help("Total number of records received from source in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalRecordsReceived1min = statTotalRecordsReceived1min.labels(metricsLabels);
 
         statTotalSysExceptions1min = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL_1min)
-                .help("Total number of system exceptions in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL_1min)
+                        .help("Total number of system exceptions in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalSysExceptions1min = statTotalSysExceptions1min.labels(metricsLabels);
 
         statTotalSourceExceptions1min = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + SOURCE_EXCEPTIONS_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + SOURCE_EXCEPTIONS_TOTAL_1min)
-                .help("Total number of source exceptions in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + SOURCE_EXCEPTIONS_TOTAL_1min)
+                        .help("Total number of source exceptions in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalSourceExceptions1min = statTotalSourceExceptions1min.labels(metricsLabels);
 
         statTotalWritten1min = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + WRITTEN_TOTAL_1min,
                 Counter.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + WRITTEN_TOTAL_1min)
-                .help("Total number of records written to a Pulsar topic in the last 1 minute.")
-                .labelNames(metricsLabelNames)
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + WRITTEN_TOTAL_1min)
+                        .help("Total number of records written to a Pulsar topic in the last 1 minute.")
+                        .labelNames(METRICS_LABEL_NAMES)
+                        .create());
         _statTotalWritten1min = statTotalWritten1min.labels(metricsLabels);
 
         sysExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + "system_exception",
                 Gauge.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + "system_exception")
-                .labelNames(exceptionMetricsLabelNames)
-                .help("Exception from system code.")
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + "system_exception")
+                        .labelNames(EXCEPTION_METRICS_LABEL_NAMES)
+                        .help("Exception from system code.")
+                        .create());
 
         sourceExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + "source_exception",
                 Gauge.build()
-                .name(PULSAR_SOURCE_METRICS_PREFIX + "source_exception")
-                .labelNames(exceptionMetricsLabelNames)
-                .help("Exception from source.")
-                .create());
+                        .name(PULSAR_SOURCE_METRICS_PREFIX + "source_exception")
+                        .labelNames(EXCEPTION_METRICS_LABEL_NAMES)
+                        .help("Exception from source.")
+                        .create());
 
         sysExceptionRateLimiter = RateLimiter.builder()
                 .scheduledExecutorService(scheduledExecutorService)

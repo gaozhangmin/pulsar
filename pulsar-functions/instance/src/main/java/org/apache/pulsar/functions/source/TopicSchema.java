@@ -84,11 +84,14 @@ public class TopicSchema {
         return cachedSchemas.computeIfAbsent(topic, t -> newSchemaInstance(clazz, schemaType));
     }
 
-    public Schema<?> getSchema(String topic, Class<?> clazz, String schemaTypeOrClassName, boolean input, ClassLoader classLoader) {
-        return cachedSchemas.computeIfAbsent(topic, t -> newSchemaInstance(topic, clazz, schemaTypeOrClassName, input, classLoader));
+    public Schema<?> getSchema(String topic, Class<?> clazz, String schemaTypeOrClassName, boolean input,
+                               ClassLoader classLoader) {
+        return cachedSchemas.computeIfAbsent(topic,
+                t -> newSchemaInstance(topic, clazz, schemaTypeOrClassName, input, classLoader));
     }
 
-    public Schema<?> getSchema(String topic, Class<?> clazz, ConsumerConfig conf, boolean input, ClassLoader classLoader) {
+    public Schema<?> getSchema(String topic, Class<?> clazz, ConsumerConfig conf, boolean input,
+                               ClassLoader classLoader) {
         return cachedSchemas.computeIfAbsent(topic, t -> newSchemaInstance(topic, clazz, conf, input, classLoader));
     }
 
@@ -120,8 +123,8 @@ public class TopicSchema {
 
     private static SchemaType getDefaultSchemaType(Class<?> clazz) {
         if (byte[].class.equals(clazz)
-            || ByteBuf.class.equals(clazz)
-            || ByteBuffer.class.equals(clazz)) {
+                || ByteBuf.class.equals(clazz)
+                || ByteBuffer.class.equals(clazz)) {
             return SchemaType.NONE;
         } else if (GenericObject.class.isAssignableFrom(clazz)) {
             // the function is taking generic record/object, so we do auto schema detection
@@ -145,42 +148,42 @@ public class TopicSchema {
 
     private static <T> Schema<T> newSchemaInstance(Class<T> clazz, SchemaType type, ConsumerConfig conf) {
         switch (type) {
-        case NONE:
-            if (ByteBuffer.class.isAssignableFrom(clazz)) {
-                return (Schema<T>) Schema.BYTEBUFFER;
-            } else {
-                return (Schema<T>) Schema.BYTES;
-            }
+            case NONE:
+                if (ByteBuffer.class.isAssignableFrom(clazz)) {
+                    return (Schema<T>) Schema.BYTEBUFFER;
+                } else {
+                    return (Schema<T>) Schema.BYTES;
+                }
 
-        case AUTO_CONSUME:
-        case AUTO:
-            return (Schema<T>) Schema.AUTO_CONSUME();
+            case AUTO_CONSUME:
+            case AUTO:
+                return (Schema<T>) Schema.AUTO_CONSUME();
 
-        case STRING:
-            return (Schema<T>) Schema.STRING;
+            case STRING:
+                return (Schema<T>) Schema.STRING;
 
-        case AVRO:
-            return AvroSchema.of(SchemaDefinition.<T>builder()
-                    .withProperties(new HashMap<>(conf.getSchemaProperties()))
-                    .withPojo(clazz).build());
+            case AVRO:
+                return AvroSchema.of(SchemaDefinition.<T>builder()
+                        .withProperties(new HashMap<>(conf.getSchemaProperties()))
+                        .withPojo(clazz).build());
 
-        case JSON:
-            return JSONSchema.of(SchemaDefinition.<T>builder().withPojo(clazz).build());
+            case JSON:
+                return JSONSchema.of(SchemaDefinition.<T>builder().withPojo(clazz).build());
 
-        case KEY_VALUE:
-            return (Schema<T>)Schema.KV_BYTES();
+            case KEY_VALUE:
+                return (Schema<T>) Schema.KV_BYTES();
 
-        case PROTOBUF:
-            return ProtobufSchema.ofGenericClass(clazz, new HashMap<>());
+            case PROTOBUF:
+                return ProtobufSchema.ofGenericClass(clazz, new HashMap<>());
 
-        case PROTOBUF_NATIVE:
-            return ProtobufNativeSchema.ofGenericClass(clazz, new HashMap<>());
+            case PROTOBUF_NATIVE:
+                return ProtobufNativeSchema.ofGenericClass(clazz, new HashMap<>());
 
-        case AUTO_PUBLISH:
-            return (Schema<T>) Schema.AUTO_PRODUCE_BYTES();
+            case AUTO_PUBLISH:
+                return (Schema<T>) Schema.AUTO_PRODUCE_BYTES();
 
-        default:
-            throw new RuntimeException("Unsupported schema type" + type);
+            default:
+                throw new RuntimeException("Unsupported schema type" + type);
         }
     }
 
@@ -195,12 +198,14 @@ public class TopicSchema {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, String schemaTypeOrClassName, boolean input, ClassLoader classLoader){
+    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, String schemaTypeOrClassName, boolean input,
+                                            ClassLoader classLoader) {
         return newSchemaInstance(topic, clazz, new ConsumerConfig(schemaTypeOrClassName), input, classLoader);
     }
 
     @SuppressWarnings("unchecked")
-    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, ConsumerConfig conf, boolean input, ClassLoader classLoader) {
+    private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, ConsumerConfig conf, boolean input,
+                                            ClassLoader classLoader) {
         // The schemaTypeOrClassName can represent multiple thing, either a schema type, a schema class name or a ser-de
         // class name.
         String schemaTypeOrClassName = conf.getSchemaType();
@@ -238,7 +243,8 @@ public class TopicSchema {
 
     @SuppressWarnings("unchecked")
     private <T> Schema<T> newSchemaInstance(String topic, Class<T> clazz, String schemaTypeOrClassName, boolean input) {
-        return newSchemaInstance(topic, clazz, new ConsumerConfig(schemaTypeOrClassName), input, Thread.currentThread().getContextClassLoader());
+        return newSchemaInstance(topic, clazz, new ConsumerConfig(schemaTypeOrClassName), input,
+                Thread.currentThread().getContextClassLoader());
     }
 
     @SuppressWarnings("unchecked")

@@ -16,15 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.pulsar.functions.source;
-
-import org.apache.pulsar.client.api.PulsarClient;
-import org.apache.pulsar.functions.api.Record;
-import org.apache.pulsar.io.core.SourceContext;
 
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
+import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.functions.api.Record;
+import org.apache.pulsar.io.core.SourceContext;
 
 public abstract class PushPulsarSource<T> extends PulsarSource<T> {
 

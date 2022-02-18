@@ -56,7 +56,7 @@ public class WorkerStatsManager {
   private static final String IS_LEADER = "is_leader";
 
 
-  private static final String[] metricsLabelNames = {"cluster"};
+  private static final String[] METRICS_LABEL_NAMES = {"cluster"};
   private final String[] metricsLabels;
 
   @Setter
@@ -101,21 +101,21 @@ public class WorkerStatsManager {
     statWorkerStartupTime = Summary.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + START_UP_TIME)
       .help("Worker service startup time in milliseconds.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .register(collectorRegistry);
     _statWorkerStartupTime = statWorkerStartupTime.labels(metricsLabels);
 
     statNumInstances = Gauge.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + INSTANCE_COUNT)
       .help("Number of instances run by this worker.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .register(collectorRegistry);
     _statNumInstances = statNumInstances.labels(metricsLabels);
 
     scheduleTotalExecutionTime = Summary.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + SCHEDULE_TOTAL_EXEC_TIME)
       .help("Total execution time of schedule in milliseconds.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .quantile(0.5, 0.01)
       .quantile(0.9, 0.01)
       .quantile(1, 0.01)
@@ -125,7 +125,7 @@ public class WorkerStatsManager {
     scheduleStrategyExecutionTime = Summary.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + SCHEDULE_STRATEGY_EXEC_TIME)
       .help("Execution time of schedule strategy in milliseconds.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .quantile(0.5, 0.01)
       .quantile(0.9, 0.01)
       .quantile(1, 0.01)
@@ -135,7 +135,7 @@ public class WorkerStatsManager {
     rebalanceTotalExecutionTime = Summary.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + REBALANCE_TOTAL_EXEC_TIME)
       .help("Total execution time of a rebalance in milliseconds.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .quantile(0.5, 0.01)
       .quantile(0.9, 0.01)
       .quantile(1, 0.01)
@@ -145,7 +145,7 @@ public class WorkerStatsManager {
     rebalanceStrategyExecutionTime = Summary.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + REBALANCE_STRATEGY_EXEC_TIME)
       .help("Execution time of rebalance strategy in milliseconds.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .quantile(0.5, 0.01)
       .quantile(0.9, 0.01)
       .quantile(1, 0.01)
@@ -155,7 +155,7 @@ public class WorkerStatsManager {
     stopInstanceProcessTime = Summary.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + STOPPING_INSTANCE_PROCESS_TIME)
       .help("Stopping instance process time in milliseconds.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .quantile(0.5, 0.01)
       .quantile(0.9, 0.01)
       .quantile(1, 0.01)
@@ -165,7 +165,7 @@ public class WorkerStatsManager {
     startInstanceProcessTime = Summary.build()
       .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + STARTING_INSTANCE_PROCESS_TIME)
       .help("Starting instance process time in milliseconds.")
-      .labelNames(metricsLabelNames)
+      .labelNames(METRICS_LABEL_NAMES)
       .quantile(0.5, 0.01)
       .quantile(0.9, 0.01)
       .quantile(1, 0.01)
@@ -175,7 +175,7 @@ public class WorkerStatsManager {
     drainTotalExecutionTime = Summary.build()
             .name(PULSAR_FUNCTION_WORKER_METRICS_PREFIX + DRAIN_TOTAL_EXEC_TIME)
             .help("Total execution time of a drain in milliseconds.")
-            .labelNames(metricsLabelNames)
+            .labelNames(METRICS_LABEL_NAMES)
             .quantile(0.5, 0.01)
             .quantile(0.9, 0.01)
             .quantile(1, 0.01)
@@ -332,8 +332,8 @@ public class WorkerStatsManager {
     stream.write(metricName);
     stream.write("{");
 
-    for (int i = 0; i < metricsLabelNames.length; i++) {
-      stream.write(metricsLabelNames[i]);
+    for (int i = 0; i < METRICS_LABEL_NAMES.length; i++) {
+      stream.write(METRICS_LABEL_NAMES[i]);
       stream.write('=');
       stream.write('\"');
       stream.write(metricsLabels[i]);

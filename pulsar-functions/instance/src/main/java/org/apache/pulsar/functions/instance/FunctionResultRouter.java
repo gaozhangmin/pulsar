@@ -40,11 +40,11 @@ public class FunctionResultRouter extends RoundRobinPartitionMessageRouterImpl {
     @VisibleForTesting
     public FunctionResultRouter(int startPtnIdx, Clock clock) {
         super(
-            HashingScheme.Murmur3_32Hash,
-            startPtnIdx,
-            true,
-            1,
-            clock);
+                HashingScheme.Murmur3_32Hash,
+                startPtnIdx,
+                true,
+                1,
+                clock);
     }
 
     public static FunctionResultRouter of() {

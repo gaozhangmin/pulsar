@@ -153,14 +153,14 @@ public class PulsarSink<T> implements Sink<T> {
             return publishProducers.computeIfAbsent(producerId, s -> {
                 try {
                     log.info("Initializing producer {} on topic {} with schema {}",
-                        producerName, topicName, schema);
+                            producerName, topicName, schema);
                     Producer<T> producer = createProducer(
                             client,
                             topicName,
                             producerName,
                             schema != null ? schema : this.schema);
                     log.info("Initialized producer {} on topic {} with schema {}: {} -> {}",
-                        producerName, topicName, schema, producerId, producer);
+                            producerName, topicName, schema, producerId, producer);
                     return producer;
                 } catch (PulsarClientException e) {
                     log.error("Failed to create Producer while doing user publish", e);
@@ -172,7 +172,7 @@ public class PulsarSink<T> implements Sink<T> {
         @Override
         public void close() throws Exception {
             List<CompletableFuture<Void>> closeFutures = new ArrayList<>(publishProducers.size());
-            for (Map.Entry<String, Producer<T>> entry: publishProducers.entrySet()) {
+            for (Map.Entry<String, Producer<T>> entry : publishProducers.entrySet()) {
                 Producer<T> producer = entry.getValue();
                 closeFutures.add(producer.closeAsync());
             }
@@ -195,11 +195,14 @@ public class PulsarSink<T> implements Sink<T> {
 
                 String errorMsg = null;
                 if (srcRecord instanceof PulsarRecord) {
-                    errorMsg = String.format("Failed to publish to topic [%s] with error [%s] with src message id [%s]", topic, throwable.getMessage(), ((PulsarRecord) srcRecord).getMessageId());
+                    errorMsg = String.format("Failed to publish to topic [%s] with error [%s] with src message id [%s]",
+                            topic, throwable.getMessage(), ((PulsarRecord) srcRecord).getMessageId());
                 } else {
-                    errorMsg = String.format("Failed to publish to topic [%s] with error [%s]", topic, throwable.getMessage());
+                    errorMsg = String.format("Failed to publish to topic [%s] with error [%s]", topic,
+                            throwable.getMessage());
                     if (record.getRecordSequence().isPresent()) {
-                        errorMsg = String.format(errorMsg + " with src sequence id [%s]", record.getRecordSequence().get());
+                        errorMsg = String.format(errorMsg + " with src sequence id [%s]",
+                                record.getRecordSequence().get());
                     }
                 }
                 log.error(errorMsg);
@@ -217,7 +220,7 @@ public class PulsarSink<T> implements Sink<T> {
                 // initialize default topic
                 try {
                     publishProducers.put(pulsarSinkConfig.getTopic(),
-                        createProducer(client, pulsarSinkConfig.getTopic(), null, schema));
+                            createProducer(client, pulsarSinkConfig.getTopic(), null, schema));
                 } catch (PulsarClientException e) {
                     log.error("Failed to create Producer while doing user publish", e);
                     throw new RuntimeException(e);
@@ -225,7 +228,7 @@ public class PulsarSink<T> implements Sink<T> {
             } else {
                 if (log.isDebugEnabled()) {
                     log.debug("The Pulsar producer is not initialized until the first record is"
-                        + " published for `AUTO_CONSUME` schema.");
+                            + " published for `AUTO_CONSUME` schema.");
                 }
             }
         }
@@ -284,7 +287,8 @@ public class PulsarSink<T> implements Sink<T> {
         @Override
         public TypedMessageBuilder<T> newMessage(SinkRecord<T> record) {
             if (!record.getPartitionId().isPresent()) {
-                throw new RuntimeException("PartitionId needs to be specified for every record while in Effectively-once mode");
+                throw new RuntimeException(
+                        "PartitionId needs to be specified for every record while in Effectively-once mode");
             }
             Schema<T> schemaToWrite = record.getSchema();
             if (record.getSourceRecord() instanceof PulsarRecord) {
@@ -293,7 +297,8 @@ public class PulsarSink<T> implements Sink<T> {
                 schemaToWrite = schema;
             }
             Producer<T> producer = getProducer(
-                    String.format("%s-%s",record.getDestinationTopic().orElse(pulsarSinkConfig.getTopic()), record.getPartitionId().get()),
+                    String.format("%s-%s", record.getDestinationTopic().orElse(pulsarSinkConfig.getTopic()),
+                            record.getPartitionId().get()),
                     record.getPartitionId().get(),
                     record.getDestinationTopic().orElse(pulsarSinkConfig.getTopic()),
                     schemaToWrite
@@ -309,7 +314,8 @@ public class PulsarSink<T> implements Sink<T> {
         public void sendOutputMessage(TypedMessageBuilder<T> msg, SinkRecord<T> record) {
 
             if (!record.getRecordSequence().isPresent()) {
-                throw new RuntimeException("RecordSequence needs to be specified for every record while in Effectively-once mode");
+                throw new RuntimeException(
+                        "RecordSequence needs to be specified for every record while in Effectively-once mode");
             }
 
             // assign sequence id to output message for idempotent producing
@@ -379,8 +385,9 @@ public class PulsarSink<T> implements Sink<T> {
             PulsarRecord<T> pulsarRecord = (PulsarRecord<T>) sinkRecord.getSourceRecord();
             // forward user properties to sink-topic
             msg.property("__pfn_input_topic__", pulsarRecord.getTopicName().get())
-               .property("__pfn_input_msg_id__",
-                         new String(Base64.getEncoder().encode(pulsarRecord.getMessageId().toByteArray()), StandardCharsets.UTF_8));
+                    .property("__pfn_input_msg_id__",
+                            new String(Base64.getEncoder().encode(pulsarRecord.getMessageId().toByteArray()),
+                                    StandardCharsets.UTF_8));
         } else {
             // It is coming from some source
             Optional<Long> eventTime = sinkRecord.getSourceRecord().getEventTime();
@@ -417,7 +424,7 @@ public class PulsarSink<T> implements Sink<T> {
                 SchemaType configuredSchemaType = SchemaType.valueOf(pulsarSinkConfig.getSchemaType());
                 if (SchemaType.AUTO_CONSUME != configuredSchemaType) {
                     log.info("The configured schema type {} is not able to write GenericRecords."
-                        + " So overwrite the schema type to be {}", configuredSchemaType, SchemaType.AUTO_CONSUME);
+                            + " So overwrite the schema type to be {}", configuredSchemaType, SchemaType.AUTO_CONSUME);
                 }
             } else {
                 consumerConfig.setSchemaType(pulsarSinkConfig.getSchemaType());
@@ -453,7 +460,8 @@ public class PulsarSink<T> implements Sink<T> {
                 .encryptionKeys(encryptionKeys);
 
         bldr.keyReader(CryptoUtils.getCryptoKeyReaderInstance(
-                cryptoConfig.getCryptoKeyReaderClassName(), cryptoConfig.getCryptoKeyReaderConfig(), functionClassLoader));
+                cryptoConfig.getCryptoKeyReaderClassName(), cryptoConfig.getCryptoKeyReaderConfig(),
+                functionClassLoader));
 
         return bldr.build();
     }

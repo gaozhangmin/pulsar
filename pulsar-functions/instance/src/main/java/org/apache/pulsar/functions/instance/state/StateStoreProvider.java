@@ -51,7 +51,8 @@ public interface StateStoreProvider extends AutoCloseable {
      * @param functionDetails the function details.
      * @throws Exception when failed to init the state store provider.
      */
-    default void init(Map<String, Object> config, FunctionDetails functionDetails) throws Exception {}
+    default void init(Map<String, Object> config, FunctionDetails functionDetails) throws Exception {
+    }
 
     /**
      * Get the state store with the provided store name.
