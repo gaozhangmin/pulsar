@@ -73,7 +73,7 @@ public class SinkStatsManager extends ComponentStatsManager {
 
     // As an optimization
     private final Counter.Child _statTotalRecordsReceived;
-    private final Counter.Child _statTotalSysExceptions;
+    private final Counter.Child statTotalSysExceptionsChild;
     private final Counter.Child _statTotalSinkExceptions;
     private final Counter.Child _statTotalWritten;
     private final Gauge.Child _statlastInvocation;
@@ -116,7 +116,7 @@ public class SinkStatsManager extends ComponentStatsManager {
                         .help("Total number of system exceptions.")
                         .labelNames(METRICS_LABEL_NAMES)
                         .create());
-        _statTotalSysExceptions = statTotalSysExceptions.labels(metricsLabels);
+        statTotalSysExceptionsChild = statTotalSysExceptions.labels(metricsLabels);
 
         statTotalSinkExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_SINK_METRICS_PREFIX + SINK_EXCEPTIONS_TOTAL,
@@ -240,7 +240,7 @@ public class SinkStatsManager extends ComponentStatsManager {
 
     @Override
     public void incrSysExceptions(Throwable ex) {
-        _statTotalSysExceptions.inc();
+        statTotalSysExceptionsChild.inc();
         _statTotalSysExceptions1min.inc();
 
         long ts = System.currentTimeMillis();
@@ -313,7 +313,7 @@ public class SinkStatsManager extends ComponentStatsManager {
 
     @Override
     public double getTotalSysExceptions() {
-        return _statTotalSysExceptions.get();
+        return statTotalSysExceptionsChild.get();
     }
 
     @Override

@@ -41,7 +41,7 @@ public class FunctionStatsManager extends ComponentStatsManager {
 
     public static final String PULSAR_FUNCTION_METRICS_PREFIX = "pulsar_function_";
 
-    /** Declare metric names **/
+    /** Declare metric names. **/
     public static final String PROCESSED_SUCCESSFULLY_TOTAL = "processed_successfully_total";
     public static final String SYSTEM_EXCEPTIONS_TOTAL = "system_exceptions_total";
     public static final String USER_EXCEPTIONS_TOTAL = "user_exceptions_total";
@@ -59,7 +59,7 @@ public class FunctionStatsManager extends ComponentStatsManager {
     public static final String PROCESS_LATENCY_MS_1min = "process_latency_ms_1min";
     public static final String RECEIVED_TOTAL_1min = "received_total_1min";
 
-    /** Declare Prometheus stats **/
+    /** Declare Prometheus stats. **/
 
     final Counter statTotalProcessedSuccessfully;
 
@@ -96,10 +96,10 @@ public class FunctionStatsManager extends ComponentStatsManager {
     final Gauge sinkExceptions;
 
     // As an optimization
-    private final Counter.Child _statTotalProcessedSuccessfully;
-    private final Counter.Child _statTotalSysExceptions;
-    private final Counter.Child _statTotalUserExceptions;
-    private final Summary.Child _statProcessLatency;
+    private final Counter.Child statTotalProcessedSuccessfullyChild;
+    private final Counter.Child statTotalSysExceptionsChild;
+    private final Counter.Child statTotalUserExceptionsChild;
+    private final Summary.Child statProcessLatencyChild;
     private final Gauge.Child _statlastInvocation;
     private final Counter.Child _statTotalRecordsReceived;
     private Counter.Child _statTotalProcessedSuccessfully1min;
@@ -131,7 +131,7 @@ public class FunctionStatsManager extends ComponentStatsManager {
                         .help("Total number of messages processed successfully.")
                         .labelNames(METRICS_LABEL_NAMES)
                         .create());
-        _statTotalProcessedSuccessfully = statTotalProcessedSuccessfully.labels(metricsLabels);
+        statTotalProcessedSuccessfullyChild = statTotalProcessedSuccessfully.labels(metricsLabels);
 
         statTotalSysExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + SYSTEM_EXCEPTIONS_TOTAL,
@@ -140,7 +140,7 @@ public class FunctionStatsManager extends ComponentStatsManager {
                         .help("Total number of system exceptions.")
                         .labelNames(METRICS_LABEL_NAMES)
                         .create());
-        _statTotalSysExceptions = statTotalSysExceptions.labels(metricsLabels);
+        statTotalSysExceptionsChild = statTotalSysExceptions.labels(metricsLabels);
 
         statTotalUserExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + USER_EXCEPTIONS_TOTAL,
@@ -149,7 +149,7 @@ public class FunctionStatsManager extends ComponentStatsManager {
                         .help("Total number of user exceptions.")
                         .labelNames(METRICS_LABEL_NAMES)
                         .create());
-        _statTotalUserExceptions = statTotalUserExceptions.labels(metricsLabels);
+        statTotalUserExceptionsChild = statTotalUserExceptions.labels(metricsLabels);
 
         statProcessLatency = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + PROCESS_LATENCY_MS,
@@ -162,7 +162,7 @@ public class FunctionStatsManager extends ComponentStatsManager {
                         .quantile(0.999, 0.01)
                         .labelNames(METRICS_LABEL_NAMES)
                         .create());
-        _statProcessLatency = statProcessLatency.labels(metricsLabels);
+        statProcessLatencyChild = statProcessLatency.labels(metricsLabels);
 
         statlastInvocation = collectorRegistry.registerIfNotExist(
                 PULSAR_FUNCTION_METRICS_PREFIX + LAST_INVOCATION,
@@ -314,20 +314,20 @@ public class FunctionStatsManager extends ComponentStatsManager {
 
     @Override
     public void incrTotalProcessedSuccessfully() {
-        _statTotalProcessedSuccessfully.inc();
+        statTotalProcessedSuccessfullyChild.inc();
         _statTotalProcessedSuccessfully1min.inc();
     }
 
     @Override
     public void incrSysExceptions(Throwable sysException) {
-        _statTotalSysExceptions.inc();
+        statTotalSysExceptionsChild.inc();
         _statTotalSysExceptions1min.inc();
         addSystemException(sysException);
     }
 
     @Override
     public void incrUserExceptions(Throwable userException) {
-        _statTotalUserExceptions.inc();
+        statTotalUserExceptionsChild.inc();
         _statTotalUserExceptions1min.inc();
         addUserException(userException);
     }
@@ -358,14 +358,14 @@ public class FunctionStatsManager extends ComponentStatsManager {
     public void processTimeEnd() {
         if (processTimeStart != null) {
             double endTimeMs = ((double) System.nanoTime() - processTimeStart) / 1.0E6D;
-            _statProcessLatency.observe(endTimeMs);
+            statProcessLatencyChild.observe(endTimeMs);
             _statProcessLatency1min.observe(endTimeMs);
         }
     }
 
     @Override
     public double getTotalProcessedSuccessfully() {
-        return _statTotalProcessedSuccessfully.get();
+        return statTotalProcessedSuccessfullyChild.get();
     }
 
     @Override
@@ -375,12 +375,12 @@ public class FunctionStatsManager extends ComponentStatsManager {
 
     @Override
     public double getTotalSysExceptions() {
-        return _statTotalSysExceptions.get();
+        return statTotalSysExceptionsChild.get();
     }
 
     @Override
     public double getTotalUserExceptions() {
-        return _statTotalUserExceptions.get();
+        return statTotalUserExceptionsChild.get();
     }
 
     @Override
@@ -389,24 +389,24 @@ public class FunctionStatsManager extends ComponentStatsManager {
     }
 
     public double getAvgProcessLatency() {
-        return _statProcessLatency.get().count <= 0.0
-                ? 0 : _statProcessLatency.get().sum / _statProcessLatency.get().count;
+        return statProcessLatencyChild.get().count <= 0.0
+                ? 0 : statProcessLatencyChild.get().sum / statProcessLatencyChild.get().count;
     }
 
     public double getProcessLatency50P() {
-        return _statProcessLatency.get().quantiles.get(0.5);
+        return statProcessLatencyChild.get().quantiles.get(0.5);
     }
 
     public double getProcessLatency90P() {
-        return _statProcessLatency.get().quantiles.get(0.9);
+        return statProcessLatencyChild.get().quantiles.get(0.9);
     }
 
     public double getProcessLatency99P() {
-        return _statProcessLatency.get().quantiles.get(0.99);
+        return statProcessLatencyChild.get().quantiles.get(0.99);
     }
 
     public double getProcessLatency99_9P() {
-        return _statProcessLatency.get().quantiles.get(0.999);
+        return statProcessLatencyChild.get().quantiles.get(0.999);
     }
 
     @Override

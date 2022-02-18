@@ -73,7 +73,7 @@ public class SourceStatsManager extends ComponentStatsManager {
 
     // As an optimization
     private final Counter.Child _statTotalRecordsReceived;
-    private final Counter.Child _statTotalSysExceptions;
+    private final Counter.Child statTotalSysExceptionsChild;
     private final Counter.Child _statTotalSourceExceptions;
     private final Counter.Child _statTotalWritten;
     private final Gauge.Child _statlastInvocation;
@@ -115,7 +115,7 @@ public class SourceStatsManager extends ComponentStatsManager {
                         .help("Total number of system exceptions.")
                         .labelNames(METRICS_LABEL_NAMES)
                         .create());
-        _statTotalSysExceptions = statTotalSysExceptions.labels(metricsLabels);
+        statTotalSysExceptionsChild = statTotalSysExceptions.labels(metricsLabels);
 
         statTotalSourceExceptions = collectorRegistry.registerIfNotExist(
                 PULSAR_SOURCE_METRICS_PREFIX + SOURCE_EXCEPTIONS_TOTAL,
@@ -239,7 +239,7 @@ public class SourceStatsManager extends ComponentStatsManager {
 
     @Override
     public void incrSysExceptions(Throwable ex) {
-        _statTotalSysExceptions.inc();
+        statTotalSysExceptionsChild.inc();
         _statTotalSysExceptions1min.inc();
 
         long ts = System.currentTimeMillis();
@@ -312,7 +312,7 @@ public class SourceStatsManager extends ComponentStatsManager {
 
     @Override
     public double getTotalSysExceptions() {
-        return _statTotalSysExceptions.get();
+        return statTotalSysExceptionsChild.get();
     }
 
     @Override
