@@ -48,6 +48,8 @@ metadataStoreCacheExpirySeconds: 300
 
 numFunctionPackageReplicas: 1
 downloadDirectory: download/pulsar_functions
+#Enable Functions Worker to use packageManagement Service to store package.
+functionsWorkerEnablePackageManagement: false
 # Classname of Pluggable JVM GC metrics logger that can log GC specific metrics
 # jvmGCMetricsLoggerClassName:
 
@@ -126,14 +128,14 @@ exposeAdminClientEnabled: false
 
 functionRuntimeFactoryClassName: org.apache.pulsar.functions.runtime.process.ProcessRuntimeFactory
 functionRuntimeFactoryConfigs:
-    # location of log files for functions
-    logDirectory: logs/
-    # change the jar location only when you put the java instance jar in a different location
-    javaInstanceJarLocation:
-    # change the python instance location only when you put the python instance jar in a different location
-    pythonInstanceLocation:
-    # change the extra dependencies location:
-    extraFunctionDependenciesDir:
+# location of log files for functions
+logDirectory: logs/
+# change the jar location only when you put the java instance jar in a different location
+javaInstanceJarLocation:
+# change the python instance location only when you put the python instance jar in a different location
+pythonInstanceLocation:
+# change the extra dependencies location:
+extraFunctionDependenciesDir:
 
 #### Additional JVM tuning (only process and Kubernetes runtime) ####
 #   This arguments will be added to the command line execution of 'java'
