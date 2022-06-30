@@ -64,8 +64,8 @@ public class OffloadPoliciesTest {
                 readBufferSizeInBytes,
                 offloadThresholdInBytes,
                 offloadDeletionLagInMillis,
-                OffloadedReadPriority.TIERED_STORAGE_FIRST
-        );
+                OffloadedReadPriority.TIERED_STORAGE_FIRST,
+                2, 1);
 
         Assert.assertEquals(offloadPolicies.getManagedLedgerOffloadDriver(), driver);
         Assert.assertEquals(offloadPolicies.getS3ManagedLedgerOffloadRegion(), region);
@@ -108,8 +108,8 @@ public class OffloadPoliciesTest {
                 readBufferSizeInBytes,
                 offloadThresholdInBytes,
                 offloadDeletionLagInMillis,
-                readPriority
-        );
+                readPriority,
+                2, 1);
 
         Assert.assertEquals(offloadPolicies.getManagedLedgerOffloadDriver(), driver);
         Assert.assertEquals(offloadPolicies.getGcsManagedLedgerOffloadRegion(), region);

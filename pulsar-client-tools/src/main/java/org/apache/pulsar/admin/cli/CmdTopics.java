@@ -2035,6 +2035,14 @@ public class CmdTopics extends CmdBase {
         )
         private String offloadReadPriorityStr;
 
+        @Parameter(names = {"-mt", "--offloadMaxThreads"}
+                , description = "Maximum number of thread pool threads for ledger offloading")
+        private int offloadMaxThreads;
+
+        @Parameter(names = {"-pr", "--offloadPrefetchRounds"}
+                , description = "Maximum prefetch rounds for ledger reading for offloading")
+        private int offloadPrefetchRounds;
+
         @Override
         void run() throws PulsarAdminException {
             String persistentTopic = validatePersistentTopic(params);
@@ -2057,7 +2065,8 @@ public class CmdTopics extends CmdBase {
                     s3Role, s3RoleSessionName,
                     awsId, awsSecret,
                     maxBlockSizeInBytes,
-                    readBufferSizeInBytes, offloadThresholdInBytes, offloadDeletionLagInMillis, offloadedReadPriority);
+                    readBufferSizeInBytes, offloadThresholdInBytes, offloadDeletionLagInMillis, offloadedReadPriority,
+                    offloadMaxThreads, offloadPrefetchRounds);
 
             getTopics().setOffloadPolicies(persistentTopic, offloadPolicies);
         }

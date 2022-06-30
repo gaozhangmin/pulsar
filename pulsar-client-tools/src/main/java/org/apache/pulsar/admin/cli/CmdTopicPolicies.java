@@ -1711,6 +1711,14 @@ public class CmdTopicPolicies extends CmdBase {
                 + "If set to true, the policy will be replicate to other clusters asynchronously")
         private boolean isGlobal = false;
 
+        @Parameter(names = {"-mt", "--offloadMaxThreads"}
+                , description = "Maximum number of thread pool threads for ledger offloading")
+        private int offloadMaxThreads;
+
+        @Parameter(names = {"-pr", "--offloadPrefetchRounds"}
+                , description = "Maximum prefetch rounds for ledger reading for offloading")
+        private int offloadPrefetchRounds;
+
         @Override
         void run() throws PulsarAdminException {
             String persistentTopic = validatePersistentTopic(params);
@@ -1733,7 +1741,8 @@ public class CmdTopicPolicies extends CmdBase {
                     s3Role, s3RoleSessionName,
                     awsId, awsSecret,
                     maxBlockSizeInBytes,
-                    readBufferSizeInBytes, offloadThresholdInBytes, offloadDeletionLagInMillis, offloadedReadPriority);
+                    readBufferSizeInBytes, offloadThresholdInBytes, offloadDeletionLagInMillis, offloadedReadPriority,
+                    offloadMaxThreads, offloadPrefetchRounds);
 
             getTopicPolicies(isGlobal).setOffloadPolicies(persistentTopic, offloadPolicies);
         }

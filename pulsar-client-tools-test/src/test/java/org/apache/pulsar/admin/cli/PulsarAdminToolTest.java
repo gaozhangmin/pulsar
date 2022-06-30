@@ -769,7 +769,7 @@ public class PulsarAdminToolTest {
         verify(mockNamespaces).setOffloadPolicies("myprop/clust/ns1",
                 OffloadPoliciesImpl.create("aws-s3", "test-region", "test-bucket",
                         "http://test.endpoint",null, null, null, null, 32 * 1024 * 1024, 5 * 1024 * 1024,
-                        10 * 1024 * 1024L, 10000L, OffloadedReadPriority.TIERED_STORAGE_FIRST));
+                        10 * 1024 * 1024L, 10000L, OffloadedReadPriority.TIERED_STORAGE_FIRST, 2, 1));
 
         namespaces.run(split("remove-offload-policies myprop/clust/ns1"));
         verify(mockNamespaces).removeOffloadPolicies("myprop/clust/ns1");
@@ -929,7 +929,7 @@ public class PulsarAdminToolTest {
         verify(mockTopicsPolicies)
                 .setOffloadPolicies("persistent://myprop/clust/ns1/ds1",
                         OffloadPoliciesImpl.create("s3", "region", "bucket" , "endpoint", null, null, null, null,
-                8, 9, 10L, null, OffloadedReadPriority.TIERED_STORAGE_FIRST));
+                8, 9, 10L, null, OffloadedReadPriority.TIERED_STORAGE_FIRST, 2, 1));
 
         cmdTopics.run(split("get-retention persistent://myprop/clust/ns1/ds1"));
         verify(mockTopicsPolicies).getRetention("persistent://myprop/clust/ns1/ds1", false);
@@ -1338,7 +1338,7 @@ public class PulsarAdminToolTest {
         verify(mockGlobalTopicsPolicies)
                 .setOffloadPolicies("persistent://myprop/clust/ns1/ds1",
                         OffloadPoliciesImpl.create("s3", "region", "bucket" , "endpoint", null, null, null, null,
-                                8, 9, 10L, null, OffloadedReadPriority.TIERED_STORAGE_FIRST));
+                                8, 9, 10L, null, OffloadedReadPriority.TIERED_STORAGE_FIRST, 2, 1));
     }
 
     @Test
@@ -1607,7 +1607,7 @@ public class PulsarAdminToolTest {
         cmdTopics.run(split("set-offload-policies persistent://myprop/clust/ns1/ds1 -d s3 -r region -b bucket -e endpoint -m 8 -rb 9 -t 10 -orp tiered-storage-first"));
         OffloadPoliciesImpl offloadPolicies = OffloadPoliciesImpl.create("s3", "region", "bucket"
                 , "endpoint", null, null, null, null,
-                8, 9, 10L, null, OffloadedReadPriority.TIERED_STORAGE_FIRST);
+                8, 9, 10L, null, OffloadedReadPriority.TIERED_STORAGE_FIRST, 2, 1);
         verify(mockTopics).setOffloadPolicies("persistent://myprop/clust/ns1/ds1", offloadPolicies);
 
         cmdTopics.run(split("get-max-unacked-messages-on-consumer persistent://myprop/clust/ns1/ds1"));

@@ -174,7 +174,7 @@ public class AdminApiOffloadTest extends MockedPulsarServiceBaseTest {
 
         OffloadPolicies offload1 = OffloadPoliciesImpl.create(
                 driver, region, bucket, endpoint, null, null, null, null,
-                100, 100, offloadThresholdInBytes, offloadDeletionLagInMillis, priority);
+                100, 100, offloadThresholdInBytes, offloadDeletionLagInMillis, priority, 2, 1);
         admin.namespaces().setOffloadPolicies(namespaceName, offload1);
         OffloadPolicies offload2 = admin.namespaces().getOffloadPolicies(namespaceName);
         assertEquals(offload1, offload2);

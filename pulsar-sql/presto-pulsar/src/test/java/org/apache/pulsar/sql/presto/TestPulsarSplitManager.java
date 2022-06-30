@@ -427,8 +427,8 @@ public class TestPulsarSplitManager extends TestPulsarConnector {
                 2000,
                 1000L,
                 5000L,
-                OffloadedReadPriority.BOOKKEEPER_FIRST
-        );
+                OffloadedReadPriority.BOOKKEEPER_FIRST,
+                2, 1);
 
         SchemaInfo schemaInfo = JSONSchema.of(Foo.class).getSchemaInfo();
         final String schema = new String(schemaInfo.getSchema(),  "ISO8859-1");

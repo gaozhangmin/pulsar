@@ -2277,6 +2277,14 @@ public class CmdNamespaces extends CmdBase {
         )
         private String offloadReadPriorityStr;
 
+        @Parameter(names = {"-mt", "--offloadMaxThreads"}
+                , description = "Maximum number of thread pool threads for ledger offloading")
+        private int offloadMaxThreads;
+
+        @Parameter(names = {"-pr", "--offloadPrefetchRounds"}
+                , description = "Maximum prefetch rounds for ledger reading for offloading")
+        private int offloadPrefetchRounds;
+
         public final List<String> driverNames = OffloadPoliciesImpl.DRIVER_NAMES;
 
         public boolean driverSupported(String driver) {
@@ -2378,7 +2386,7 @@ public class CmdNamespaces extends CmdBase {
                     s3Role, s3RoleSessionName,
                     awsId, awsSecret,
                     maxBlockSizeInBytes, readBufferSizeInBytes, offloadAfterThresholdInBytes,
-                    offloadAfterElapsedInMillis, offloadedReadPriority);
+                    offloadAfterElapsedInMillis, offloadedReadPriority, offloadMaxThreads, offloadPrefetchRounds);
 
             getAdmin().namespaces().setOffloadPolicies(namespace, offloadPolicies);
         }

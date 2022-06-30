@@ -83,7 +83,7 @@ public class OffloadLedgerDeleteTest extends MockedBookKeeperTestCase {
                 OffloadPoliciesImpl.DEFAULT_READ_BUFFER_SIZE_IN_BYTES,
                 OffloadPoliciesImpl.DEFAULT_OFFLOAD_THRESHOLD_IN_BYTES,
                 OffloadPoliciesImpl.DEFAULT_OFFLOAD_DELETION_LAG_IN_MILLIS,
-                OffloadPoliciesImpl.DEFAULT_OFFLOADED_READ_PRIORITY);
+                OffloadPoliciesImpl.DEFAULT_OFFLOADED_READ_PRIORITY, 2, 1);
 
         @Override
         public String getOffloadDriverName() {

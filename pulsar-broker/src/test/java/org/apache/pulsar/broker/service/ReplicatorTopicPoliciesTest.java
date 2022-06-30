@@ -698,7 +698,7 @@ public class ReplicatorTopicPoliciesTest extends ReplicatorTestBase {
         init(namespace, persistentTopicName);
         OffloadPoliciesImpl offloadPolicies =
                 OffloadPoliciesImpl.create("s3", "region", "bucket", "endpoint", null, null, null, null,
-                8, 9, 10L, null, OffloadedReadPriority.BOOKKEEPER_FIRST);
+                8, 9, 10L, null, OffloadedReadPriority.BOOKKEEPER_FIRST, 2, 1);
         // local
         try {
             admin1.topicPolicies().setOffloadPolicies(persistentTopicName, offloadPolicies);
