@@ -1976,7 +1976,11 @@ public class CmdTopics extends CmdBase {
         @Parameter(description = "persistent://tenant/namespace/topic", required = true)
         private java.util.List<String> params;
 
-        @Parameter(names = {"-d", "--driver"}, description = "ManagedLedger offload driver", required = true)
+        @Parameter(
+                names = {"--driver", "-d"},
+                description = "Driver to use to offload old data to long term storage, "
+                        + "(Possible values: S3, aws-s3, google-cloud-storage, filesystem, azureblob, aliyun-oss)",
+                required = true)
         private String driver;
 
         @Parameter(names = {"-r", "--region"}
@@ -2037,11 +2041,11 @@ public class CmdTopics extends CmdBase {
 
         @Parameter(names = {"-mt", "--offloadMaxThreads"}
                 , description = "Maximum number of thread pool threads for ledger offloading")
-        private int offloadMaxThreads;
+        private int offloadMaxThreads = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_THREADS;
 
         @Parameter(names = {"-pr", "--offloadPrefetchRounds"}
                 , description = "Maximum prefetch rounds for ledger reading for offloading")
-        private int offloadPrefetchRounds;
+        private int offloadPrefetchRounds = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_PREFETCH_ROUNDS;
 
         @Override
         void run() throws PulsarAdminException {
@@ -2059,6 +2063,13 @@ public class CmdTopics extends CmdBase {
                                     .collect(Collectors.joining(","))
                             + " but got: " + this.offloadReadPriorityStr, e);
                 }
+            }
+            if (offloadMaxThreads <= 0) {
+                offloadMaxThreads = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_THREADS;
+            }
+
+            if(offloadPrefetchRounds <= 0) {
+                offloadMaxThreads = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_PREFETCH_ROUNDS;
             }
 
             OffloadPoliciesImpl offloadPolicies = OffloadPoliciesImpl.create(driver, region, bucket, endpoint,

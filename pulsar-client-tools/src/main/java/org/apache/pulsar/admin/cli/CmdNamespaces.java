@@ -2194,7 +2194,7 @@ public class CmdNamespaces extends CmdBase {
         @Parameter(
                 names = {"--driver", "-d"},
                 description = "Driver to use to offload old data to long term storage, "
-                        + "(Possible values: S3, aws-s3, google-cloud-storage, filesystem, azureblob)",
+                        + "(Possible values: S3, aws-s3, google-cloud-storage, filesystem, azureblob, aliyun-oss)",
                 required = true)
         private String driver;
 
@@ -2279,11 +2279,11 @@ public class CmdNamespaces extends CmdBase {
 
         @Parameter(names = {"-mt", "--offloadMaxThreads"}
                 , description = "Maximum number of thread pool threads for ledger offloading")
-        private int offloadMaxThreads;
+        private int offloadMaxThreads = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_THREADS;
 
         @Parameter(names = {"-pr", "--offloadPrefetchRounds"}
                 , description = "Maximum prefetch rounds for ledger reading for offloading")
-        private int offloadPrefetchRounds;
+        private int offloadPrefetchRounds = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_PREFETCH_ROUNDS;
 
         public final List<String> driverNames = OffloadPoliciesImpl.DRIVER_NAMES;
 
@@ -2380,6 +2380,14 @@ public class CmdNamespaces extends CmdBase {
                                     .collect(Collectors.joining(","))
                             + " but got: " + this.offloadReadPriorityStr, e);
                 }
+            }
+
+            if (offloadMaxThreads <= 0) {
+                offloadMaxThreads = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_THREADS;
+            }
+
+            if(offloadPrefetchRounds <= 0) {
+                offloadMaxThreads = OffloadPoliciesImpl.DEFAULT_OFFLOAD_MAX_PREFETCH_ROUNDS;
             }
 
             OffloadPolicies offloadPolicies = OffloadPoliciesImpl.create(driver, region, bucket, endpoint,

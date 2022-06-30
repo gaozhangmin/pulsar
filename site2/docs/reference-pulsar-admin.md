@@ -2139,20 +2139,22 @@ $ pulsar-admin namespaces set-offload-policies tenant/namespace options
 
 Options
 
-|Flag|Description|Default|
-|----|---|---|
-|`-d`, `--driver`|Driver to use to offload old data to long term storage,(Possible values: S3, aws-s3, google-cloud-storage)||
-|`-r`, `--region`|The long term storage region||
-|`-b`, `--bucket`|Bucket to place offloaded ledger into||
-|`-e`, `--endpoint`|Alternative endpoint to connect to||
-|`-i`, `--aws-id`|AWS Credential Id to use when using driver S3 or aws-s3||
-|`-s`, `--aws-secret`|AWS Credential Secret to use when using driver S3 or aws-s3||
-|`-ro`, `--s3-role`|S3 Role used for STSAssumeRoleSessionCredentialsProvider using driver S3 or aws-s3||
-|`-rsn`, `--s3-role-session-name`|S3 role session name used for STSAssumeRoleSessionCredentialsProvider using driver S3 or aws-s3||
-|`-mbs`, `--maxBlockSize`|Max block size|64MB|
-|`-rbs`, `--readBufferSize`|Read buffer size|1MB|
-|`-oat`, `--offloadAfterThreshold`|Offload after threshold size (eg: 1M, 5M)||
-|`-oae`, `--offloadAfterElapsed`|Offload after elapsed in millis (or minutes, hours,days,weeks eg: 100m, 3h, 2d, 5w).||
+| Flag                              |Description|Default|
+|-----------------------------------|---|---|
+| `-d`, `--driver`                  |Driver to use to offload old data to long term storage,(Possible values: S3, aws-s3, google-cloud-storage)||
+| `-r`, `--region`                  |The long term storage region||
+| `-b`, `--bucket`                  |Bucket to place offloaded ledger into||
+| `-e`, `--endpoint`                |Alternative endpoint to connect to||
+| `-i`, `--aws-id`                  |AWS Credential Id to use when using driver S3 or aws-s3||
+| `-s`, `--aws-secret`              |AWS Credential Secret to use when using driver S3 or aws-s3||
+| `-ro`, `--s3-role`                |S3 Role used for STSAssumeRoleSessionCredentialsProvider using driver S3 or aws-s3||
+| `-rsn`, `--s3-role-session-name`  |S3 role session name used for STSAssumeRoleSessionCredentialsProvider using driver S3 or aws-s3||
+| `-mbs`, `--maxBlockSize`          |Max block size|64MB|
+| `-rbs`, `--readBufferSize`        |Read buffer size|1MB|
+| `-oat`, `--offloadAfterThreshold` |Offload after threshold size (eg: 1M, 5M)||
+| `-oae`, `--offloadAfterElapsed`   |Offload after elapsed in millis (or minutes, hours,days,weeks eg: 100m, 3h, 2d, 5w).||
+| `-mt`, `--offloadMaxThreads`      |Maximum number of thread pool threads for ledger offloading.||
+| `-pr`, `--offloadPrefetchRounds`    |Maximum prefetch rounds for ledger reading for offloading.||
 
 ### `get-offload-policies`
 Get the offload policy for a namespace.
