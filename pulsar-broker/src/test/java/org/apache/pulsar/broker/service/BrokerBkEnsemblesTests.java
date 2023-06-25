@@ -127,7 +127,7 @@ public class BrokerBkEnsemblesTests extends BkEnsemblesTestBase {
         // (3) remove topic and managed-ledger from broker which means topic is not closed gracefully
         consumer.close();
         producer.close();
-        pulsar.getBrokerService().removeTopicFromCache(topic1);
+        pulsar.getBrokerService().removeTopicFromCache(topic);
         ManagedLedgerFactoryImpl factory = (ManagedLedgerFactoryImpl) pulsar.getManagedLedgerFactory();
         Field field = ManagedLedgerFactoryImpl.class.getDeclaredField("ledgers");
         field.setAccessible(true);
@@ -183,7 +183,7 @@ public class BrokerBkEnsemblesTests extends BkEnsemblesTestBase {
     @Test
     public void testSkipCorruptDataLedger() throws Exception {
         // Ensure intended state for autoSkipNonRecoverableData
-        admin.brokers().updateDynamicConfiguration("autoSkipNonRecoverableData", "false");
+        admin.brokers().updateDynamicConfiguration("autoSkipNonRecoverableData", "false", "cluster");
 
         @Cleanup
         PulsarClient client = PulsarClient.builder()
@@ -252,7 +252,7 @@ public class BrokerBkEnsemblesTests extends BkEnsemblesTestBase {
 
         // clean managed-ledger and recreate topic to clean any data from the cache
         producer.close();
-        pulsar.getBrokerService().removeTopicFromCache(topic1);
+        pulsar.getBrokerService().removeTopicFromCache(topic);
         ManagedLedgerFactoryImpl factory = (ManagedLedgerFactoryImpl) pulsar.getManagedLedgerFactory();
         Field field = ManagedLedgerFactoryImpl.class.getDeclaredField("ledgers");
         field.setAccessible(true);
@@ -270,7 +270,7 @@ public class BrokerBkEnsemblesTests extends BkEnsemblesTestBase {
         consumer.close();
 
         // (4) enable dynamic config to skip non-recoverable data-ledgers
-        admin.brokers().updateDynamicConfiguration("autoSkipNonRecoverableData", "true");
+        admin.brokers().updateDynamicConfiguration("autoSkipNonRecoverableData", "true", "cluster");
 
         retryStrategically((test) -> config.isAutoSkipNonRecoverableData(), 5, 100);
 
@@ -289,7 +289,7 @@ public class BrokerBkEnsemblesTests extends BkEnsemblesTestBase {
     @Test
     public void testTruncateCorruptDataLedger() throws Exception {
         // Ensure intended state for autoSkipNonRecoverableData
-        admin.brokers().updateDynamicConfiguration("autoSkipNonRecoverableData", "false");
+        admin.brokers().updateDynamicConfiguration("autoSkipNonRecoverableData", "false", "cluster");
 
         @Cleanup
         PulsarClient client = PulsarClient.builder()

@@ -18,7 +18,9 @@
  */
 package org.apache.pulsar.broker.admin.impl;
 
+import static org.apache.pulsar.broker.resources.DynamicConfigurationResources.BROKER_SERVICE_CONFIGURATION_PATH;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
@@ -32,6 +34,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -53,7 +56,6 @@ import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.admin.AdminResource;
 import org.apache.pulsar.broker.loadbalance.LeaderBroker;
 import org.apache.pulsar.broker.namespace.NamespaceService;
-import org.apache.pulsar.broker.service.BrokerService;
 import org.apache.pulsar.broker.service.Subscription;
 import org.apache.pulsar.broker.service.Topic;
 import org.apache.pulsar.broker.web.RestException;
@@ -78,6 +80,7 @@ import org.slf4j.LoggerFactory;
 public class BrokersBase extends AdminResource {
     private static final Logger LOG = LoggerFactory.getLogger(BrokersBase.class);
     public static final String HEALTH_CHECK_TOPIC_SUFFIX = "healthcheck";
+    public static final String DYNAMIC_CONFIGURATIONS_DEFAULT_SCOPE = "cluster";
     // log a full thread dump when a deadlock is detected in healthcheck once every 10 minutes
     // to prevent excessive logging
     private static final long LOG_THREADDUMP_INTERVAL_WHEN_DEADLOCK_DETECTED = 600000L;
@@ -192,9 +195,10 @@ public class BrokersBase extends AdminResource {
             @ApiResponse(code = 500, message = "Internal server error") })
     public void updateDynamicConfiguration(@Suspended AsyncResponse asyncResponse,
                                            @PathParam("configName") String configName,
-                                           @PathParam("configValue") String configValue) {
+                                           @PathParam("configValue") String configValue,
+                                           String scope) {
         validateSuperUserAccessAsync()
-                .thenCompose(__ -> persistDynamicConfigurationAsync(configName, configValue))
+                .thenCompose(__ -> persistDynamicConfigurationAsync(configName, configValue, scope))
                 .thenAccept(__ -> {
                     LOG.info("[{}] Updated Service configuration {}/{}", clientAppId(), configName, configValue);
                     asyncResponse.resume(Response.ok().build());
@@ -216,9 +220,10 @@ public class BrokersBase extends AdminResource {
             @ApiResponse(code = 500, message = "Internal server error") })
     public void deleteDynamicConfiguration(
             @Suspended AsyncResponse asyncResponse,
-            @PathParam("configName") String configName) {
+            @PathParam("configName") String configName,
+            @QueryParam("scope") @DefaultValue("cluster") String scope) {
         validateSuperUserAccessAsync()
-                .thenCompose(__ -> internalDeleteDynamicConfigurationOnMetadataAsync(configName))
+                .thenCompose(__ -> internalDeleteDynamicConfigurationOnMetadataAsync(scope, configName))
                 .thenAccept(__ -> {
                     LOG.info("[{}] Successfully to delete dynamic configuration {}", clientAppId(), configName);
                     asyncResponse.resume(Response.ok().build());
@@ -236,9 +241,18 @@ public class BrokersBase extends AdminResource {
         @ApiResponse(code = 403, message = "You don't have admin permission to view configuration"),
         @ApiResponse(code = 404, message = "Configuration not found"),
         @ApiResponse(code = 500, message = "Internal server error")})
-    public void getAllDynamicConfigurations(@Suspended AsyncResponse asyncResponse) {
+    public void getAllDynamicConfigurations(@Suspended AsyncResponse asyncResponse,
+                                            @QueryParam("scope") @DefaultValue("cluster") String scope) {
         validateSuperUserAccessAsync()
-                .thenCompose(__ -> dynamicConfigurationResources().getDynamicConfigurationAsync())
+                .thenCompose(__ -> {
+                    if (DYNAMIC_CONFIGURATIONS_DEFAULT_SCOPE.equals(scope)) {
+                        return dynamicConfigurationResources()
+                                .getDynamicConfigurationAsync(BROKER_SERVICE_CONFIGURATION_PATH);
+                    } else {
+                        return dynamicConfigurationResources()
+                                .getBrokerDynamicConfigurationAsync(scope);
+                    }
+                })
                 .thenAccept(configOpt -> asyncResponse.resume(configOpt.orElseGet(Collections::emptyMap)))
                 .exceptionally(ex -> {
                     LOG.error("[{}] Failed to get all dynamic configuration.", clientAppId(), ex);
@@ -254,7 +268,7 @@ public class BrokersBase extends AdminResource {
             @ApiResponse(code = 403, message = "You don't have admin permission to get configuration")})
     public void getDynamicConfigurationName(@Suspended AsyncResponse asyncResponse) {
         validateSuperUserAccessAsync()
-                .thenAccept(__ -> asyncResponse.resume(BrokerService.getDynamicConfiguration()))
+                .thenAccept(__ -> asyncResponse.resume(pulsar().getBrokerService().getDynamicConfiguration()))
                 .exceptionally(ex -> {
                     LOG.error("[{}] Failed to get all dynamic configuration names.", clientAppId(), ex);
                     resumeAsyncResponseExceptionally(asyncResponse, ex);
@@ -286,17 +300,38 @@ public class BrokersBase extends AdminResource {
      *            : configuration value
      */
     private synchronized CompletableFuture<Void> persistDynamicConfigurationAsync(
-            String configName, String configValue) {
-        if (!BrokerService.validateDynamicConfiguration(configName, configValue)) {
+            String configName, String configValue, String scope) {
+        if (!pulsar().getBrokerService().validateDynamicConfiguration(configName, configValue)) {
             return FutureUtil
                     .failedFuture(new RestException(Status.PRECONDITION_FAILED, " Invalid dynamic-config value"));
         }
-        if (BrokerService.isDynamicConfiguration(configName)) {
-            return dynamicConfigurationResources().setDynamicConfigurationWithCreateAsync(old -> {
-                Map<String, String> configurationMap = old.orElseGet(Maps::newHashMap);
-                configurationMap.put(configName, configValue);
-                return configurationMap;
-            });
+        if (pulsar().getBrokerService().isDynamicConfiguration(configName)) {
+            if (DYNAMIC_CONFIGURATIONS_DEFAULT_SCOPE.equals(scope)) {
+                return dynamicConfigurationResources().setDynamicConfigurationWithCreateAsync(old -> {
+                    Map<String, String> configurationMap = old.orElseGet(Maps::newHashMap);
+                    configurationMap.put(configName, configValue);
+                    return configurationMap;
+                });
+            } else {
+                String[] brokers = scope.split(",");
+                try {
+                    Set<String> availableBrokers = pulsar().getLoadManager().get().getAvailableBrokers();
+                    Set<String> knownBrokers = Sets.intersection(Sets.newHashSet(brokers), availableBrokers);
+                    if (knownBrokers.isEmpty()) {
+                        return FutureUtil.failedFuture(new RestException(Status.PRECONDITION_FAILED,
+                                "Brokers not found in cluster"));
+                    }
+                    return dynamicConfigurationResources().setDynamicConfigurationWithCreateAsync(
+                            knownBrokers, old -> {
+                                Map<String, String> configurationMap = old.orElseGet(Maps::newHashMap);
+                                configurationMap.put(configName, configValue);
+                                return configurationMap;
+                            });
+                } catch (Exception e) {
+                    return FutureUtil.failedFuture(new RestException(Status.PRECONDITION_FAILED,
+                            "Brokers not found in cluster"));
+                }
+            }
         } else {
             return FutureUtil.failedFuture(new RestException(Status.PRECONDITION_FAILED,
                     "Can't update non-dynamic configuration"));
@@ -511,11 +546,19 @@ public class BrokersBase extends AdminResource {
                 });
     }
 
-    private CompletableFuture<Void> internalDeleteDynamicConfigurationOnMetadataAsync(String configName) {
-        if (!BrokerService.isDynamicConfiguration(configName)) {
+    private CompletableFuture<Void> internalDeleteDynamicConfigurationOnMetadataAsync(String scope, String configName) {
+        if (!pulsar().getBrokerService().isDynamicConfiguration(configName)) {
             throw new RestException(Status.PRECONDITION_FAILED, " Can't update non-dynamic configuration");
-        } else {
+        } else if (DYNAMIC_CONFIGURATIONS_DEFAULT_SCOPE.equals(scope)) {
             return dynamicConfigurationResources().setDynamicConfigurationAsync(old -> {
+                if (old != null) {
+                    old.remove(configName);
+                }
+                return old;
+            });
+        } else {
+            String[] brokers = scope.split(",");
+            return dynamicConfigurationResources().setDynamicConfigurationAsync(Sets.newHashSet(brokers), old -> {
                 if (old != null) {
                     old.remove(configName);
                 }
