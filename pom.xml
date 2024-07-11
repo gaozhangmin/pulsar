@@ -61,9 +61,10 @@ flexible messaging model and an intuitive client API.</description>
   </licenses>
 
   <scm>
-    <url>https://github.com/apache/pulsar</url>
-    <connection>scm:git:https://github.com/apache/pulsar.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com:apache/pulsar.git</developerConnection>
+    <url>https://git.corp.kuaishou.com/infra/pulsar</url>
+    <connection>scm:git:https://git.corp.kuaishou.com:infra/pulsar.git</connection>
+    <developerConnection>scm:git:ssh://git.corp.kuaishou.com:infra/pulsar.git</developerConnection>
+    <tag>HEAD</tag>
   </scm>
 
   <ciManagement>
