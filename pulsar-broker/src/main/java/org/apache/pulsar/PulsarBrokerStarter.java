@@ -58,6 +58,7 @@ import org.apache.pulsar.docs.tools.CmdGenerateDocs;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.apache.pulsar.functions.worker.WorkerService;
 import org.apache.pulsar.functions.worker.service.WorkerServiceLoader;
+import org.apache.pulsar.utils.StartUpUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -365,10 +366,13 @@ public class PulsarBrokerStarter {
         try {
             int start = starter.start(args);
             if (start != 0) {
+                StartUpUtil.logServiceStartUp(false);
                 System.exit(start);
             }
+            StartUpUtil.logServiceStartUp(true);
         } catch (Throwable t) {
             log.error("Failed to start pulsar service.", t);
+            StartUpUtil.logServiceStartUp(false);
             ShutdownUtil.triggerImmediateForcefulShutdown();
         } finally {
             starter.join();
