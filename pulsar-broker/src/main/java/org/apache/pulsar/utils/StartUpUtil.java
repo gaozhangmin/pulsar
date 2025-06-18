@@ -18,16 +18,10 @@
  */
 package org.apache.pulsar.utils;
 
-import lombok.extern.slf4j.Slf4j;
-
 import static java.lang.Integer.parseInt;
 import static java.lang.management.ManagementFactory.getRuntimeMXBean;
+import lombok.extern.slf4j.Slf4j;
 
-
-/**
- * @author dongzhonghua03 <dongzhonghua03@kuaishou.com>
- * Created on 2025-05-19
- */
 @Slf4j
 public class StartUpUtil {
 
