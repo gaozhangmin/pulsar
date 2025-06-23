@@ -32,7 +32,7 @@
   <groupId>org.apache.pulsar</groupId>
   <artifactId>pulsar</artifactId>
 
-  <version>3.3.6</version>
+  <version>3.3.6.0-kwai-SNAPSHOT</version>
 
   <name>Pulsar</name>
   <description>Pulsar is a distributed pub-sub messaging platform with a very
@@ -95,7 +95,7 @@ flexible messaging model and an intuitive client API.</description>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <project.build.outputTimestamp>2025-03-31T09:16:47Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2025-06-22T03:48:09Z</project.build.outputTimestamp>
     <redirectTestOutputToFile>true</redirectTestOutputToFile>
 
     <!-- By default build for local Docker platform.
@@ -2341,7 +2341,18 @@ flexible messaging model and an intuitive client API.</description>
       </extension>
     </extensions>
   </build>
-
+  <distributionManagement>
+    <repository>
+      <id>kuaishou.releases</id>
+      <name>Internal Release Repository</name>
+      <url>http://nexus.corp.kuaishou.com:88/nexus/content/repositories/releases/</url>
+    </repository>
+    <snapshotRepository>
+      <id>kuaishou.snapshots</id>
+      <name>Internal Snapshot Repository</name>
+      <url>http://nexus.corp.kuaishou.com:88/nexus/content/repositories/snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
   <profiles>
     <profile>
       <!-- used for running integration tests on Java 8 -->
@@ -2872,32 +2883,5 @@ flexible messaging model and an intuitive client API.</description>
         <IMAGE_JDK_MAJOR_VERSION>${env.IMAGE_JDK_MAJOR_VERSION}</IMAGE_JDK_MAJOR_VERSION>
       </properties>
     </profile>
-
   </profiles>
-
-  <repositories>
-    <repository>
-      <id>central</id>
-      <layout>default</layout>
-      <url>https://repo1.maven.org/maven2</url>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-    <repository>
-      <id>confluent</id>
-      <url>https://packages.confluent.io/maven/</url>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-    <repository>
-      <id>maven.restlet.org</id>
-      <name>maven.restlet.org</name>
-      <url>https://maven.restlet.talend.com</url>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-  </repositories>
 </project>

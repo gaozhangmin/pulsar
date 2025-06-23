@@ -33,7 +33,7 @@
 
   <groupId>org.apache.pulsar</groupId>
   <artifactId>pulsar-bom</artifactId>
-  <version>3.3.6</version>
+  <version>3.3.6.0-kwai-SNAPSHOT</version>
   <name>Pulsar BOM</name>
   <description>Pulsar (Bill of Materials)</description>
 
@@ -61,9 +61,10 @@
   </licenses>
 
   <scm>
-    <url>https://github.com/apache/pulsar</url>
-    <connection>scm:git:https://github.com/apache/pulsar.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com:apache/pulsar.git</developerConnection>
+    <url>https://git.corp.kuaishou.com/infra/pulsar</url>
+    <connection>scm:git:https://git.corp.kuaishou.com:infra/pulsar.git</connection>
+    <developerConnection>scm:git:ssh://git.corp.kuaishou.com:infra/pulsar.git</developerConnection>
+    <tag>HEAD</tag>
   </scm>
 
   <ciManagement>
@@ -81,7 +82,7 @@
     <maven.compiler.target>17</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <project.build.outputTimestamp>2025-03-31T09:16:47Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2025-06-22T03:48:09Z</project.build.outputTimestamp>
     <license-maven-plugin.version>4.1</license-maven-plugin.version>
     <maven-checkstyle-plugin.version>3.1.2</maven-checkstyle-plugin.version>
     <wagon-ssh-external.version>3.5.3</wagon-ssh-external.version>
@@ -707,4 +708,16 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+  <distributionManagement>
+    <repository>
+      <id>kuaishou.releases</id>
+      <name>Internal Release Repository</name>
+      <url>http://nexus.corp.kuaishou.com:88/nexus/content/repositories/releases/</url>
+    </repository>
+    <snapshotRepository>
+      <id>kuaishou.snapshots</id>
+      <name>Internal Snapshot Repository</name>
+      <url>http://nexus.corp.kuaishou.com:88/nexus/content/repositories/snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
 </project>
