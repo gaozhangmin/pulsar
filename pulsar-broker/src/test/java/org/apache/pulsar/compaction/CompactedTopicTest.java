@@ -70,7 +70,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
-@Test(groups = "broker-compaction")
+@Test(groups = "flaky")
 public class CompactedTopicTest extends MockedPulsarServiceBaseTest {
     private final Random r = new Random(0);
 

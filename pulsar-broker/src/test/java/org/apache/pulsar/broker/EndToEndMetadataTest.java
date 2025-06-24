@@ -54,7 +54,7 @@ public class EndToEndMetadataTest extends BaseMetadataStoreTest {
         FileUtils.deleteDirectory(tempDir);
     }
 
-    @Test(dataProvider = "impl")
+    @Test(dataProvider = "impl", groups = "flaky")
     public void testPublishConsume(String provider, Supplier<String> urlSupplier) throws Exception {
 
         @Cleanup

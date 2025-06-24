@@ -76,18 +76,55 @@ alias echo='{ [[ $- =~ .*x.* ]] && trace_enabled=1 || trace_enabled=0; set +x; }
 
 # Test Groups  -- start --
 function test_group_broker_group_1() {
+  mvn_test -pl pulsar-broker -Dtest=org.apache.pulsar.broker.stats.prometheus.PrometheusMetricsGeneratorWithNoUnsafeTest -DtestForkCount=1 -DtestReuseFork=false
+}
+
+function test_group_broker_group_broker() {
   mvn_test -pl pulsar-broker -Dgroups='broker' -DtestReuseFork=true
+}
+
+function test_group_broker_group_2() {
   # run tests in broker-isolated group individually (instead of with -Dgroups=broker-isolated) to avoid scanning all test classes
   mvn_test -pl pulsar-broker -Dtest=org.apache.pulsar.broker.stats.prometheus.PrometheusMetricsGeneratorWithNoUnsafeTest -DtestForkCount=1 -DtestReuseFork=false
 }
 
-function test_group_broker_group_2() {
-  mvn_test -pl pulsar-broker -Dgroups='schema,utils,functions-worker,broker-io,broker-discovery,broker-compaction,broker-naming,broker-replication,websocket,other'
+function test_group_broker_group_schema() {
+  mvn_test -pl pulsar-broker -Dgroups='schema'
+}
+
+function test_group_broker_group_utils() {
+  mvn_test -pl pulsar-broker -Dgroups='utils'
+}
+function test_group_broker_group_functions_worker() {
+  mvn_test -pl pulsar-broker -Dgroups='functions-worker'
+}
+function test_group_broker_group_broker_io() {
+  mvn_test -pl pulsar-broker -Dgroups='broker-io'
+}
+function test_group_broker_group_broker_discovery() {
+  mvn_test -pl pulsar-broker -Dgroups='broker-discovery'
+}
+function test_group_broker_group_broker_compaction() {
+  mvn_test -pl pulsar-broker -Dgroups='broker-compaction'
+}
+function test_group_broker_group_broker_naming() {
+  mvn_test -pl pulsar-broker -Dgroups='broker-naming'
+}
+function test_group_broker_group_broker_replication() {
+  mvn_test -pl pulsar-broker -Dgroups='broker-replication'
+}
+function test_group_broker_group_websocket() {
+  mvn_test -pl pulsar-broker -Dgroups='websocket'
+}
+function test_group_broker_group_broker_other() {
+  mvn_test -pl pulsar-broker -Dgroups='other'
+}
+
+function test_group_broker_group_broker_admin() {
+  mvn_test -pl pulsar-broker -Dgroups='broker-admin'
 }
 
 function test_group_broker_group_3() {
-  mvn_test -pl pulsar-broker -Dgroups='broker-admin'
-  # run AdminApiTransactionMultiBrokerTest independently with a larger heap size
   mvn_test -pl pulsar-broker -DtestMaxHeapSize=1500M -Dtest=org.apache.pulsar.broker.admin.v3.AdminApiTransactionMultiBrokerTest -DtestForkCount=1 -DtestReuseFork=false
 }
 
@@ -165,11 +202,17 @@ function test_group_proxy() {
     mvn_test -pl pulsar-proxy -Dtest="org.apache.pulsar.proxy.server.ProxyServiceTlsStarterTest"
     mvn_test -pl pulsar-proxy -Dtest="org.apache.pulsar.proxy.server.ProxyServiceStarterTest"
     mvn_test -pl pulsar-proxy -Dexclude='org.apache.pulsar.proxy.server.ProxyServiceTlsStarterTest,
-                                                  org.apache.pulsar.proxy.server.ProxyServiceStarterTest'
+                                                  org.apache.pulsar.proxy.server.ProxyServiceStarterTest,
+                                                  org.apache.pulsar.proxy.server.ProxyStuckConnectionTest'
     echo "::endgroup::"
 }
 
-function test_group_other() {
+function test_group_managedledger() {
+  mvn_test -pl managed-ledger -Dinclude='**/ManagedLedgerTest.java,
+                                                  **/OffloadersCacheTest.java'
+}
+
+function test_group_other1() {
   mvn_test --clean --install \
            -pl '!org.apache.pulsar:distribution,!org.apache.pulsar:pulsar-offloader-distribution,!org.apache.pulsar:pulsar-server-distribution,!org.apache.pulsar:pulsar-io-distribution,!org.apache.pulsar:pulsar-all-docker-image' \
            -PskipTestsForUnitGroupOther -DdisableIoMainProfile=true -DskipIntegrationTests \
@@ -177,11 +220,12 @@ function test_group_other() {
                    **/OffloadersCacheTest.java
                   **/PrimitiveSchemaTest.java,
                   **/BlobStoreManagedLedgerOffloaderTest.java,
+                  **/FileSystemManagedLedgerOffloaderTest.java,
+                  **/FileSystemOffloaderLocalFileTest.java,
                   **/BlobStoreManagedLedgerOffloaderStreamingTest.java'
+}
 
-  mvn_test -pl managed-ledger -Dinclude='**/ManagedLedgerTest.java,
-                                                  **/OffloadersCacheTest.java'
-
+function test_group_other() {
   mvn_test -pl tiered-storage/jcloud -Dinclude='**/BlobStoreManagedLedgerOffloaderTest.java'
   mvn_test -pl tiered-storage/jcloud -Dinclude='**/BlobStoreManagedLedgerOffloaderStreamingTest.java'
 

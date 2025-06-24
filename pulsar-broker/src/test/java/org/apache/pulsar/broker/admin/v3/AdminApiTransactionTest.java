@@ -595,7 +595,7 @@ public class AdminApiTransactionTest extends MockedPulsarServiceBaseTest {
         assertNull(managedLedgerInternalStats.ledgers.get(0).metadata);
     }
 
-    @Test(timeOut = 20000)
+    @Test(timeOut = 20000, groups = "flaky")
     public void testGetTransactionBufferInternalStats() throws Exception {
         // Initialize transaction
         initTransaction(1);

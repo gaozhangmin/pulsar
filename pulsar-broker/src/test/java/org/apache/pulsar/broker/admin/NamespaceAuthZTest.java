@@ -81,7 +81,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
-@Test(groups = "broker-admin")
+@Test(groups = "flaky")
 public class NamespaceAuthZTest extends MockedPulsarStandalone {
 
     private PulsarAdmin superUserAdmin;

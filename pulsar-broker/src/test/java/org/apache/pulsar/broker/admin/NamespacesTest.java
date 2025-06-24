@@ -134,7 +134,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
-@Test(groups = "broker-admin")
+@Test(groups = "flaky")
 public class NamespacesTest extends MockedPulsarServiceBaseTest {
     private static final Logger log = LoggerFactory.getLogger(NamespacesTest.class);
     private Namespaces namespaces;

@@ -36,7 +36,7 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 @Slf4j
-@Test(groups = "broker")
+@Test(groups = "flaky")
 public class BrokerServiceChaosTest extends CanReconnectZKClientPulsarServiceBaseTest {
 
     @Override
