@@ -336,6 +336,9 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
         // ledger creation fails (persistent bk failure, another instance owning the ML, ...), then the writes will
         // be marked as failed.
         ManagedLedgerImpl finalMl = this.ml;
+        if (finalMl == null) {
+            return;
+        }
         finalMl.mbean.recordAddEntryError();
 
         finalMl.getExecutor().execute(() -> {

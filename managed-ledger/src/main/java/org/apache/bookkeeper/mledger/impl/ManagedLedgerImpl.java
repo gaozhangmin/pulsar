@@ -4184,8 +4184,13 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 || state.isFenced()) {
             return;
         }
-        checkAddTimeout();
-        checkReadTimeout();
+        try {
+            checkAddTimeout();
+            checkReadTimeout();
+        } catch (Throwable t) {
+            log.error("[{}] Error while checking timeouts", this.name, t);
+        }
+
     }
 
     private void checkAddTimeout() {
