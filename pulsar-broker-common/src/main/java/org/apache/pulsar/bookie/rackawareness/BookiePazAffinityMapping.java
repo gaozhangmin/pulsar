@@ -26,7 +26,6 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,8 +52,9 @@ public class BookiePazAffinityMapping extends AbstractDNSToSwitchMapping impleme
 
     private static final ExecutorService EXECUTORS = Executors.newSingleThreadScheduledExecutor(
             new ThreadFactoryBuilder().setNameFormat("paz-affinity-executors-%d").setDaemon(true).build());
-    private static volatile Map<String, Optional<BookieKwsInfo>> bookieKwsInfoMap = new ConcurrentHashMap<>();
+    private static final BookieKwsInfo NULL_KWS_INFO = new BookieKwsInfo(null, null);
 
+    private volatile Map<String, BookieKwsInfo> bookieKwsInfoMap = new ConcurrentHashMap<>();
     private RegistrationClient registrationClient;
     private ITopologyAwareEnsemblePlacementPolicy<BookieNode> rackawarePolicy = null;
     private String localHostname;
@@ -133,7 +133,7 @@ public class BookiePazAffinityMapping extends AbstractDNSToSwitchMapping impleme
     }
 
     private void updateKwsInfoMap(Set<BookieId> bookieIds) throws ExecutionException, InterruptedException {
-        Map<String, Optional<BookieKwsInfo>> newBookieInfoMap = new ConcurrentHashMap<>();
+        Map<String, BookieKwsInfo> newBookieInfoMap = new ConcurrentHashMap<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>(bookieIds.size());
         for (BookieId bookieId : bookieIds) {
             futures.add(registrationClient.getBookieServiceInfo(bookieId)
@@ -159,36 +159,36 @@ public class BookiePazAffinityMapping extends AbstractDNSToSwitchMapping impleme
         if (!ignoreLocalNodeInPlacementPolicy && (address.equals(localAddress) || address.equals(localHostname))) {
             return localRack;
         }
-        Optional<BookieKwsInfo> kwsInfoOpt = bookieKwsInfoMap.get(address);
-        if (kwsInfoOpt.isEmpty()) {
+        BookieKwsInfo kwsInfo = bookieKwsInfoMap.get(address);
+        if (kwsInfo == null || kwsInfo == NULL_KWS_INFO) {
             // since different placement policy will have different default rack,
             // don't be smart here and just return null
             return null;
         }
-        return rack(kwsInfoOpt.get().getRegion(), kwsInfoOpt.get().getPaz());
+        return rack(kwsInfo.getRegion(), kwsInfo.getPaz());
     }
 
     private String rack(String region, String paz) {
         return "/" + requireNonNull(region, "region is null") + "#" + requireNonNull(paz, "paz is null");
     }
 
-    private Optional<BookieKwsInfo> createBookieKwsInfo(BookieServiceInfo bsi) {
+    private BookieKwsInfo createBookieKwsInfo(BookieServiceInfo bsi) {
         Map<String, String> properties = bsi.getProperties();
         if (properties == null || properties.isEmpty()) {
-            LOG.error("Bookie service properties is empty. BookieServiceInfo: {}", bsi);
-            return Optional.empty();
+            LOG.warn("Bookie service properties is empty. BookieServiceInfo: {}", bsi);
+            return NULL_KWS_INFO;
         }
         String region = properties.get("KWS_SERVICE_REGION");
         if (isBlank(region)) {
-            LOG.error("Bookie service region is blank. BookieServiceInfo: {}", bsi);
-            return Optional.empty();
+            LOG.warn("Bookie service region is blank. BookieServiceInfo: {}", bsi);
+            return NULL_KWS_INFO;
         }
         String paz = properties.get("KWS_SERVICE_PAZ");
         if (isBlank(paz)) {
-            LOG.error("Bookie service paz is blank. BookieServiceInfo: {}", bsi);
-            return Optional.empty();
+            LOG.warn("Bookie service paz is blank. BookieServiceInfo: {}", bsi);
+            return NULL_KWS_INFO;
         }
-        return Optional.of(new BookieKwsInfo(region, paz));
+        return new BookieKwsInfo(region, paz);
     }
 
     @Data
