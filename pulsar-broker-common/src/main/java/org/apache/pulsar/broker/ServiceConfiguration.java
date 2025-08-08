@@ -2329,6 +2329,14 @@ public class ServiceConfiguration implements PulsarConfiguration {
 
     @FieldContext(
             category = CATEGORY_LOAD_BALANCER,
+            dynamic = true,
+            doc = "Configures the maximum number of bundles to unload/do load shedding at once."
+                    + " If set to -1, it will be unlimited. Default is -1."
+    )
+    private int maxBundlesUnloadDoLoadShedding = -1;
+
+    @FieldContext(
+            category = CATEGORY_LOAD_BALANCER,
             doc = "When [current usage < average usage - threshold], "
                     + "the broker with the highest load will be triggered to unload"
     )

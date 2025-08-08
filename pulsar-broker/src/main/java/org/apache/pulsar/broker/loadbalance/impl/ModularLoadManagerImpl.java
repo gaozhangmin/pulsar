@@ -19,6 +19,7 @@
 package org.apache.pulsar.broker.loadbalance.impl;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import java.util.ArrayList;
@@ -38,6 +39,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -648,11 +650,21 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
 
         for (LoadSheddingStrategy strategy : loadSheddingPipeline) {
             final Multimap<String, String> bundlesToUnload = strategy.findBundlesForUnloading(loadData, conf);
+            AtomicInteger numberOfBundlesUnloaded = new AtomicInteger();
+            // Create a new multimap to track bundles that were actually unloaded
+            Multimap<String, String> actuallyUnloadedBundles = HashMultimap.create();
 
             bundlesToUnload.asMap().forEach((broker, bundles) -> {
                 bundles.forEach(bundle -> {
                     final String namespaceName = LoadManagerShared.getNamespaceNameFromBundleName(bundle);
                     final String bundleRange = LoadManagerShared.getBundleRangeFromBundleName(bundle);
+                    numberOfBundlesUnloaded.getAndIncrement();
+                    if (conf.getMaxBundlesUnloadDoLoadShedding() != -1 && numberOfBundlesUnloaded.get()
+                            >= conf.getMaxBundlesUnloadDoLoadShedding()) {
+                        log.warn("[{}] Maximum number of bundles to unload reached: {}",
+                                strategy.getClass().getSimpleName(), conf.getMaxBundlesUnloadDoLoadShedding());
+                        return;
+                    }
                     if (sheddingExcludedNamespaces.contains(namespaceName)) {
                         if (log.isDebugEnabled()) {
                             log.debug("[{}] Skipping load shedding for namespace {}",
@@ -686,13 +698,15 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
                         pulsar.getAdminClient().namespaces()
                                 .unloadNamespaceBundle(namespaceName, bundleRange, destBroker.get());
                         loadData.getRecentlyUnloadedBundles().put(bundle, System.currentTimeMillis());
+                        // Only add to actuallyUnloadedBundles if unload was successful
+                        actuallyUnloadedBundles.put(broker, bundle);
                     } catch (PulsarServerException | PulsarAdminException e) {
                         log.warn("Error when trying to perform load shedding on {} for broker {}", bundle, broker, e);
                     }
                 });
             });
 
-            updateBundleUnloadingMetrics(bundlesToUnload);
+            updateBundleUnloadingMetrics(actuallyUnloadedBundles);
         }
     }
 
