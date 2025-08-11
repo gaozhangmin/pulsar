@@ -207,7 +207,7 @@ public class ZKMetadataStore extends AbstractBatchedMetadataStore
                                 .entrySet().stream().map(e -> e.getValue() + " " + e.getKey().name() + " entries")
                                 .collect(Collectors.joining(", "));
                         Long totalSize = ops.stream().collect(Collectors.summingLong(MetadataOp::size));
-                        log.warn("Connection loss while executing batch operation of {} "
+                        log.error("Connection loss while executing batch operation of {} "
                                 + "of total data size of {}. "
                                 + "Retrying individual operations one-by-one.", countsByType, totalSize);
 
