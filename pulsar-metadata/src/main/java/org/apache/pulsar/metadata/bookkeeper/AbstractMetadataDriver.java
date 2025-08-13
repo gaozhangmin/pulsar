@@ -35,7 +35,6 @@ import org.apache.bookkeeper.util.BookKeeperConstants;
 import org.apache.pulsar.metadata.api.MetadataStoreConfig;
 import org.apache.pulsar.metadata.api.MetadataStoreException;
 import org.apache.pulsar.metadata.api.extended.MetadataStoreExtended;
-import org.apache.zookeeper.client.ConnectStringParser;
 
 public abstract class AbstractMetadataDriver implements Closeable {
 
@@ -115,7 +114,7 @@ public abstract class AbstractMetadataDriver implements Closeable {
                 throw new MetadataException(Code.METADATA_SERVICE_ERROR, e);
             }
             try {
-                this.store = MetadataStoreExtended.create(url.replaceFirst(ledgersRootPath, ""),
+                this.store = MetadataStoreExtended.create(url,
                         MetadataStoreConfig.builder()
                                 .sessionTimeoutMillis(conf.getZkTimeout())
                                 .metadataStoreName(MetadataStoreConfig.METADATA_STORE)
@@ -136,10 +135,6 @@ public abstract class AbstractMetadataDriver implements Closeable {
         String metadataServiceUriStr = conf.getMetadataServiceUriUnchecked();
         if (metadataServiceUriStr == null) {
             return conf.getZkLedgersRootPath();
-        }
-        if (metadataServiceUriStr.startsWith(METADATA_STORE_SCHEME + ":zk")) {
-            String ledgerRootPath = new ConnectStringParser(metadataServiceUriStr).getChrootPath();
-            return ledgerRootPath == null ? BookKeeperConstants.DEFAULT_ZK_LEDGERS_ROOT_PATH : ledgerRootPath;
         }
         URI metadataServiceUri = URI.create(metadataServiceUriStr);
         String path = metadataServiceUri.getPath();

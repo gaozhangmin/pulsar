@@ -109,7 +109,6 @@ public class ZKSessionWatcher implements AutoCloseable, Watcher {
                 zkClientState = future.get(tickTimeMillis, TimeUnit.MILLISECONDS);
             } catch (TimeoutException e) {
                 // Consider zk disconnection if zk operation takes more than TICK_TIME
-                log.warn("ZooKeeper operation timed out");
                 zkClientState = Watcher.Event.KeeperState.Disconnected;
             }
 
