@@ -19,16 +19,19 @@
 package org.apache.pulsar.broker.loadbalance.impl;
 
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.NICUsageType;
+import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.PodNICUsageType;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getCpuUsageForCGroup;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getCpuUsageForEntireHost;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalCpuLimit;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalNicLimit;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalNicUsage;
+import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalPodNicUsage;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getUsablePhysicalNICs;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.isCGroupEnabled;
 import static org.apache.pulsar.common.util.Runnables.catchingAndLoggingThrowables;
 import com.google.common.annotations.VisibleForTesting;
 import com.sun.management.OperatingSystemMXBean;
+import io.prometheus.client.Gauge;
 import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.Optional;
@@ -56,23 +59,30 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
     private OperatingSystemMXBean systemBean;
     private SystemResourceUsage usage;
     private final Optional<Double> overrideBrokerNicSpeedGbps;
+    private final boolean isPodNicEnabled;
     private final boolean isCGroupsEnabled;
+    private static final Gauge netRx = Gauge.build("net_rx", "-").labelNames().register();
+    private static final Gauge netTx = Gauge.build("net_tx", "-").labelNames().register();
+    private static final Gauge netLimit = Gauge.build("net_limit", "-").labelNames().register();
 
     public LinuxBrokerHostUsageImpl(PulsarService pulsar) {
         this(
             pulsar.getConfiguration().getLoadBalancerHostUsageCheckIntervalMinutes(),
             pulsar.getConfiguration().getLoadBalancerOverrideBrokerNicSpeedGbps(),
+            pulsar.getConfiguration().isLoadBalancerEnableUsePodNIC(),
             pulsar.getLoadManagerExecutor()
         );
     }
 
     public LinuxBrokerHostUsageImpl(int hostUsageCheckIntervalMin,
                                     Optional<Double> overrideBrokerNicSpeedGbps,
+                                    boolean isPodNicEnabled,
                                     ScheduledExecutorService executorService) {
         this.systemBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
         this.lastCollection = 0L;
         this.usage = new SystemResourceUsage();
         this.overrideBrokerNicSpeedGbps = overrideBrokerNicSpeedGbps;
+        this.isPodNicEnabled = isPodNicEnabled;
         this.isCGroupsEnabled = isCGroupEnabled();
         // Call now to initialize values before the constructor returns
         calculateBrokerHostUsage();
@@ -90,8 +100,15 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
     public void calculateBrokerHostUsage() {
         List<String> nics = getUsablePhysicalNICs();
         double totalNicLimit = getTotalNicLimitWithConfiguration(nics);
-        double totalNicUsageTx = getTotalNicUsage(nics, NICUsageType.TX, BitRateUnit.Kilobit);
-        double totalNicUsageRx = getTotalNicUsage(nics, NICUsageType.RX, BitRateUnit.Kilobit);
+        double totalNicUsageTx;
+        double totalNicUsageRx;
+        if (isPodNicEnabled) {
+            totalNicUsageTx = getTotalPodNicUsage(PodNICUsageType.TX, BitRateUnit.Kilobit);
+            totalNicUsageRx = getTotalPodNicUsage(PodNICUsageType.RX, BitRateUnit.Kilobit);
+        } else {
+            totalNicUsageTx = getTotalNicUsage(nics, NICUsageType.TX, BitRateUnit.Kilobit);
+            totalNicUsageRx = getTotalNicUsage(nics, NICUsageType.RX, BitRateUnit.Kilobit);
+        }
         double totalCpuLimit = getTotalCpuLimit(isCGroupsEnabled);
         long now = System.currentTimeMillis();
         double elapsedSeconds = (now - lastCollection) / 1000d;
@@ -107,12 +124,21 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
             usage.setBandwidthIn(new ResourceUsage(0d, totalNicLimit));
             usage.setBandwidthOut(new ResourceUsage(0d, totalNicLimit));
         } else {
-            double nicUsageTx = (totalNicUsageTx - lastTotalNicUsageTx) / elapsedSeconds;
-            double nicUsageRx = (totalNicUsageRx - lastTotalNicUsageRx) / elapsedSeconds;
-
+            if (isPodNicEnabled && (totalNicUsageRx == -1 || totalNicUsageTx == -1)) {
+                usage.setBandwidthIn(new ResourceUsage(totalNicLimit, totalNicLimit));
+                usage.setBandwidthOut(new ResourceUsage(totalNicLimit, totalNicLimit));
+                netRx.set(-1);
+                netTx.set(-1);
+            } else {
+                double nicUsageTx = (totalNicUsageTx - lastTotalNicUsageTx) / elapsedSeconds;
+                double nicUsageRx = (totalNicUsageRx - lastTotalNicUsageRx) / elapsedSeconds;
+                usage.setBandwidthIn(new ResourceUsage(nicUsageRx, totalNicLimit));
+                usage.setBandwidthOut(new ResourceUsage(nicUsageTx, totalNicLimit));
+                netRx.set(nicUsageRx);
+                netTx.set(nicUsageTx);
+            }
+            netLimit.set(totalNicLimit);
             usage.setMemory(getMemUsage());
-            usage.setBandwidthIn(new ResourceUsage(nicUsageRx, totalNicLimit));
-            usage.setBandwidthOut(new ResourceUsage(nicUsageTx, totalNicLimit));
         }
         usage.setCpu(new ResourceUsage(cpuUsage, totalCpuLimit));
 
@@ -127,7 +153,6 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
         // Use the override value as configured. Return the total max speed across all available NICs, converted
         // from Gbps into Kbps
         return overrideBrokerNicSpeedGbps.map(BitRateUnit.Gigabit::toKilobit)
-                .map(speed -> speed * nics.size())
                 .orElseGet(() -> getTotalNicLimit(nics, BitRateUnit.Kilobit));
     }
 

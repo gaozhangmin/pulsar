@@ -19,6 +19,8 @@
 package org.apache.pulsar.broker.loadbalance;
 
 import com.google.common.annotations.VisibleForTesting;
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -27,8 +29,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,6 +55,7 @@ public class LinuxInfoUtils {
     // proc states
     private static final String PROC_STAT_PATH = "/proc/stat";
     private static final String NIC_PATH = "/sys/class/net/";
+    private static final String POD_NIC_PATH = "/sys/fs/cgroup/net_cls/net_cls.rate_info";
     // NIC type
     private static final int ARPHRD_ETHER = 1;
     private static final String NIC_SPEED_TEMPLATE = "/sys/class/net/%s/speed";
@@ -276,6 +281,47 @@ public class LinuxInfoUtils {
     }
 
     /**
+     * Get all pod nic usage.
+     * @param type Nic's usage type:  transport, receive
+     * @param bitRateUnit Bit rate unit
+     * @return Total nic usage
+     */
+    public static double getTotalPodNicUsage(PodNICUsageType type, BitRateUnit bitRateUnit) {
+        try {
+            Map<String, Double> nicUsage = parsePodNicFile(POD_NIC_PATH);
+            Double res = nicUsage.get(type.template);
+            if (res == null) {
+                log.error("[LinuxInfo] Failed to read {} bytes for pod NIC", type);
+                return -1d;
+            }
+            return bitRateUnit.convert(res, BitRateUnit.Byte);
+        } catch (Exception e) {
+            log.error("[LinuxInfo] Failed to read {} bytes for pod NIC", type, e);
+            return -1d;
+        }
+    }
+
+    public static Map<String, Double> parsePodNicFile(String filePath) throws Exception {
+        Map<String, Double> resultMap = new HashMap<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(":", 2);
+                if (parts.length < 2) {
+                    continue;
+                }
+                String key = parts[0].trim();
+                String valuePart = parts[1].trim();
+                if (!valuePart.isEmpty()) {
+                    double value = Double.parseDouble(valuePart);
+                    resultMap.put(key, value);
+                }
+            }
+        }
+        return resultMap;
+    }
+
+    /**
      * Get paths of all usable physical nic.
      * @return All usable physical nic paths.
      */
@@ -354,6 +400,15 @@ public class LinuxInfoUtils {
         TX("/sys/class/net/%s/statistics/tx_bytes"),
         // receive
         RX("/sys/class/net/%s/statistics/rx_bytes");
+        private final String template;
+    }
+
+    @AllArgsConstructor
+    public enum PodNICUsageType {
+        // transport
+        TX("tx_thrput_socket(bytes)"),
+        // receive
+        RX("rx_thrput_socket(bytes)");
         private final String template;
     }
 

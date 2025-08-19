@@ -2666,6 +2666,11 @@ public class ServiceConfiguration implements PulsarConfiguration {
         doc = "Option to override the auto-detected network interfaces max speed"
     )
     private Optional<Double> loadBalancerOverrideBrokerNicSpeedGbps = Optional.empty();
+    @FieldContext(
+        category = CATEGORY_LOAD_BALANCER,
+        doc = "Option to enable use pod NIC"
+    )
+    private boolean loadBalancerEnableUsePodNIC = false;
 
     @FieldContext(
         category = CATEGORY_LOAD_BALANCER,

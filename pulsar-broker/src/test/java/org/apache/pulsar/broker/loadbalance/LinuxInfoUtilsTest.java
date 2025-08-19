@@ -18,12 +18,20 @@
  */
 package org.apache.pulsar.broker.loadbalance;
 
+import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalPodNicUsage;
+import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.parsePodNicFile;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertThrows;
+import static org.testng.AssertJUnit.assertNull;
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Map;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pulsar.broker.BitRateUnit;
 import org.mockito.MockedStatic;
 import org.testng.annotations.Test;
 
@@ -45,6 +53,51 @@ public class LinuxInfoUtilsTest {
                     .idle(idle)
                     .total(total).build();
             assertEquals(LinuxInfoUtils.getCpuUsageForEntireHost(), resourceUsage);
+        }
+    }
+
+    @Test
+    void testGetTotalPodNicUsage() throws Exception {
+        try (MockedStatic<LinuxInfoUtils> linuxInfoUtilsMockedStatic = mockStatic(LinuxInfoUtils.class)) {
+            String content = "tx_throttled_time(ns): 0\n"
+                    + "tx_throttled_count: 0\n"
+                    + "tx_throttled_time_v2(ms): 0\n"
+                    + "tx_throttled_count_v2: 0\n"
+                    + "rx_throttled_time(ms): 0\n"
+                    + "rx_throttled_count: 0\n"
+                    + "tx_thrput(bytes): 681\n"
+                    + "rx_thrput(bytes): 608\n"
+                    + "tx_thrput_socket(bytes): 1000\n"
+                    + "rx_thrput_socket(bytes): 1000";
+            File tempFile = File.createTempFile("testng", ".txt");
+            Files.writeString(tempFile.toPath(), content);
+            linuxInfoUtilsMockedStatic.when(() -> parsePodNicFile(any())).thenCallRealMethod();
+            Map<String, Double> result = parsePodNicFile(tempFile.getPath());
+            System.out.println(result);
+            assertEquals(10, result.size());
+            assertEquals(0.0, result.get("tx_throttled_count"));
+            assertNull(result.get("empty"));
+            assertEquals(1000, result.get("tx_thrput_socket(bytes)"));
+            assertEquals(1000, result.get("rx_thrput_socket(bytes)"));
+
+            linuxInfoUtilsMockedStatic.when(() -> parsePodNicFile(any())).thenReturn(result);
+            System.out.println(parsePodNicFile("a"));
+
+            linuxInfoUtilsMockedStatic.when(() -> getTotalPodNicUsage(any(), any())).thenCallRealMethod();
+            assertEquals(getTotalPodNicUsage(LinuxInfoUtils.PodNICUsageType.TX, BitRateUnit.Kilobit)
+                    , 8);
+            assertEquals(getTotalPodNicUsage(LinuxInfoUtils.PodNICUsageType.RX, BitRateUnit.Kilobit)
+                    , 8);
+
+            linuxInfoUtilsMockedStatic.when(() -> parsePodNicFile(any())).thenCallRealMethod();
+            Files.writeString(tempFile.toPath(), "");
+            Map<String, Double> res1 = parsePodNicFile(tempFile.toString());
+            assertEquals(res1.size(), 0);
+            assertThrows(IOException.class, () -> parsePodNicFile("null"));
+            assertEquals(getTotalPodNicUsage(LinuxInfoUtils.PodNICUsageType.TX, BitRateUnit.Kilobit)
+                    , -1);
+            assertEquals(getTotalPodNicUsage(LinuxInfoUtils.PodNICUsageType.RX, BitRateUnit.Kilobit)
+                    , -1);
         }
     }
 }

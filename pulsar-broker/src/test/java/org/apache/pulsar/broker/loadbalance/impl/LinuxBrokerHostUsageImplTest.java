@@ -38,13 +38,13 @@ public class LinuxBrokerHostUsageImplTest {
         @Cleanup("shutdown")
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         LinuxBrokerHostUsageImpl linuxBrokerHostUsage =
-                new LinuxBrokerHostUsageImpl(1, Optional.of(3.0), executorService);
+                new LinuxBrokerHostUsageImpl(1, Optional.of(3.0), false, executorService);
         List<String> nics = new ArrayList<>();
         nics.add("1");
         nics.add("2");
         nics.add("3");
         double totalLimit = linuxBrokerHostUsage.getTotalNicLimitWithConfiguration(nics);
-        Assert.assertEquals(totalLimit, 3.0 * 1000 * 1000 * 3);
+        Assert.assertEquals(totalLimit, 3.0 * 1000 * 1000);
     }
 
     @Test
@@ -56,7 +56,7 @@ public class LinuxBrokerHostUsageImplTest {
         @Cleanup("shutdown")
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         LinuxBrokerHostUsageImpl linuxBrokerHostUsage =
-                new LinuxBrokerHostUsageImpl(Integer.MAX_VALUE, Optional.empty(), executorService);
+                new LinuxBrokerHostUsageImpl(Integer.MAX_VALUE, Optional.empty(), false, executorService);
 
         linuxBrokerHostUsage.calculateBrokerHostUsage();
         TimeUnit.SECONDS.sleep(1);

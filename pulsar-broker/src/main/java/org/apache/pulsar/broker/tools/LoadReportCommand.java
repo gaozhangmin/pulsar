@@ -67,7 +67,7 @@ public class LoadReportCommand implements Callable<Integer> {
         try {
             if (isLinux) {
                 hostUsage = new LinuxBrokerHostUsageImpl(
-                    Integer.MAX_VALUE, Optional.empty(), scheduler
+                    Integer.MAX_VALUE, Optional.empty(), false, scheduler
                 );
             } else {
                 hostUsage = new GenericBrokerHostUsageImpl(
