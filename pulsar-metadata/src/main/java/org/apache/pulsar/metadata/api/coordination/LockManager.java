@@ -21,6 +21,7 @@ package org.apache.pulsar.metadata.api.coordination;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import org.apache.pulsar.metadata.api.MetadataStoreException;
 import org.apache.pulsar.metadata.api.MetadataStoreException.LockBusyException;
 import org.apache.pulsar.metadata.api.MetadataStoreException.NotFoundException;
@@ -91,5 +92,7 @@ public interface LockManager<T> extends AutoCloseable {
      *             if there's a failure in closing the LockManager
      */
     CompletableFuture<Void> asyncClose();
+
+    void registerRemoveListener(BiConsumer<String, T> removeListener);
 
 }

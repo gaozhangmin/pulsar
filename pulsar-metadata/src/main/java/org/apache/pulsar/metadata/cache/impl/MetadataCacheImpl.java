@@ -23,16 +23,20 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.github.benmanes.caffeine.cache.AsyncCacheLoader;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -54,6 +58,8 @@ import org.apache.pulsar.metadata.api.Notification;
 import org.apache.pulsar.metadata.api.extended.CreateOption;
 import org.apache.pulsar.metadata.api.extended.MetadataStoreExtended;
 import org.apache.pulsar.metadata.impl.AbstractMetadataStore;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 @Slf4j
 public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notification> {
@@ -65,6 +71,7 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
     private final MetadataCacheConfig cacheConfig;
 
     private final AsyncLoadingCache<String, Optional<CacheGetResult<T>>> objCache;
+    private final List<BiConsumer<String, T>> removeListeners;
 
     public MetadataCacheImpl(MetadataStore store, TypeReference<T> typeRef, MetadataCacheConfig cacheConfig,
                              ScheduledExecutorService executor) {
@@ -96,6 +103,16 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
             cacheBuilder.expireAfterWrite(cacheConfig.getExpireAfterWriteMillis(), TimeUnit.MILLISECONDS);
         }
         this.objCache = cacheBuilder
+                .removalListener(new RemovalListener<String, Optional<CacheGetResult<T>>>() {
+                    @Override
+                    public void onRemoval(@Nullable String key,
+                                          @Nullable Optional<CacheGetResult<T>> value, @NonNull RemovalCause cause) {
+                        if (key == null || value == null) {
+                            return;
+                        }
+                        value.ifPresent(tCacheGetResult -> notifyRemoveListeners(key, tCacheGetResult.getValue()));
+                    }
+                })
                 .buildAsync(new AsyncCacheLoader<String, Optional<CacheGetResult<T>>>() {
                     @Override
                     public CompletableFuture<Optional<CacheGetResult<T>>> asyncLoad(String key, Executor executor) {
@@ -116,8 +133,13 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
                         }
                     }
                 });
+        this.removeListeners = new CopyOnWriteArrayList<>();
     }
 
+    /**
+     * Read the value from the store, after the reading the cache will be updated.
+     * @param path
+     */
     private CompletableFuture<Optional<CacheGetResult<T>>> readValueFromStore(String path) {
         return store.get(path)
                 .thenCompose(optRes -> {
@@ -303,9 +325,20 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
         objCache.asMap().computeIfPresent(path, (oldKey, oldValue) -> readValueFromStore(path));
     }
 
+    @Override
+    public void registerRemoveListener(BiConsumer<String, T> listener) {
+        this.removeListeners.add(listener);
+    }
+
     @VisibleForTesting
     public void invalidateAll() {
         objCache.synchronous().invalidateAll();
+    }
+
+    private void notifyRemoveListeners(String path, T value) {
+        for (BiConsumer<String, T> listener : removeListeners) {
+            listener.accept(path, value);
+        }
     }
 
     @Override

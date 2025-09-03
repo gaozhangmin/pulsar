@@ -359,4 +359,8 @@ public class OwnershipCache {
                 pulsar.getWebServiceAddressTls(), true, pulsar.getAdvertisedListeners());
         return selfOwnerInfo.getNativeUrl() != null || selfOwnerInfo.getNativeUrlTls() != null;
     }
+
+    public LockManager<NamespaceEphemeralData> getNamespaceLockManager() {
+        return lockManager;
+    }
 }

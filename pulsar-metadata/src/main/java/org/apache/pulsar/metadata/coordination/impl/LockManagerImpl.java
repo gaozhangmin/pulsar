@@ -28,6 +28,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.common.util.FutureUtil;
@@ -178,5 +179,10 @@ class LockManagerImpl<T> implements LockManager<T> {
         return FutureUtil.waitForAll(locks.values().stream()
                 .map(ResourceLock::release)
                 .collect(Collectors.toList()));
+    }
+
+    @Override
+    public void registerRemoveListener(BiConsumer<String, T> removeListener) {
+        cache.registerRemoveListener(removeListener);
     }
 }
