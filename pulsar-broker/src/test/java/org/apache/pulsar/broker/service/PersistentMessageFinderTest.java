@@ -63,6 +63,9 @@ import org.apache.pulsar.broker.service.persistent.PersistentMessageExpiryMonito
 import org.apache.pulsar.broker.service.persistent.PersistentMessageFinder;
 import org.apache.pulsar.broker.service.persistent.PersistentSubscription;
 import org.apache.pulsar.broker.service.persistent.PersistentTopic;
+import org.apache.pulsar.client.api.MessageId;
+import org.apache.pulsar.client.impl.MessageIdImpl;
+import org.apache.pulsar.client.impl.MessageImpl;
 import org.apache.pulsar.client.impl.ResetCursorData;
 import org.apache.pulsar.common.allocator.PulsarByteBufAllocator;
 import org.apache.pulsar.common.api.proto.BrokerEntryMetadata;
@@ -435,6 +438,146 @@ public class PersistentMessageFinderTest extends MockedBookKeeperTestCase {
         ledger.close();
         factory.shutdown();
 
+    }
+
+    public void testFindMessageWithTimestampAutoSkipNonRecoverable() throws Exception {
+
+        final String ledgerAndCursorName = "testFindMessageWithTimestampAutoSkipNonRecoverable";
+        final int entriesPerLedger = 5;
+        final int totalEntries = 50;
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setRetentionSizeInMB(10);
+        config.setMaxEntriesPerLedger(entriesPerLedger);
+        config.setRetentionTime(1, TimeUnit.HOURS);
+        config.setAutoSkipNonRecoverableData(true);
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open(ledgerAndCursorName, config);
+
+        long initTimeMillis = System.currentTimeMillis();
+        for (int i = 0; i < totalEntries; i++) {
+            ledger.addEntry(createMessageWrittenToLedger("msg" + i, initTimeMillis + i));
+        }
+        // {0,1,2,3,4} (0) 3 x
+        // {5,6,7,8,9} (1) 4
+        // {10,11,12,13,14} (2) 5
+        // {15,16,17,18,19} (3) 6
+        // {20,21,22,23,24} (4) 7 x
+        // {25,26,27,28,29} (5) 8 x
+        // {30,31,32,33,34} (6) 9
+        // {35,36,37,38,39} (7) 10
+        // {40,41,42,43,44} (8) 11
+        // {45,46,47,48,49} (9) 12 x
+        Awaitility.await().untilAsserted(() ->
+                assertEquals(ledger.getState(), ManagedLedgerImpl.State.LedgerOpened));
+
+        List<LedgerInfo> ledgers = ledger.getLedgersInfoAsList();
+        LedgerInfo lastLedgerInfo = ledgers.get(ledgers.size() - 1);
+        // The `lastLedgerInfo` should be newly opened, and it does not contain any entries.
+        // Please refer to: https://github.com/apache/pulsar/pull/22034
+        assertEquals(lastLedgerInfo.getEntries(), 0);
+        assertEquals(ledgers.size(), totalEntries / entriesPerLedger + 1);
+
+        bkc.deleteLedger(ledgers.get(0).getLedgerId());
+        bkc.deleteLedger(ledgers.get(4).getLedgerId());
+        bkc.deleteLedger(ledgers.get(5).getLedgerId());
+        bkc.deleteLedger(ledgers.get(9).getLedgerId());
+
+        MessageId messageId = findMessageIdByPublishTime(initTimeMillis + 17, ledger).join();
+        assertEquals(messageId, new MessageIdImpl(ledgers.get(3).getLedgerId(), 2, -1));
+
+        messageId = findMessageIdByPublishTime(initTimeMillis + 27, ledger).join();
+        assertEquals(messageId, new MessageIdImpl(ledgers.get(4).getLedgerId(), 0, -1));
+
+        messageId = findMessageIdByPublishTime(initTimeMillis + 43, ledger).join();
+        assertEquals(messageId, new MessageIdImpl(ledgers.get(8).getLedgerId(), 3, -1));
+
+        messageId = findMessageIdByPublishTime(initTimeMillis + 48, ledger).join();
+        assertEquals(messageId, new MessageIdImpl(ledgers.get(9).getLedgerId(), 0, -1));
+
+        ledger.close();
+        factory.shutdown();
+    }
+
+    public void testFindMessageByCursorWithTimestampAutoSkipNonRecoverable() throws Exception {
+
+        final String ledgerAndCursorName = "testFindMessageByCursorWithTimestampAutoSkipNonRecoverable";
+        final int entriesPerLedger = 5;
+        final int totalEntries = 50;
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setRetentionSizeInMB(10);
+        config.setMaxEntriesPerLedger(entriesPerLedger);
+        config.setRetentionTime(1, TimeUnit.HOURS);
+        config.setAutoSkipNonRecoverableData(true);
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open(ledgerAndCursorName, config);
+        ManagedCursorImpl cursor = (ManagedCursorImpl) ledger.openCursor(ledgerAndCursorName);
+
+        long initTimeMillis = System.currentTimeMillis();
+        for (int i = 0; i < totalEntries; i++) {
+            ledger.addEntry(createMessageWrittenToLedger("msg" + i, initTimeMillis + i));
+        }
+        // {0,1,2,3,4} (0) 3 x
+        // {5,6,7,8,9} (1) 4
+        // {10,11,12,13,14} (2) 5
+        // {15,16,17,18,19} (3) 6
+        // {20,21,22,23,24} (4) 7 x
+        // {25,26,27,28,29} (5) 8 x
+        // {30,31,32,33,34} (6) 9
+        // {35,36,37,38,39} (7) 10
+        // {40,41,42,43,44} (8) 11
+        // {45,46,47,48,49} (9) 12 x
+        Awaitility.await().untilAsserted(() ->
+                assertEquals(ledger.getState(), ManagedLedgerImpl.State.LedgerOpened));
+
+        List<LedgerInfo> ledgers = ledger.getLedgersInfoAsList();
+        LedgerInfo lastLedgerInfo = ledgers.get(ledgers.size() - 1);
+        // The `lastLedgerInfo` should be newly opened, and it does not contain any entries.
+        // Please refer to: https://github.com/apache/pulsar/pull/22034
+        assertEquals(lastLedgerInfo.getEntries(), 0);
+        assertEquals(ledgers.size(), totalEntries / entriesPerLedger + 1);
+
+        bkc.deleteLedger(ledgers.get(0).getLedgerId());
+        bkc.deleteLedger(ledgers.get(4).getLedgerId());
+        bkc.deleteLedger(ledgers.get(5).getLedgerId());
+        bkc.deleteLedger(ledgers.get(9).getLedgerId());
+        Result result = new Result();
+
+        findMessage(result, cursor, initTimeMillis + 17).join();
+        assertNull(result.exception);
+        assertEquals(result.position, new PositionImpl(ledgers.get(3).getLedgerId(), 1));
+
+        result = new Result();
+        findMessage(result, cursor, initTimeMillis + 27).join();
+        assertNull(result.exception);
+        assertEquals(result.position, new PositionImpl(ledgers.get(3).getLedgerId(), 4));
+
+        result = new Result();
+        findMessage(result, cursor, initTimeMillis + 43).join();
+        assertNull(result.exception);
+        assertEquals(result.position, new PositionImpl(ledgers.get(8).getLedgerId(), 2));
+
+        ledger.close();
+        factory.shutdown();
+    }
+
+    private CompletableFuture<MessageId> findMessageIdByPublishTime(long timestamp, ManagedLedger managedLedger) {
+        return managedLedger.asyncFindPosition(entry -> {
+            try {
+                long entryTimestamp = Commands.getEntryTimestamp(entry.getDataBuffer());
+                return MessageImpl.isEntryPublishedEarlierThan(entryTimestamp, timestamp);
+            } catch (Exception e) {
+
+            } finally {
+                entry.release();
+            }
+            return false;
+        }).thenApply(position -> {
+            if (position == null) {
+                return null;
+            } else {
+                return new MessageIdImpl(position.getLedgerId(), position.getEntryId(), -1);
+            }
+        });
     }
 
     @Test
