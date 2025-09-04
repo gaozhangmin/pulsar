@@ -53,13 +53,7 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -73,6 +67,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import lombok.Cleanup;
+import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.mledger.AsyncCallbacks;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.AddEntryCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.CloseCallback;
@@ -90,9 +85,11 @@ import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.mledger.impl.ManagedCursorImpl;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.bookkeeper.mledger.impl.PositionImpl;
+import org.apache.bookkeeper.mledger.proto.MLDataFormats;
 import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.apache.pulsar.broker.PulsarService;
 import org.apache.pulsar.broker.ServiceConfiguration;
+import org.apache.pulsar.broker.intercept.ManagedLedgerInterceptorImpl;
 import org.apache.pulsar.broker.namespace.NamespaceService;
 import org.apache.pulsar.broker.service.persistent.GeoPersistentReplicator;
 import org.apache.pulsar.broker.service.persistent.PersistentDispatcherMultipleConsumers;
@@ -119,6 +116,8 @@ import org.apache.pulsar.common.api.proto.KeySharedMeta;
 import org.apache.pulsar.common.api.proto.KeySharedMode;
 import org.apache.pulsar.common.api.proto.MessageMetadata;
 import org.apache.pulsar.common.api.proto.ProducerAccessMode;
+import org.apache.pulsar.common.intercept.BrokerEntryMetadataInterceptor;
+import org.apache.pulsar.common.intercept.BrokerEntryMetadataUtils;
 import org.apache.pulsar.common.naming.NamespaceBundle;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.partition.PartitionedTopicMetadata;
@@ -2282,6 +2281,66 @@ public class PersistentTopicTest extends MockedBookKeeperTestCase {
                 1, 1, 1, null, 1, false, false
         );
         verify(topic, times(0)).publishTxnMessage(any(), any(), any());
+    }
+
+    public static Set<BrokerEntryMetadataInterceptor> getBrokerEntryMetadataInterceptors() {
+        Set<String> interceptorNames = new HashSet<>();
+        interceptorNames.add("org.apache.pulsar.common.intercept.AppendBrokerTimestampMetadataInterceptor");
+        interceptorNames.add("org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor");
+        return BrokerEntryMetadataUtils.loadBrokerEntryMetadataInterceptors(interceptorNames,
+                Thread.currentThread().getContextClassLoader());
+    }
+
+    @Test
+    public void testLastEntryNoSuchEntryReadErrorWhenInitWithManagedLedgerInterceptor() throws Exception {
+        final String ledgerName  = "testLastEntryReadErrorWhenInitWithManagedLedgerInterceptor" + UUID.randomUUID();
+        ManagedLedgerConfig conf = new ManagedLedgerConfig();
+        conf.setAutoSkipNonRecoverableData(true);
+        conf.setMaxEntriesPerLedger(2);
+        conf.setManagedLedgerInterceptor(new ManagedLedgerInterceptorImpl(getBrokerEntryMetadataInterceptors(), null));
+
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open(ledgerName, conf);
+        ledger.addEntry("entry-1".getBytes());
+        ledger.addEntry("entry-2".getBytes());
+        ledger.addEntry("entry-3".getBytes());
+        NavigableMap<Long, MLDataFormats.ManagedLedgerInfo.LedgerInfo> ledgerInfos = ledger.getLedgersInfo();
+        assertEquals(ledgerInfos.size(), 2);
+
+        //reopen the ManagedLedger to init it
+        ledger.close();
+
+        // Simulating lh.readAsync(lh.getLastAddConfirmed(), lh.getLastAddConfirmed()) error in
+        // ManagedLedgerInterceptorImpl#onManagedLedgerLastLedgerInitialize
+        bkc.failAfter(1, BKException.Code.NoSuchEntryException);
+        ledger = (ManagedLedgerImpl) factory.open(ledgerName, conf);
+        assertEquals(ledger.getLedgersInfo().size(), 3);
+        ledger.close();
+    }
+
+    @Test
+    public void testLastEntryReadErrorWhenInitWithManagedLedgerInterceptor() throws Exception {
+        final String ledgerName  = "testLastEntryReadErrorWhenInitWithManagedLedgerInterceptor" + UUID.randomUUID();
+        ManagedLedgerConfig conf = new ManagedLedgerConfig();
+        conf.setAutoSkipNonRecoverableData(true);
+        conf.setMaxEntriesPerLedger(2);
+        conf.setManagedLedgerInterceptor(new ManagedLedgerInterceptorImpl(getBrokerEntryMetadataInterceptors(), null));
+
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open(ledgerName, conf);
+        ledger.addEntry("entry-1".getBytes());
+        ledger.addEntry("entry-2".getBytes());
+        ledger.addEntry("entry-3".getBytes());
+        NavigableMap<Long, MLDataFormats.ManagedLedgerInfo.LedgerInfo> ledgerInfos = ledger.getLedgersInfo();
+        assertEquals(ledgerInfos.size(), 2);
+
+        //reopen the ManagedLedger to init it
+        ledger.close();
+
+        // Simulating lh.readAsync(lh.getLastAddConfirmed(), lh.getLastAddConfirmed()) error in
+        // ManagedLedgerInterceptorImpl#onManagedLedgerLastLedgerInitialize
+        bkc.failAfter(1, BKException.Code.NoSuchLedgerExistsException);
+        ledger = (ManagedLedgerImpl) factory.open(ledgerName, conf);
+        assertEquals(ledger.getLedgersInfo().size(), 2);
+        ledger.close();
     }
 
 }

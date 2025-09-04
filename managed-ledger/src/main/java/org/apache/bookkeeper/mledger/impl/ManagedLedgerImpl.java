@@ -429,19 +429,43 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                 ledgers.put(id, info);
                                 if (managedLedgerInterceptor != null) {
                                     managedLedgerInterceptor.onManagedLedgerLastLedgerInitialize(name, lh)
-                                        .thenRun(() -> initializeBookKeeper(callback))
-                                        .exceptionally(ex -> {
-                                            callback.initializeFailed(
-                                                    new ManagedLedgerInterceptException(ex.getCause()));
-                                            return null;
-                                        });
+                                            .whenComplete((__, ex) -> {
+                                                if (ex == null) {
+                                                    initializeBookKeeper(callback);
+                                                } else {
+                                                    // Open ledger success but read fail.
+                                                    // It could happen when the ledger was removed from the disk but
+                                                    // leave the meta
+                                                    Throwable unwrappedException =
+                                                            FutureUtil.unwrapCompletionException(ex);
+                                                    if (config.isAutoSkipNonRecoverableData()) {
+                                                        if (unwrappedException
+                                                                instanceof BKException.BKNoSuchLedgerExistsException) {
+                                                            removeBadLedgerAndInitBookkeeper(id, callback);
+                                                        } else if (unwrappedException
+                                                                instanceof BKException.BKNoSuchEntryException) {
+                                                            // for no such entry exception, we just ignore the exception
+                                                            // but don't remove the ledger
+                                                            // appendIndexMetadataInterceptor index just start from 0
+                                                            // during read entry, it will skip the invalid entry,
+                                                            // because isAutoSkipNonRecoverableData
+                                                            initializeBookKeeper(callback);
+                                                        } else {
+                                                            callback.initializeFailed(
+                                                                    new ManagedLedgerInterceptException(ex.getCause()));
+                                                        }
+                                                    }  else {
+                                                        callback.initializeFailed(
+                                                                new ManagedLedgerInterceptException(ex.getCause()));
+                                                    }
+                                                }
+                                            });
                                 } else {
                                     initializeBookKeeper(callback);
                                 }
                             } else if (isNoSuchLedgerExistsException(rc)) {
                                 log.warn("[{}] Ledger not found: {}", name, id);
-                                ledgers.remove(id);
-                                initializeBookKeeper(callback);
+                                removeBadLedgerAndInitBookkeeper(id, callback);
                             } else {
                                 log.error("[{}] Failed to open ledger {}: {}", name, id, BKException.getMessage(rc));
                                 callback.initializeFailed(createManagedLedgerException(rc));
@@ -472,6 +496,11 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         });
 
         scheduleTimeoutTask();
+    }
+
+    private void removeBadLedgerAndInitBookkeeper(long id, ManagedLedgerInitializeLedgerCallback callback) {
+        ledgers.remove(id);
+        initializeBookKeeper(callback);
     }
 
     protected synchronized void initializeBookKeeper(final ManagedLedgerInitializeLedgerCallback callback) {
@@ -3506,7 +3535,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
      *            the position range
      * @return the count of entries
      */
-    long getNumberOfEntries(Range<PositionImpl> range) {
+    public long getNumberOfEntries(Range<PositionImpl> range) {
         PositionImpl fromPosition = range.lowerEndpoint();
         boolean fromIncluded = range.lowerBoundType() == BoundType.CLOSED;
         PositionImpl toPosition = range.upperEndpoint();
