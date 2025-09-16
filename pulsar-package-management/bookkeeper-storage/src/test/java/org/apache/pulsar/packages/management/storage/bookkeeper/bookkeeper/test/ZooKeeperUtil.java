@@ -97,34 +97,61 @@ public class ZooKeeperUtil implements ZooKeeperCluster {
         this.zkc = ZooKeeperClient.newBuilder().connectString(this.getZooKeeperConnectString()).sessionTimeoutMs(10000).build();
     }
 
-    public void sleepCluster(final int time, final TimeUnit timeUnit, final CountDownLatch l) throws InterruptedException, IOException {
+    @Override
+    public void sleepCluster(final int time, final TimeUnit timeUnit)
+            throws InterruptedException, IOException {
         Thread[] allthreads = new Thread[Thread.activeCount()];
         Thread.enumerate(allthreads);
-        Thread[] var5 = allthreads;
-        int var6 = allthreads.length;
-
-        for(int var7 = 0; var7 < var6; ++var7) {
-            final Thread t = var5[var7];
+        for (final Thread t : allthreads) {
             if (t.getName().contains("SyncThread:0")) {
+                final CountDownLatch suspendLatch = new CountDownLatch(1);
                 Thread sleeper = new Thread() {
+                    @SuppressWarnings("deprecation")
                     public void run() {
                         try {
                             t.suspend();
-                            l.countDown();
-                            timeUnit.sleep((long)time);
+                            suspendLatch.countDown();
+                            timeUnit.sleep(time);
                             t.resume();
-                        } catch (Exception var2) {
-                            ZooKeeperUtil.LOG.error("Error suspending thread", var2);
+                        } catch (Exception e) {
+                            LOG.error("Error suspending thread", e);
                         }
-
                     }
                 };
                 sleeper.start();
+                suspendLatch.await();
                 return;
             }
         }
-
         throw new IOException("ZooKeeper thread not found");
+    }
+
+    @Override
+    public void sleepCluster(final CountDownLatch l)
+            throws InterruptedException, IOException {
+        Thread[] allthreads = new Thread[Thread.activeCount()];
+        Thread.enumerate(allthreads);
+        for (final Thread t : allthreads) {
+            if (t.getName().contains("SyncThread:0")) {
+                final CountDownLatch suspendLatch = new CountDownLatch(1);
+                Thread sleeper = new Thread() {
+                    @SuppressWarnings("deprecation")
+                    public void run() {
+                        try {
+                            t.suspend();
+                            suspendLatch.countDown();
+                            l.await();
+                            t.resume();
+                        } catch (Exception e) {
+                            LOG.error("Error suspending thread", e);
+                        }
+                    }
+                };
+                sleeper.start();
+                suspendLatch.await();
+                return;
+            }
+        }
     }
 
     public void stopCluster() throws Exception {
