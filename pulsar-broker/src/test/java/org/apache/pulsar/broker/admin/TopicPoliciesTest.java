@@ -88,6 +88,7 @@ import org.apache.pulsar.common.policies.data.SubscribeRate;
 import org.apache.pulsar.common.policies.data.TenantInfoImpl;
 import org.apache.pulsar.common.policies.data.TopicPolicies;
 import org.apache.pulsar.common.policies.data.TopicStats;
+import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.util.collections.ConcurrentOpenHashMap;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
@@ -3262,5 +3263,71 @@ public class TopicPoliciesTest extends MockedPulsarServiceBaseTest {
         subscriptions.clear();
         admin.namespaces().removeRetention(myNamespace);
         admin.topics().delete(tpName, false);
+    }
+
+    @Test
+    public void testSetFederationTopicPolicies() throws Exception {
+        FederationTopicPolicies federationPolicies = new FederationTopicPolicies(
+                "sourceCluster",
+                "sourceBootstrap",
+                "sourceZkAddress",
+                true,
+                false,
+                true
+        );
+        log.info("Federation topic policies: {} will set to the topic: {}", federationPolicies, testTopic);
+
+        admin.topicPolicies().setFederationTopicPolicies(testTopic, federationPolicies);
+        log.info("Federation topic policies set success on topic: {}", testTopic);
+
+        Awaitility.await()
+                .untilAsserted(() -> Assert.assertEquals(admin.topicPolicies().getFederationTopicPolicies(testTopic), federationPolicies));
+
+        admin.topics().deletePartitionedTopic(testTopic, true);
+    }
+
+    @Test
+    public void testRemoveFederationTopicPolicies() throws Exception {
+        FederationTopicPolicies federationPolicies = new FederationTopicPolicies(
+                "sourceCluster",
+                "sourceBootstrap",
+                "sourceZkAddress",
+                true,
+                false,
+                true
+        );
+        log.info("Federation topic policies: {} will set to the topic: {}", federationPolicies, testTopic);
+
+        admin.topicPolicies().setFederationTopicPolicies(testTopic, federationPolicies);
+        log.info("Federation topic policies set success on topic: {}", testTopic);
+
+        Awaitility.await()
+                .untilAsserted(() -> Assert.assertEquals(admin.topicPolicies().getFederationTopicPolicies(testTopic), federationPolicies));
+
+        admin.topicPolicies().removeFederationTopicPolicies(testTopic);
+        Awaitility.await()
+                .untilAsserted(() -> Assert.assertNull(admin.topicPolicies().getFederationTopicPolicies(testTopic)));
+
+        admin.topics().deletePartitionedTopic(testTopic, true);
+    }
+
+    @Test(timeOut = 10000)
+    public void testGetFederationTopicPolicies() throws Exception {
+        final String topic = testTopic + UUID.randomUUID();
+        pulsarClient.newProducer().topic(topic).create().close();
+
+        assertNull(admin.topicPolicies().getFederationTopicPolicies(topic, true));
+
+        FederationTopicPolicies topicPolicies = new FederationTopicPolicies(
+                "nsSourceCluster",
+                "nsSourceBootstrap",
+                "nsSourceZkAddress",
+                true,
+                true,
+                false
+        );
+        admin.topicPolicies().setFederationTopicPolicies(topic, topicPolicies);
+        Awaitility.await().untilAsserted(()
+                -> assertEquals(admin.topicPolicies().getFederationTopicPolicies(topic, false), topicPolicies));
     }
 }

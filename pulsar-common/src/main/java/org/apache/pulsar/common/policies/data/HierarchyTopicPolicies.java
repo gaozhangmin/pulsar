@@ -34,6 +34,7 @@ import org.apache.pulsar.common.policies.data.impl.DispatchRateImpl;
 public class HierarchyTopicPolicies {
     final PolicyHierarchyValue<List<String>> replicationClusters;
     final PolicyHierarchyValue<RetentionPolicies> retentionPolicies;
+    final PolicyHierarchyValue<FederationTopicPolicies> federationTopicPolicies;
     final PolicyHierarchyValue<Boolean> deduplicationEnabled;
     final PolicyHierarchyValue<Integer> deduplicationSnapshotIntervalSeconds;
     final PolicyHierarchyValue<InactiveTopicPolicies> inactiveTopicPolicies;
@@ -65,6 +66,7 @@ public class HierarchyTopicPolicies {
     public HierarchyTopicPolicies() {
         replicationClusters = new PolicyHierarchyValue<>();
         retentionPolicies = new PolicyHierarchyValue<>();
+        federationTopicPolicies = new PolicyHierarchyValue<>();
         deduplicationEnabled = new PolicyHierarchyValue<>();
         deduplicationSnapshotIntervalSeconds = new PolicyHierarchyValue<>();
         inactiveTopicPolicies = new PolicyHierarchyValue<>();

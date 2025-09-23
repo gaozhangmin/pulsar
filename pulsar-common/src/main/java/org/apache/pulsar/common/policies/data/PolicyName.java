@@ -37,6 +37,7 @@ public enum PolicyName {
     MAX_UNACKED,
     MAX_SUBSCRIPTIONS,
     OFFLOAD,
+    FEDERATION,
     PARTITION,
     PERSISTENCE,
     RATE,

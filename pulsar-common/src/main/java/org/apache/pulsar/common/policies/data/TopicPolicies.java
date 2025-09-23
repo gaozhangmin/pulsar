@@ -53,6 +53,7 @@ public class TopicPolicies {
     private Boolean isGlobal = false;
     private PersistencePolicies persistence;
     private RetentionPolicies retentionPolicies;
+    private FederationTopicPolicies federationTopicPolicies;
     private Boolean deduplicationEnabled;
     private Integer messageTTLInSeconds;
     private Integer maxProducerPerTopic;
@@ -142,6 +143,10 @@ public class TopicPolicies {
 
     public boolean isRetentionSet() {
         return retentionPolicies != null;
+    }
+
+    public boolean isFederationTopicPoliciesSet() {
+        return federationTopicPolicies != null;
     }
 
     public boolean isDeduplicationSet() {

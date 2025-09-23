@@ -41,6 +41,7 @@ import org.apache.pulsar.common.policies.data.BacklogQuota;
 import org.apache.pulsar.common.policies.data.DelayedDeliveryPolicies;
 import org.apache.pulsar.common.policies.data.DispatchRate;
 import org.apache.pulsar.common.policies.data.EntryFilters;
+import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicDeleteMode;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
@@ -168,6 +169,10 @@ public class CmdTopicPolicies extends CmdBase {
                 new GetDispatcherPauseOnAckStatePersistent());
         addCommand("remove-dispatcher-pause-on-ack-state-persistent",
                 new RemoveDispatcherPauseOnAckStatePersistent());
+
+        addCommand("get-federation-topic-policies", new GetFederationTopicPolicies());
+        addCommand("set-federation-topic-policies", new SetFederationTopicPolicies());
+        addCommand("remove-federation-topic-policies", new RemoveFederationTopicPolicies());
     }
 
     @Command(description = "Get entry filters for a topic")
@@ -1984,6 +1989,78 @@ public class CmdTopicPolicies extends CmdBase {
         void run() throws PulsarAdminException {
             String persistentTopic = validatePersistentTopic(topicName);
             getTopicPolicies(isGlobal).removeDispatcherPauseOnAckStatePersistent(persistentTopic);
+        }
+    }
+
+    @Command(description = "Get federation topic policies for a topic")
+    private class GetFederationTopicPolicies extends CliCommand {
+        @Parameters(description = "persistent://tenant/namespace/topic", arity = "1")
+        private String topicName;
+
+        @Option(names = { "-ap", "--applied" }, description = "Get the applied policy of the topic")
+        private boolean applied = false;
+
+        @Option(names = { "--global", "-g" }, description = "Whether to get this policy globally. "
+                + "If set to true, broker returned global topic policies")
+        private boolean isGlobal = false;
+
+        @Override
+        void run() throws PulsarAdminException {
+            String persistentTopic = validatePersistentTopic(topicName);
+            print(getTopicPolicies(isGlobal).getFederationTopicPolicies(persistentTopic, applied));
+        }
+    }
+
+    @Command(description = "Set federation topic policies for a topic")
+    private class SetFederationTopicPolicies extends CliCommand {
+        @Parameters(description = "persistent://tenant/namespace/topic", arity = "1")
+        private String topicName;
+
+        @Option(names = { "--source-cluster", "-sc" }, description = "Source cluster name", required = true)
+        private String sourceCluster;
+
+        @Option(names = { "--source-bootstrap", "-sb" }, description = "Source bootstrap servers")
+        private String sourceBootstrap;
+
+        @Option(names = { "--source-zk-address", "-sz" }, description = "Source ZooKeeper address")
+        private String sourceZkAddress;
+
+        @Option(names = { "--can-read", "-cr" }, description = "Whether the topic can be read from the source cluster")
+        private Boolean canRead;
+
+        @Option(names = { "--can-write", "-cw" },
+                description = "Whether the topic can be written to the source cluster")
+        private Boolean canWrite;
+
+        @Option(names = { "--migrate-back", "-mb" }, description = "Whether to migrate back to the source cluster")
+        private Boolean migrateBack;
+
+        @Option(names = { "--global", "-g" }, description = "Whether to set this policy globally. "
+                + "If set to true, the policy will be replicated to other clusters asynchronously")
+        private boolean isGlobal = false;
+
+        @Override
+        void run() throws PulsarAdminException {
+            String persistentTopic = validatePersistentTopic(topicName);
+            FederationTopicPolicies policies = new FederationTopicPolicies(
+                    sourceCluster, sourceBootstrap, sourceZkAddress, canRead, canWrite, migrateBack);
+            getTopicPolicies(isGlobal).setFederationTopicPolicies(persistentTopic, policies);
+        }
+    }
+
+    @Command(description = "Remove federation topic policies for a topic")
+    private class RemoveFederationTopicPolicies extends CliCommand {
+        @Parameters(description = "persistent://tenant/namespace/topic", arity = "1")
+        private String topicName;
+
+        @Option(names = { "--global", "-g" }, description = "Whether to remove this policy globally. "
+                + "If set to true, the removing operation will be replicated to other clusters asynchronously")
+        private boolean isGlobal = false;
+
+        @Override
+        void run() throws PulsarAdminException {
+            String persistentTopic = validatePersistentTopic(topicName);
+            getTopicPolicies(isGlobal).removeFederationTopicPolicies(persistentTopic);
         }
     }
 

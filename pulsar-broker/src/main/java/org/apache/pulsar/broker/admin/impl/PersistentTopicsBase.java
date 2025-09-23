@@ -121,6 +121,7 @@ import org.apache.pulsar.common.policies.data.BacklogQuota;
 import org.apache.pulsar.common.policies.data.DelayedDeliveryPolicies;
 import org.apache.pulsar.common.policies.data.DispatchRate;
 import org.apache.pulsar.common.policies.data.EntryFilters;
+import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.NamespaceOperation;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
@@ -3503,6 +3504,37 @@ public class PersistentTopicsBase extends AdminResource {
                         return CompletableFuture.completedFuture(null);
                     }
                     op.get().setRetentionPolicies(null);
+                    return pulsar().getTopicPoliciesService().updateTopicPoliciesAsync(topicName, op.get());
+                });
+    }
+
+    protected CompletableFuture<FederationTopicPolicies> internalGetFederationTopicPolicies(boolean applied,
+                                                                                            boolean isGlobal) {
+        return getTopicPoliciesAsyncWithRetry(topicName, isGlobal)
+            .thenApply(op -> op.map(TopicPolicies::getFederationTopicPolicies).orElse(null));
+    }
+
+    protected CompletableFuture<Void> internalSetFederationTopicPolicies(FederationTopicPolicies federationPolicies,
+                                                                         boolean isGlobal) {
+        if (federationPolicies == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return getTopicPoliciesAsyncWithRetry(topicName, isGlobal)
+            .thenCompose(op -> {
+                TopicPolicies topicPolicies = op.orElseGet(TopicPolicies::new);
+                topicPolicies.setFederationTopicPolicies(federationPolicies);
+                topicPolicies.setIsGlobal(isGlobal);
+                return pulsar().getTopicPoliciesService().updateTopicPoliciesAsync(topicName, topicPolicies);
+            });
+    }
+
+    protected CompletableFuture<Void> internalRemoveFederationTopicPolicies(boolean isGlobal) {
+        return getTopicPoliciesAsyncWithRetry(topicName, isGlobal)
+                .thenCompose(op -> {
+                    if (!op.isPresent()) {
+                        return CompletableFuture.completedFuture(null);
+                    }
+                    op.get().setFederationTopicPolicies(null);
                     return pulsar().getTopicPoliciesService().updateTopicPoliciesAsync(topicName, op.get());
                 });
     }

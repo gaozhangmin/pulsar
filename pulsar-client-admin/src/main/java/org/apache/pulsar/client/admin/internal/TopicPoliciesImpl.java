@@ -37,6 +37,7 @@ import org.apache.pulsar.common.policies.data.DelayedDeliveryPolicies;
 import org.apache.pulsar.common.policies.data.DispatchRate;
 import org.apache.pulsar.common.policies.data.EntryFilters;
 import org.apache.pulsar.common.policies.data.ErrorData;
+import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
@@ -1279,6 +1280,56 @@ public class TopicPoliciesImpl extends BaseResource implements TopicPolicies {
         TopicName tn = validateTopic(topic);
         WebTarget path = topicPath(tn, "dispatcherPauseOnAckStatePersistent").queryParam("applied", applied);
         return asyncGetRequest(path, new FutureCallback<Boolean>(){});
+    }
+
+    @Override
+    public FederationTopicPolicies getFederationTopicPolicies(String topic) throws PulsarAdminException {
+        return getFederationTopicPolicies(topic, false);
+    }
+
+    @Override
+    public CompletableFuture<FederationTopicPolicies> getFederationTopicPoliciesAsync(String topic) {
+        return getFederationTopicPoliciesAsync(topic, false);
+    }
+
+    @Override
+    public FederationTopicPolicies getFederationTopicPolicies(String topic, boolean applied)
+            throws PulsarAdminException {
+        return sync(() -> getFederationTopicPoliciesAsync(topic, applied));
+    }
+
+    @Override
+    public CompletableFuture<FederationTopicPolicies> getFederationTopicPoliciesAsync(String topic, boolean applied) {
+        TopicName tn = validateTopic(topic);
+        WebTarget path = topicPath(tn, "federationTopicPolicies");
+        path = path.queryParam("applied", applied);
+        return asyncGetRequest(path, new FutureCallback<FederationTopicPolicies>(){});
+    }
+
+    @Override
+    public void setFederationTopicPolicies(String topic, FederationTopicPolicies federationTopicPolicies)
+            throws PulsarAdminException {
+        sync(() -> setFederationTopicPoliciesAsync(topic, federationTopicPolicies));
+    }
+
+    @Override
+    public CompletableFuture<Void> setFederationTopicPoliciesAsync(String topic,
+                                                                   FederationTopicPolicies federationTopicPolicies) {
+        TopicName tn = validateTopic(topic);
+        WebTarget path = topicPath(tn, "federationTopicPolicies");
+        return asyncPostRequest(path, Entity.entity(federationTopicPolicies, MediaType.APPLICATION_JSON));
+    }
+
+    @Override
+    public void removeFederationTopicPolicies(String topic) throws PulsarAdminException {
+        sync(() -> removeFederationTopicPoliciesAsync(topic));
+    }
+
+    @Override
+    public CompletableFuture<Void> removeFederationTopicPoliciesAsync(String topic) {
+        TopicName tn = validateTopic(topic);
+        WebTarget path = topicPath(tn, "federationTopicPolicies");
+        return asyncDeleteRequest(path);
     }
 
     /*

@@ -65,6 +65,9 @@ public class Policies {
     public Integer subscription_expiration_time_minutes = null;
     @SuppressWarnings("checkstyle:MemberName")
     public RetentionPolicies retention_policies = null;
+    @SuppressWarnings("checkstyle:MemberName")
+    public FederationTopicPolicies federation_policies = null;
+
     public boolean deleted = false;
     public static final String FIRST_BOUNDARY = "0x00000000";
     public static final String LAST_BOUNDARY = "0xffffffff";

@@ -67,6 +67,7 @@ import org.apache.pulsar.common.policies.data.BacklogQuota.BacklogQuotaType;
 import org.apache.pulsar.common.policies.data.DelayedDeliveryPolicies;
 import org.apache.pulsar.common.policies.data.DispatchRate;
 import org.apache.pulsar.common.policies.data.EntryFilters;
+import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
 import org.apache.pulsar.common.policies.data.PartitionedTopicInternalStats;
@@ -2645,6 +2646,109 @@ public class PersistentTopics extends PersistentTopicsBase {
             })
             .exceptionally(ex -> {
                 handleTopicPolicyException("removeRetention", ex, asyncResponse);
+                return null;
+            });
+    }
+
+    @GET
+    @Path("/{tenant}/{namespace}/{topic}/federationTopicPolicies")
+    @ApiOperation(value = "Get federation topic policies for specified topic.",
+            response = FederationTopicPolicies.class)
+    @ApiResponses(value = {@ApiResponse(code = 403, message = "Don't have admin permission"),
+            @ApiResponse(code = 404, message = "Namespace or topic doesn't exist"),
+            @ApiResponse(code = 405,
+                    message = "Topic level policy is disabled, to enable the topic level policy and retry"),
+            @ApiResponse(code = 409, message = "Concurrent modification")})
+    public void getFederationTopicPolicies(@Suspended final AsyncResponse asyncResponse,
+            @PathParam("tenant") String tenant,
+            @PathParam("namespace") String namespace,
+            @PathParam("topic") @Encoded String encodedTopic,
+            @QueryParam("isGlobal") @DefaultValue("false") boolean isGlobal,
+            @QueryParam("applied") @DefaultValue("false") boolean applied,
+            @ApiParam(value = "Whether leader broker redirected this call to this broker. For internal use.")
+            @QueryParam("authoritative") @DefaultValue("false") boolean authoritative) {
+        validateTopicName(tenant, namespace, encodedTopic);
+        validateTopicPolicyOperationAsync(topicName, PolicyName.FEDERATION, PolicyOperation.READ)
+                .thenCompose(__ -> preValidation(authoritative))
+            .thenCompose(__ -> internalGetFederationTopicPolicies(applied, isGlobal))
+            .thenAccept(asyncResponse::resume)
+            .exceptionally(ex -> {
+                handleTopicPolicyException("getFederationTopicPolicies", ex, asyncResponse);
+                return null;
+            });
+    }
+
+    @POST
+    @Path("/{tenant}/{namespace}/{topic}/federationTopicPolicies")
+    @ApiOperation(value = "Set federation topic policies for specified topic.")
+    @ApiResponses(value = {
+            @ApiResponse(code = 204, message = "Operation successful"),
+            @ApiResponse(code = 403, message = "Don't have admin permission"),
+            @ApiResponse(code = 404, message = "Namespace or topic doesn't exist"),
+            @ApiResponse(code = 405, message =
+                    "Topic level policy is disabled, to enable the topic level policy and retry"),
+            @ApiResponse(code = 409, message = "Concurrent modification")})
+    public void setFederationTopicPolicies(@Suspended final AsyncResponse asyncResponse,
+            @PathParam("tenant") String tenant,
+            @PathParam("namespace") String namespace,
+            @PathParam("topic") @Encoded String encodedTopic,
+            @ApiParam(value = "Whether leader broker redirected this call to this broker. For internal use.")
+            @QueryParam("authoritative") @DefaultValue("false") boolean authoritative,
+            @QueryParam("isGlobal") @DefaultValue("false") boolean isGlobal,
+            @ApiParam(value = "Federation topic policies for the specified topic")
+                                               FederationTopicPolicies federationTopicPolicies) {
+        validateTopicName(tenant, namespace, encodedTopic);
+        validateTopicPolicyOperationAsync(topicName, PolicyName.FEDERATION, PolicyOperation.WRITE)
+            .thenCompose(__ -> preValidation(authoritative))
+            .thenCompose(__ -> internalSetFederationTopicPolicies(federationTopicPolicies, isGlobal))
+            .thenRun(() -> {
+                try {
+                    log.info("[{}] Successfully updated federation topic policies: "
+                                    + "namespace={}, topic={}, federationTopicPolicies={}",
+                            clientAppId(),
+                            namespaceName,
+                            topicName.getLocalName(),
+                            objectWriter().writeValueAsString(federationTopicPolicies));
+                } catch (JsonProcessingException ignore) {
+                }
+                asyncResponse.resume(Response.noContent().build());
+            })
+            .exceptionally(ex -> {
+                handleTopicPolicyException("setFederationTopicPolicies", ex, asyncResponse);
+                return null;
+            });
+    }
+
+    @DELETE
+    @Path("/{tenant}/{namespace}/{topic}/federationTopicPolicies")
+    @ApiOperation(value = "Remove federation topic policies for specified topic.")
+    @ApiResponses(value = {
+            @ApiResponse(code = 204, message = "Operation successful"),
+            @ApiResponse(code = 403, message = "Don't have admin permission"),
+            @ApiResponse(code = 404, message = "Namespace or topic doesn't exist"),
+            @ApiResponse(code = 405,
+                    message = "Topic level policy is disabled, to enable the topic level policy and retry"),
+            @ApiResponse(code = 409, message = "Concurrent modification")})
+    public void removeFederationTopicPolicies(@Suspended final AsyncResponse asyncResponse,
+            @PathParam("tenant") String tenant,
+            @PathParam("namespace") String namespace,
+            @PathParam("topic") @Encoded String encodedTopic,
+            @QueryParam("isGlobal") @DefaultValue("false") boolean isGlobal,
+            @ApiParam(value = "Whether leader broker redirected this call to this broker. For internal use.")
+            @QueryParam("authoritative") @DefaultValue("false") boolean authoritative) {
+        validateTopicName(tenant, namespace, encodedTopic);
+        validateTopicPolicyOperationAsync(topicName, PolicyName.FEDERATION, PolicyOperation.WRITE)
+                .thenCompose(__ -> preValidation(authoritative))
+            .thenCompose(__ -> internalRemoveFederationTopicPolicies(isGlobal))
+            .thenRun(() -> {
+                log.info("[{}] Successfully remove federation topic policies: namespace={}, topic={}",
+                        clientAppId(),
+                        namespaceName,
+                        topicName.getLocalName());
+                asyncResponse.resume(Response.noContent().build());
+            })
+            .exceptionally(ex -> {
+                handleTopicPolicyException("removeFederationTopicPolicies", ex, asyncResponse);
                 return null;
             });
     }

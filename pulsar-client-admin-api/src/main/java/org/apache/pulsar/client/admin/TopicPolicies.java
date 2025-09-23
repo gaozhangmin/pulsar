@@ -27,6 +27,7 @@ import org.apache.pulsar.common.policies.data.BacklogQuota;
 import org.apache.pulsar.common.policies.data.DelayedDeliveryPolicies;
 import org.apache.pulsar.common.policies.data.DispatchRate;
 import org.apache.pulsar.common.policies.data.EntryFilters;
+import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPolicies;
 import org.apache.pulsar.common.policies.data.PersistencePolicies;
@@ -1929,4 +1930,88 @@ public interface TopicPolicies {
      * Get the dispatcherPauseOnAckStatePersistentEnabled policy for a given topic asynchronously.
      */
     CompletableFuture<Boolean> getDispatcherPauseOnAckStatePersistent(String topic, boolean applied);
+
+    /**
+     * Set the federation topic policies for a topic.
+     *
+     * @param topic
+     *            Topic name
+     * @param federationTopicPolicies
+     *            Configuration of federation topic policies
+     * @throws PulsarAdminException
+     *             Unexpected error
+     */
+    void setFederationTopicPolicies(String topic, FederationTopicPolicies federationTopicPolicies)
+            throws PulsarAdminException;
+
+    /**
+     * Set the federation topic policies for a topic asynchronously.
+     *
+     * @param topic
+     *            Topic name
+     * @param federationTopicPolicies
+     *            Configuration of federation topic policies
+     */
+    CompletableFuture<Void> setFederationTopicPoliciesAsync(String topic,
+                                                            FederationTopicPolicies federationTopicPolicies);
+
+    /**
+     * Get the federation topic policies for a topic.
+     *
+     * @param topic
+     *            Topic name
+     * @return Configuration of federation topic policies
+     * @throws PulsarAdminException
+     *             Unexpected error
+     */
+    FederationTopicPolicies getFederationTopicPolicies(String topic) throws PulsarAdminException;
+
+    /**
+     * Get the federation topic policies for a topic asynchronously.
+     *
+     * @param topic
+     *            Topic name
+     */
+    CompletableFuture<FederationTopicPolicies> getFederationTopicPoliciesAsync(String topic);
+
+    /**
+     * Get the applied federation topic policies for a topic.
+     *
+     * @param topic
+     *            Topic name
+     * @param applied
+     *            Whether to get the applied policies
+     * @return Configuration of federation topic policies
+     * @throws PulsarAdminException
+     *             Unexpected error
+     */
+    FederationTopicPolicies getFederationTopicPolicies(String topic, boolean applied) throws PulsarAdminException;
+
+    /**
+     * Get the applied federation topic policies for a topic asynchronously.
+     *
+     * @param topic
+     *            Topic name
+     * @param applied
+     *            Whether to get the applied policies
+     */
+    CompletableFuture<FederationTopicPolicies> getFederationTopicPoliciesAsync(String topic, boolean applied);
+
+    /**
+     * Remove the federation topic policies for a topic.
+     *
+     * @param topic
+     *            Topic name
+     * @throws PulsarAdminException
+     *             Unexpected error
+     */
+    void removeFederationTopicPolicies(String topic) throws PulsarAdminException;
+
+    /**
+     * Remove the federation topic policies for a topic asynchronously.
+     *
+     * @param topic
+     *            Topic name
+     */
+    CompletableFuture<Void> removeFederationTopicPoliciesAsync(String topic);
 }
