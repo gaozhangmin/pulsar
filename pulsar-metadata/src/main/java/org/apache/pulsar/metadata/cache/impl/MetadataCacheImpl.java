@@ -23,8 +23,6 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.github.benmanes.caffeine.cache.AsyncCacheLoader;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalCause;
-import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.util.EnumSet;
@@ -36,7 +34,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -58,8 +55,6 @@ import org.apache.pulsar.metadata.api.Notification;
 import org.apache.pulsar.metadata.api.extended.CreateOption;
 import org.apache.pulsar.metadata.api.extended.MetadataStoreExtended;
 import org.apache.pulsar.metadata.impl.AbstractMetadataStore;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 @Slf4j
 public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notification> {
@@ -71,7 +66,8 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
     private final MetadataCacheConfig cacheConfig;
 
     private final AsyncLoadingCache<String, Optional<CacheGetResult<T>>> objCache;
-    private final List<BiConsumer<String, T>> removeListeners;
+    private final List<Consumer<String>> removeListeners;
+    private final List<Consumer<String>> updateListeners;
 
     public MetadataCacheImpl(MetadataStore store, TypeReference<T> typeRef, MetadataCacheConfig cacheConfig,
                              ScheduledExecutorService executor) {
@@ -103,16 +99,6 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
             cacheBuilder.expireAfterWrite(cacheConfig.getExpireAfterWriteMillis(), TimeUnit.MILLISECONDS);
         }
         this.objCache = cacheBuilder
-                .removalListener(new RemovalListener<String, Optional<CacheGetResult<T>>>() {
-                    @Override
-                    public void onRemoval(@Nullable String key,
-                                          @Nullable Optional<CacheGetResult<T>> value, @NonNull RemovalCause cause) {
-                        if (key == null || value == null) {
-                            return;
-                        }
-                        value.ifPresent(tCacheGetResult -> notifyRemoveListeners(key, tCacheGetResult.getValue()));
-                    }
-                })
                 .buildAsync(new AsyncCacheLoader<String, Optional<CacheGetResult<T>>>() {
                     @Override
                     public CompletableFuture<Optional<CacheGetResult<T>>> asyncLoad(String key, Executor executor) {
@@ -134,6 +120,7 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
                     }
                 });
         this.removeListeners = new CopyOnWriteArrayList<>();
+        this.updateListeners = new CopyOnWriteArrayList<>();
     }
 
     /**
@@ -326,8 +313,13 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
     }
 
     @Override
-    public void registerRemoveListener(BiConsumer<String, T> listener) {
+    public void registerRemoveListener(Consumer<String> listener) {
         this.removeListeners.add(listener);
+    }
+
+    @Override
+    public void registerUpdateListener(Consumer<String> listener) {
+        this.updateListeners.add(listener);
     }
 
     @VisibleForTesting
@@ -335,9 +327,15 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
         objCache.synchronous().invalidateAll();
     }
 
-    private void notifyRemoveListeners(String path, T value) {
-        for (BiConsumer<String, T> listener : removeListeners) {
-            listener.accept(path, value);
+    private void notifyRemoveListeners(String path) {
+        for (Consumer<String> listener  : removeListeners) {
+            listener.accept(path);
+        }
+    }
+
+    private void notifyUpdateListeners(String path) {
+        for (Consumer<String> listener  : updateListeners) {
+            listener.accept(path);
         }
     }
 
@@ -348,10 +346,12 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
         case Created:
         case Modified:
             refresh(path);
+            notifyUpdateListeners(path);
             break;
 
         case Deleted:
             objCache.synchronous().invalidate(path);
+            notifyRemoveListeners(path);
             break;
 
         default:

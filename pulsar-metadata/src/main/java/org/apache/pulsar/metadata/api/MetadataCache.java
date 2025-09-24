@@ -22,7 +22,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.apache.pulsar.metadata.api.MetadataStoreException.AlreadyExistsException;
 import org.apache.pulsar.metadata.api.MetadataStoreException.NotFoundException;
@@ -185,5 +185,11 @@ public interface MetadataCache<T> {
      * Add a listener to the cache, when cache remove.
      * @param listener the listener to add, the listener will be called with the path of the removed object
      */
-    void registerRemoveListener(BiConsumer<String, T> listener);
+    void registerRemoveListener(Consumer<String> listener);
+
+    /**
+     * Add a listener to the cache, when cache update.
+     * @param listener the listener to add, the listener will be called with the path of the updated object
+     */
+    void registerUpdateListener(Consumer<String> listener);
 }
