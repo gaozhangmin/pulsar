@@ -18,9 +18,17 @@
  */
 package org.apache.pulsar.policies.data.loadbalancer;
 
+import java.util.Collections;
+import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+
 /**
  * This class represents a object which reflects system resource usage per resource and the upper limit on the resource.
  */
+@Getter
+@Setter
 public class SystemResourceUsage {
 
     /**
@@ -30,57 +38,33 @@ public class SystemResourceUsage {
         CPU, Memory, BandwidthIn, BandwidthOut
     }
 
+    @AllArgsConstructor
+    public enum NetThrottledType {
+        TX_THROTTLED_TIME("tx_throttled_time(ns)"),
+        TX_THROTTLED_COUNT("tx_throttled_count"),
+        RX_THROTTLED_TIME("rx_throttled_time(ms)"),
+        RX_THROTTLED_COUNT("rx_throttled_count");
+
+        public final String template;
+    }
+
     public ResourceUsage bandwidthIn;
     public ResourceUsage bandwidthOut;
+    public ResourceUsage physicalBandwidthIn;
+    public ResourceUsage physicalBandwidthOut;
     public ResourceUsage cpu;
     public ResourceUsage memory;
     public ResourceUsage directMemory;
+    public Map<NetThrottledType, Double> netThrottled;
 
     public SystemResourceUsage() {
         bandwidthIn = new ResourceUsage(-1, -1);
         bandwidthOut = new ResourceUsage(-1, -1);
+        physicalBandwidthIn = new ResourceUsage(-1, -1);
+        physicalBandwidthOut = new ResourceUsage(-1, -1);
         cpu = new ResourceUsage(-1, -1);
         memory = new ResourceUsage(-1, -1);
         directMemory = new ResourceUsage(-1, -1);
-    }
-
-    public ResourceUsage getBandwidthIn() {
-        return bandwidthIn;
-    }
-
-    public void setBandwidthIn(ResourceUsage bandwidthIn) {
-        this.bandwidthIn = bandwidthIn;
-    }
-
-    public ResourceUsage getBandwidthOut() {
-        return bandwidthOut;
-    }
-
-    public void setBandwidthOut(ResourceUsage bandwidthOut) {
-        this.bandwidthOut = bandwidthOut;
-    }
-
-    public ResourceUsage getCpu() {
-        return cpu;
-    }
-
-    public void setCpu(ResourceUsage cpu) {
-        this.cpu = cpu;
-    }
-
-    public ResourceUsage getMemory() {
-        return memory;
-    }
-
-    public void setMemory(ResourceUsage memory) {
-        this.memory = memory;
-    }
-
-    public ResourceUsage getDirectMemory() {
-        return this.directMemory;
-    }
-
-    public void setDirectMemory(ResourceUsage directMemory) {
-        this.directMemory = directMemory;
+        netThrottled = Collections.emptyMap();
     }
 }

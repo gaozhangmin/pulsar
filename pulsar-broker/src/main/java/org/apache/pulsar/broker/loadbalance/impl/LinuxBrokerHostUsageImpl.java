@@ -18,10 +18,12 @@
  */
 package org.apache.pulsar.broker.loadbalance.impl;
 
+import static java.util.Collections.emptyMap;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.NICUsageType;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.PodNICUsageType;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getCpuUsageForCGroup;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getCpuUsageForEntireHost;
+import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getThrottledMap;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalCpuLimit;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalNicLimit;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalNicUsage;
@@ -31,9 +33,10 @@ import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.isCGroupEnable
 import static org.apache.pulsar.common.util.Runnables.catchingAndLoggingThrowables;
 import com.google.common.annotations.VisibleForTesting;
 import com.sun.management.OperatingSystemMXBean;
-import io.prometheus.client.Gauge;
 import java.lang.management.ManagementFactory;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +57,9 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
     private long lastCollection;
     private double lastTotalNicUsageTx;
     private double lastTotalNicUsageRx;
+    private double lastTotalPhysicalNicUsageTx;
+    private double lastTotalPhysicalNicUsageRx;
+    private Map<SystemResourceUsage.NetThrottledType, Double> lastNetThrottledMap;
     private double lastCpuUsage;
     private double lastCpuTotalTime;
     private OperatingSystemMXBean systemBean;
@@ -61,9 +67,6 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
     private final Optional<Double> overrideBrokerNicSpeedGbps;
     private final boolean isPodNicEnabled;
     private final boolean isCGroupsEnabled;
-    private static final Gauge netRx = Gauge.build("net_rx", "-").labelNames().register();
-    private static final Gauge netTx = Gauge.build("net_tx", "-").labelNames().register();
-    private static final Gauge netLimit = Gauge.build("net_limit", "-").labelNames().register();
 
     public LinuxBrokerHostUsageImpl(PulsarService pulsar) {
         this(
@@ -100,14 +103,19 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
     public void calculateBrokerHostUsage() {
         List<String> nics = getUsablePhysicalNICs();
         double totalNicLimit = getTotalNicLimitWithConfiguration(nics);
+        double totalPhysicalNicLimit = getTotalNicLimit(nics, BitRateUnit.Kilobit);
         double totalNicUsageTx;
         double totalNicUsageRx;
+        double totalPhysicalNicUsageTx = getTotalNicUsage(nics, NICUsageType.TX, BitRateUnit.Kilobit);
+        double totalPhysicalNicUsageRx = getTotalNicUsage(nics, NICUsageType.RX, BitRateUnit.Kilobit);
+        Map<SystemResourceUsage.NetThrottledType, Double> throttledMap = null;
         if (isPodNicEnabled) {
             totalNicUsageTx = getTotalPodNicUsage(PodNICUsageType.TX, BitRateUnit.Kilobit);
             totalNicUsageRx = getTotalPodNicUsage(PodNICUsageType.RX, BitRateUnit.Kilobit);
+            throttledMap = getThrottledMap();
         } else {
-            totalNicUsageTx = getTotalNicUsage(nics, NICUsageType.TX, BitRateUnit.Kilobit);
-            totalNicUsageRx = getTotalNicUsage(nics, NICUsageType.RX, BitRateUnit.Kilobit);
+            totalNicUsageTx = totalPhysicalNicUsageTx;
+            totalNicUsageRx = totalPhysicalNicUsageRx;
         }
         double totalCpuLimit = getTotalCpuLimit(isCGroupsEnabled);
         long now = System.currentTimeMillis();
@@ -123,27 +131,45 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
             usage.setMemory(getMemUsage());
             usage.setBandwidthIn(new ResourceUsage(0d, totalNicLimit));
             usage.setBandwidthOut(new ResourceUsage(0d, totalNicLimit));
+            usage.setPhysicalBandwidthIn(new ResourceUsage(0d, totalPhysicalNicLimit));
+            usage.setPhysicalBandwidthOut(new ResourceUsage(0d, totalPhysicalNicLimit));
+            if (isPodNicEnabled) { // NetThrottled
+                usage.setNetThrottled(emptyMap());
+            }
         } else {
             if (isPodNicEnabled && (totalNicUsageRx == -1 || totalNicUsageTx == -1)) {
                 usage.setBandwidthIn(new ResourceUsage(totalNicLimit, totalNicLimit));
                 usage.setBandwidthOut(new ResourceUsage(totalNicLimit, totalNicLimit));
-                netRx.set(-1);
-                netTx.set(-1);
             } else {
                 double nicUsageTx = (totalNicUsageTx - lastTotalNicUsageTx) / elapsedSeconds;
                 double nicUsageRx = (totalNicUsageRx - lastTotalNicUsageRx) / elapsedSeconds;
                 usage.setBandwidthIn(new ResourceUsage(nicUsageRx, totalNicLimit));
                 usage.setBandwidthOut(new ResourceUsage(nicUsageTx, totalNicLimit));
-                netRx.set(nicUsageRx);
-                netTx.set(nicUsageTx);
             }
-            netLimit.set(totalNicLimit);
+            double physicalNicUsageTx = (totalPhysicalNicUsageTx - lastTotalPhysicalNicUsageTx) / elapsedSeconds;
+            double physicalNicUsageRx = (totalPhysicalNicUsageRx - lastTotalPhysicalNicUsageRx) / elapsedSeconds;
+            usage.setPhysicalBandwidthIn(new ResourceUsage(physicalNicUsageRx, totalPhysicalNicLimit));
+            usage.setPhysicalBandwidthOut(new ResourceUsage(physicalNicUsageTx, totalPhysicalNicLimit));
             usage.setMemory(getMemUsage());
+            if (isPodNicEnabled) { // NetThrottled
+                HashMap<SystemResourceUsage.NetThrottledType, Double> map = new HashMap<>();
+                if (lastNetThrottledMap != null && !throttledMap.isEmpty()) {
+                    for (Map.Entry<SystemResourceUsage.NetThrottledType, Double> entry : throttledMap.entrySet()) {
+                        double newV = (entry.getValue() - lastNetThrottledMap.getOrDefault(entry.getKey(), 0d))
+                                / elapsedSeconds;
+                        map.put(entry.getKey(), Math.max(0d, newV));
+                    }
+                    usage.setNetThrottled(map);
+                }
+            }
         }
         usage.setCpu(new ResourceUsage(cpuUsage, totalCpuLimit));
 
         lastTotalNicUsageTx = totalNicUsageTx;
         lastTotalNicUsageRx = totalNicUsageRx;
+        lastTotalPhysicalNicUsageTx = totalPhysicalNicUsageTx;
+        lastTotalPhysicalNicUsageRx = totalPhysicalNicUsageRx;
+        lastNetThrottledMap = throttledMap;
         lastCollection = System.currentTimeMillis();
         this.usage = usage;
     }

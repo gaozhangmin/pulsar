@@ -18,14 +18,11 @@
  */
 package org.apache.pulsar.broker.loadbalance;
 
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Optional;
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.pulsar.broker.PulsarServerException;
 import org.apache.pulsar.broker.PulsarService;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.loadbalance.impl.SimpleLoadManagerImpl;
@@ -64,40 +61,6 @@ public class SimpleBrokerStartTest {
             pulsarService.start();
         }
     }
-
-    public void testNoNICSpeed() throws Exception {
-        if (!LinuxInfoUtils.isLinux()) {
-            return;
-        }
-        // Start local bookkeeper ensemble
-        @Cleanup("stop")
-        LocalBookkeeperEnsemble bkEnsemble = new LocalBookkeeperEnsemble(3, 0, () -> 0);
-        bkEnsemble.start();
-        // Start broker
-        ServiceConfiguration config = new ServiceConfiguration();
-        config.setClusterName("use");
-        config.setWebServicePort(Optional.of(0));
-        config.setMetadataStoreUrl("zk:127.0.0.1:" + bkEnsemble.getZookeeperPort());
-        config.setBrokerShutdownTimeoutMs(0L);
-        config.setLoadBalancerOverrideBrokerNicSpeedGbps(Optional.of(1.0d));
-        config.setBrokerServicePort(Optional.of(0));
-        config.setLoadManagerClassName(SimpleLoadManagerImpl.class.getName());
-        config.setBrokerServicePortTls(Optional.of(0));
-        config.setWebServicePortTls(Optional.of(0));
-        config.setAdvertisedAddress("localhost");
-        boolean hasNicSpeeds = LinuxInfoUtils.checkHasNicSpeeds();
-        if (!hasNicSpeeds) {
-            @Cleanup
-            PulsarService pulsarService = new PulsarService(config);
-            try {
-                pulsarService.start();
-                fail("unexpected behaviour");
-            } catch (PulsarServerException ex) {
-                assertTrue(ex.getCause() instanceof IllegalStateException);
-            }
-        }
-    }
-
 
     @Test
     public void testCGroupMetrics() {

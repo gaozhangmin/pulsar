@@ -44,6 +44,9 @@ public class LoadReportNetworkLimitTest extends MockedPulsarServiceBaseTest {
         super.internalSetup();
         if (SystemUtils.IS_OS_LINUX) {
             usableNicCount = LinuxInfoUtils.getUsablePhysicalNICs().size();
+            if (usableNicCount == 0 && conf.getLoadBalancerOverrideBrokerNicSpeedGbps().isPresent()) {
+                usableNicCount = 1;
+            }
         }
     }
 

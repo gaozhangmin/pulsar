@@ -65,6 +65,7 @@ public class RateLimiter implements AutoCloseable{
     private Supplier<Long> permitUpdater;
     private RateLimitFunction rateLimitFunction;
     private boolean isDispatchOrPrecisePublishRateLimiter;
+    private long lastUpdateTimeNano;
 
     @Builder
     RateLimiter(final ScheduledExecutorService scheduledExecutorService, final long permits, final long rateTime,
@@ -92,7 +93,7 @@ public class RateLimiter implements AutoCloseable{
         }
 
         this.rateLimitFunction = rateLimitFunction;
-
+        this.lastUpdateTimeNano = System.nanoTime();
     }
 
     // default values for Lombok generated builder class
@@ -217,6 +218,14 @@ public class RateLimiter implements AutoCloseable{
         return Math.max(0, this.permits - this.acquiredPermits);
     }
 
+    public synchronized long getOverDraftSleepTimeMs() {
+        if (getAvailablePermits() <= 0) {
+            long sleepNanos = Math.max(lastUpdateTimeNano + timeUnit.toNanos(rateTime) - System.nanoTime(), 0);
+            return Math.min(TimeUnit.NANOSECONDS.toMillis(sleepNanos), timeUnit.toMillis(rateTime));
+        }
+        return 0;
+    }
+
     /**
      * Resets new rate by configuring new value for permits per configured rate-period.
      *
@@ -269,6 +278,7 @@ public class RateLimiter implements AutoCloseable{
 
     synchronized void renew() {
         acquiredPermits = isDispatchOrPrecisePublishRateLimiter ? Math.max(0, acquiredPermits - permits) : 0;
+        lastUpdateTimeNano = System.nanoTime();
         if (permitUpdater != null) {
             long newPermitRate = permitUpdater.get();
             if (newPermitRate > 0) {

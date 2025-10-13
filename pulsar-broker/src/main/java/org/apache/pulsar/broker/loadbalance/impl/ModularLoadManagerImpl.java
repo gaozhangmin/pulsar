@@ -1135,8 +1135,19 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
         m.put("brk_lb_cpu_usage", systemResourceUsage.getCpu().percentUsage());
         m.put("brk_lb_memory_usage", systemResourceUsage.getMemory().percentUsage());
         m.put("brk_lb_directMemory_usage", systemResourceUsage.getDirectMemory().percentUsage());
+        m.put("brk_lb_bandwidth_in", systemResourceUsage.getBandwidthIn().usage);
+        m.put("brk_lb_bandwidth_out", systemResourceUsage.getBandwidthOut().usage);
+        m.put("brk_lb_bandwidth_in_limit", systemResourceUsage.getBandwidthIn().limit);
+        m.put("brk_lb_bandwidth_out_limit", systemResourceUsage.getBandwidthOut().limit);
         m.put("brk_lb_bandwidth_in_usage", systemResourceUsage.getBandwidthIn().percentUsage());
         m.put("brk_lb_bandwidth_out_usage", systemResourceUsage.getBandwidthOut().percentUsage());
+        m.put("brk_lb_physical_bandwidth_in", systemResourceUsage.getPhysicalBandwidthIn().usage);
+        m.put("brk_lb_physical_bandwidth_out", systemResourceUsage.getPhysicalBandwidthOut().usage);
+        m.put("brk_lb_physical_bandwidth_in_limit", systemResourceUsage.getPhysicalBandwidthIn().limit);
+        m.put("brk_lb_physical_bandwidth_out_limit", systemResourceUsage.getPhysicalBandwidthOut().limit);
+        systemResourceUsage.getNetThrottled().forEach((type, usage) -> {
+            m.put("brk_lb_bandwidth_" + type.name().toLowerCase(), usage);
+        });
         metrics.add(m);
         this.loadBalancingMetrics.set(metrics);
     }

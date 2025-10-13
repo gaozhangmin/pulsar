@@ -43,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.pulsar.broker.BitRateUnit;
+import org.apache.pulsar.policies.data.loadbalancer.SystemResourceUsage;
 
 @Slf4j
 public class LinuxInfoUtils {
@@ -199,7 +200,7 @@ public class LinuxInfoUtils {
      */
     private static boolean isPhysicalNic(Path nicPath) {
         try {
-            if (nicPath.toString().contains("/virtual/")) {
+            if (nicPath.toRealPath().toString().contains("/virtual/")) {
                 return false;
             }
             // Check the type to make sure it's ethernet (type "1")
@@ -299,6 +300,24 @@ public class LinuxInfoUtils {
             log.error("[LinuxInfo] Failed to read {} bytes for pod NIC", type, e);
             return -1d;
         }
+    }
+
+    public static Map<SystemResourceUsage.NetThrottledType, Double> getThrottledMap() {
+        Map<SystemResourceUsage.NetThrottledType, Double> res = new HashMap<>();
+        try {
+            Map<String, Double> map = parsePodNicFile(POD_NIC_PATH);
+            for (SystemResourceUsage.NetThrottledType type : SystemResourceUsage.NetThrottledType.values()) {
+                Double value = map.get(type.template);
+                if (value == null) {
+                    value = 0d;
+                    log.error("[LinuxInfo] Failed to read throttled type {}", type);
+                }
+                res.put(type, value);
+            }
+        } catch (Exception e) {
+            log.error("[LinuxInfo] Failed to read throttled map", e);
+        }
+        return res;
     }
 
     public static Map<String, Double> parsePodNicFile(String filePath) throws Exception {

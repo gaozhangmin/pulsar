@@ -18,6 +18,7 @@
  */
 package org.apache.pulsar.broker.loadbalance;
 
+import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getThrottledMap;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.getTotalPodNicUsage;
 import static org.apache.pulsar.broker.loadbalance.LinuxInfoUtils.parsePodNicFile;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.broker.BitRateUnit;
+import org.apache.pulsar.policies.data.loadbalancer.SystemResourceUsage;
 import org.mockito.MockedStatic;
 import org.testng.annotations.Test;
 
@@ -59,12 +61,12 @@ public class LinuxInfoUtilsTest {
     @Test
     void testGetTotalPodNicUsage() throws Exception {
         try (MockedStatic<LinuxInfoUtils> linuxInfoUtilsMockedStatic = mockStatic(LinuxInfoUtils.class)) {
-            String content = "tx_throttled_time(ns): 0\n"
-                    + "tx_throttled_count: 0\n"
+            String content = "tx_throttled_time(ns): 1\n"
+                    + "tx_throttled_count: 1\n"
                     + "tx_throttled_time_v2(ms): 0\n"
                     + "tx_throttled_count_v2: 0\n"
-                    + "rx_throttled_time(ms): 0\n"
-                    + "rx_throttled_count: 0\n"
+                    + "rx_throttled_time(ms): 1\n"
+                    + "rx_throttled_count: 1\n"
                     + "tx_thrput(bytes): 681\n"
                     + "rx_thrput(bytes): 608\n"
                     + "tx_thrput_socket(bytes): 1000\n"
@@ -75,14 +77,20 @@ public class LinuxInfoUtilsTest {
             Map<String, Double> result = parsePodNicFile(tempFile.getPath());
             System.out.println(result);
             assertEquals(10, result.size());
-            assertEquals(0.0, result.get("tx_throttled_count"));
+            assertEquals(1.0, result.get("tx_throttled_count"));
             assertNull(result.get("empty"));
             assertEquals(1000, result.get("tx_thrput_socket(bytes)"));
             assertEquals(1000, result.get("rx_thrput_socket(bytes)"));
-
+            for (SystemResourceUsage.NetThrottledType value : SystemResourceUsage.NetThrottledType.values()) {
+                assertEquals(result.get(value.template), 1);
+            }
+            linuxInfoUtilsMockedStatic.when(LinuxInfoUtils::getThrottledMap).thenCallRealMethod();
             linuxInfoUtilsMockedStatic.when(() -> parsePodNicFile(any())).thenReturn(result);
+            Map<SystemResourceUsage.NetThrottledType, Double> throttledMap = getThrottledMap();
+            for (SystemResourceUsage.NetThrottledType value : SystemResourceUsage.NetThrottledType.values()) {
+                assertEquals(throttledMap.get(value), 1);
+            }
             System.out.println(parsePodNicFile("a"));
-
             linuxInfoUtilsMockedStatic.when(() -> getTotalPodNicUsage(any(), any())).thenCallRealMethod();
             assertEquals(getTotalPodNicUsage(LinuxInfoUtils.PodNICUsageType.TX, BitRateUnit.Kilobit)
                     , 8);
