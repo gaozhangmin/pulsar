@@ -26,6 +26,10 @@ import org.apache.pulsar.common.naming.NamespaceBundle;
  */
 public interface NamespaceBundleOwnershipListener extends Predicate<NamespaceBundle> {
 
+    default void onScheduleload(NamespaceBundle bundle) {
+        // no-op
+    }
+
     /**
      * Will be call after a <code>NamespaceBundle</code> owned by broker.
      *

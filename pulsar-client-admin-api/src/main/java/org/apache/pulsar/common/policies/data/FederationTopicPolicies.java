@@ -53,6 +53,10 @@ public class FederationTopicPolicies {
         this.migrateBack = migrateBack;
     }
 
+    public boolean needSync() {
+        return !canWrite && !canRead;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
