@@ -34,6 +34,10 @@ public class AppendIndexMetadataInterceptor implements BrokerEntryMetadataInterc
         }
     }
 
+    public void resetIndexGenerator(long index) {
+        indexGenerator.set(index);
+    }
+
     @Override
     public BrokerEntryMetadata intercept(BrokerEntryMetadata brokerMetadata) {
         // do nothing, just return brokerMetadata

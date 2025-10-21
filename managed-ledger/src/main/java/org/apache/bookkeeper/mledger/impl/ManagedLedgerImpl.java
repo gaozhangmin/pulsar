@@ -4423,6 +4423,22 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     }
 
     @Override
+    public CompletableFuture<Void> asyncTruncate(long index) {
+        return asyncTruncate().thenRun(() -> {
+            if (managedLedgerInterceptor != null) {
+                managedLedgerInterceptor.resetIndex(index);
+            }
+        });
+    }
+
+    @Override
+    public void resetIndex(long index) {
+        if (managedLedgerInterceptor != null) {
+            managedLedgerInterceptor.resetIndex(index);
+        }
+    }
+
+    @Override
     public CompletableFuture<ManagedLedgerInternalStats> getManagedLedgerInternalStats(boolean includeLedgerMetadata) {
         CompletableFuture<ManagedLedgerInternalStats> statFuture = new CompletableFuture<>();
         ManagedLedgerInternalStats stats = new ManagedLedgerInternalStats();

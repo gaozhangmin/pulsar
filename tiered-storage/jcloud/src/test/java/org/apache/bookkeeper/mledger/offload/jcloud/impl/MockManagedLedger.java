@@ -367,6 +367,14 @@ public class MockManagedLedger implements ManagedLedger {
     }
 
     @Override
+    public CompletableFuture<Void> asyncTruncate(long index) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public void resetIndex(long index) {}
+
+    @Override
     public CompletableFuture<ManagedLedgerInternalStats> getManagedLedgerInternalStats(boolean includeLedgerMetadata) {
         return CompletableFuture.completedFuture(null);
     }

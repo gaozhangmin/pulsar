@@ -677,6 +677,14 @@ public interface ManagedLedger {
     CompletableFuture<Void> asyncTruncate();
 
     /**
+     * Truncate ledgers and reset index
+     * The truncate operation will move all cursors to the end of the topic and delete all inactive ledgers.
+     */
+    CompletableFuture<Void> asyncTruncate(long index);
+
+    void resetIndex(long index);
+
+    /**
      * Get managed ledger internal stats.
      *
      * @param includeLedgerMetadata the flag to control managed ledger internal stats include ledger metadata

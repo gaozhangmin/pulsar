@@ -55,6 +55,8 @@ public interface ManagedLedgerInterceptor {
      */
     void onManagedLedgerPropertiesInitialize(Map<String, String> propertiesMap);
 
+    void resetIndex(long index);
+
     /**
      * Intercept when ManagedLedger is initialized.
      * @param name name of ManagedLedger

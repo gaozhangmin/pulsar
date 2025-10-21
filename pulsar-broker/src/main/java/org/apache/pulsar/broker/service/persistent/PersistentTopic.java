@@ -4331,6 +4331,14 @@ public class PersistentTopic extends AbstractTopic implements Topic, AddEntryCal
         return ledger.asyncTruncate();
     }
 
+    public CompletableFuture<Void> truncate(long newIndex) {
+        return ledger.asyncTruncate(newIndex);
+    }
+
+    public void resetIndex(long index) {
+        ledger.resetIndex(index);
+    }
+
     public long getDelayedDeliveryTickTimeMillis() {
         return topicPolicies.getDelayedDeliveryTickTimeMillis().get();
     }

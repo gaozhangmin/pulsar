@@ -115,6 +115,13 @@ public class ManagedLedgerInterceptorImpl implements ManagedLedgerInterceptor {
     }
 
     @Override
+    public void resetIndex(long index) {
+        if (appendIndexMetadataInterceptor != null) {
+            appendIndexMetadataInterceptor.resetIndexGenerator(index);
+        }
+    }
+
+    @Override
     public CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name, LedgerHandle lh) {
         CompletableFuture<Void> promise = new CompletableFuture<>();
         boolean hasAppendIndexMetadataInterceptor = appendIndexMetadataInterceptor != null;

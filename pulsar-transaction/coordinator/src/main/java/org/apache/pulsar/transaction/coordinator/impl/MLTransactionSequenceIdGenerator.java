@@ -58,6 +58,9 @@ public class MLTransactionSequenceIdGenerator implements ManagedLedgerIntercepto
         }
     }
 
+    @Override
+    public void resetIndex(long index) {}
+
     // When we don't roll over ledger, we can init sequenceId from the getLastAddConfirmed transaction metadata entry
     @Override
     public CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name, LedgerHandle lh) {
