@@ -2667,6 +2667,11 @@ public class ServiceConfiguration implements PulsarConfiguration {
     )
     private Optional<Double> loadBalancerOverrideBrokerNicSpeedGbps = Optional.empty();
     @FieldContext(
+            category = CATEGORY_LOAD_BALANCER,
+            doc = "Option to override the auto-detected network interfaces"
+    )
+    private List<String> loadBalancerOverrideBrokerNics = Lists.newArrayList("bond0");
+    @FieldContext(
         category = CATEGORY_LOAD_BALANCER,
         doc = "Option to enable use pod NIC"
     )

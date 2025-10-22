@@ -257,7 +257,7 @@ public class LinuxInfoUtils {
             try {
                 return readDoubleFromFile(getReplacedNICPath(NIC_SPEED_TEMPLATE, nicPath));
             } catch (IOException e) {
-                log.error("[LinuxInfo] Failed to get total nic limit.", e);
+                log.error("[LinuxInfo] Failed to get total nic limit. nic_path={}", nicPath, e);
                 return 0d;
             }
         }).sum(), BitRateUnit.Megabit);

@@ -38,7 +38,8 @@ public class LinuxBrokerHostUsageImplTest {
         @Cleanup("shutdown")
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         LinuxBrokerHostUsageImpl linuxBrokerHostUsage =
-                new LinuxBrokerHostUsageImpl(1, Optional.of(3.0), false, executorService);
+                new LinuxBrokerHostUsageImpl(1, Optional.of(3.0),
+                        new ArrayList<>(), false, executorService);
         List<String> nics = new ArrayList<>();
         nics.add("1");
         nics.add("2");
@@ -56,7 +57,8 @@ public class LinuxBrokerHostUsageImplTest {
         @Cleanup("shutdown")
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         LinuxBrokerHostUsageImpl linuxBrokerHostUsage =
-                new LinuxBrokerHostUsageImpl(Integer.MAX_VALUE, Optional.empty(), false, executorService);
+                new LinuxBrokerHostUsageImpl(Integer.MAX_VALUE, Optional.empty(),
+                        new ArrayList<>(), false, executorService);
 
         linuxBrokerHostUsage.calculateBrokerHostUsage();
         TimeUnit.SECONDS.sleep(1);

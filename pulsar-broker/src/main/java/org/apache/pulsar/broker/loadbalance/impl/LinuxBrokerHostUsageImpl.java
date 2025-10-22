@@ -65,6 +65,7 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
     private OperatingSystemMXBean systemBean;
     private SystemResourceUsage usage;
     private final Optional<Double> overrideBrokerNicSpeedGbps;
+    private final List<String> overrideBrokerNics;
     private final boolean isPodNicEnabled;
     private final boolean isCGroupsEnabled;
 
@@ -72,6 +73,7 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
         this(
             pulsar.getConfiguration().getLoadBalancerHostUsageCheckIntervalMinutes(),
             pulsar.getConfiguration().getLoadBalancerOverrideBrokerNicSpeedGbps(),
+            pulsar.getConfiguration().getLoadBalancerOverrideBrokerNics(),
             pulsar.getConfiguration().isLoadBalancerEnableUsePodNIC(),
             pulsar.getLoadManagerExecutor()
         );
@@ -79,12 +81,14 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
 
     public LinuxBrokerHostUsageImpl(int hostUsageCheckIntervalMin,
                                     Optional<Double> overrideBrokerNicSpeedGbps,
+                                    List<String> overrideBrokerNics,
                                     boolean isPodNicEnabled,
                                     ScheduledExecutorService executorService) {
         this.systemBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
         this.lastCollection = 0L;
         this.usage = new SystemResourceUsage();
         this.overrideBrokerNicSpeedGbps = overrideBrokerNicSpeedGbps;
+        this.overrideBrokerNics = overrideBrokerNics;
         this.isPodNicEnabled = isPodNicEnabled;
         this.isCGroupsEnabled = isCGroupEnabled();
         // Call now to initialize values before the constructor returns
@@ -101,7 +105,7 @@ public class LinuxBrokerHostUsageImpl implements BrokerHostUsage {
 
     @Override
     public void calculateBrokerHostUsage() {
-        List<String> nics = getUsablePhysicalNICs();
+        List<String> nics = !overrideBrokerNics.isEmpty() ? overrideBrokerNics : getUsablePhysicalNICs();
         double totalNicLimit = getTotalNicLimitWithConfiguration(nics);
         double totalPhysicalNicLimit = getTotalNicLimit(nics, BitRateUnit.Kilobit);
         double totalNicUsageTx;
