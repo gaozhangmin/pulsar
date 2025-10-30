@@ -61,6 +61,7 @@ import org.apache.pulsar.common.partition.PartitionedTopicMetadata;
 import org.apache.pulsar.common.policies.data.BacklogQuota;
 import org.apache.pulsar.common.policies.data.BundlesData;
 import org.apache.pulsar.common.policies.data.EntryFilters;
+import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.LocalPolicies;
 import org.apache.pulsar.common.policies.data.NamespaceOperation;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
@@ -608,6 +609,23 @@ public abstract class AdminResource extends PulsarWebResource {
                 })
                 .thenCompose(__ -> provisionPartitionedTopicPath(numPartitions, createLocalTopicOnly, properties))
                 .thenCompose(__ -> tryCreatePartitionsAsync(numPartitions))
+                .thenCompose(__ -> internalSetFederationTopicPolicies(properties))
+                .thenCompose(__ -> {
+                    FederationTopicPolicies federationPolicies =
+                            FederationTopicPolicies.createFederationTopicPolicies(properties);
+                    if (federationPolicies != null && federationPolicies.needSync()) {
+                        try {
+                            return pulsar().getAdminClient().lookups().lookupPartitionedTopicAsync(topicName.toString())
+                                    .thenApply(result -> null); // Convert to Void
+                        } catch (Exception e) {
+                            log.warn("[{}] Failed to lookup partitioned topic {} for federation sync: {}",
+                                    clientAppId(), topicName, e.getMessage());
+                            return CompletableFuture.completedFuture(null);
+                        }
+                    } else {
+                        return CompletableFuture.completedFuture(null);
+                    }
+                })
                 .thenRun(() -> {
                     if (!createLocalTopicOnly && topicName.isGlobal()) {
                         internalCreatePartitionedTopicToReplicatedClustersInBackground(numPartitions);
@@ -625,6 +643,21 @@ public abstract class AdminResource extends PulsarWebResource {
                     }
                     resumeAsyncResponseExceptionally(asyncResponse, ex);
                     return null;
+                });
+    }
+
+    CompletableFuture<Void> internalSetFederationTopicPolicies(Map<String, String> properties) {
+        FederationTopicPolicies federationPolicies =
+                FederationTopicPolicies.createFederationTopicPolicies(properties);
+        if (federationPolicies == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return getTopicPoliciesAsyncWithRetry(topicName, false)
+                .thenCompose(op -> {
+                    TopicPolicies topicPolicies = op.orElseGet(TopicPolicies::new);
+                    topicPolicies.setFederationTopicPolicies(federationPolicies);
+                    topicPolicies.setIsGlobal(false);
+                    return pulsar().getTopicPoliciesService().updateTopicPoliciesAsync(topicName, topicPolicies);
                 });
     }
 

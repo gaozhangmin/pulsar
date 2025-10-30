@@ -18,6 +18,7 @@
  */
 package org.apache.pulsar.common.policies.data;
 
+import java.util.Map;
 import lombok.Getter;
 
 /**
@@ -31,6 +32,13 @@ import lombok.Getter;
  */
 @Getter
 public class FederationTopicPolicies {
+    public static final String FEDERATION_SOURCE_CLUSTER = "source_cluster";
+    public static final String FEDERATION_SOURCE_BOOT_ADDRESS = "source_boot_address";
+    public static final String FEDERATION_SOURCE_ZK_ADDRESS = "source_zk_address";
+    public static final String FEDERATION_CAN_READ = "can_read";
+    public static final String FEDERATION_CAN_WRITE = "can_write";
+    public static final String FEDERATION_MIGRATE_BACK = "migrate_back";
+
     private String sourceCluster;
     private String sourceBootstrap;
     private String sourceZkAddress;
@@ -51,6 +59,28 @@ public class FederationTopicPolicies {
         this.canRead = canRead;
         this.canWrite = canWrite;
         this.migrateBack = migrateBack;
+    }
+
+    public static FederationTopicPolicies createFederationTopicPolicies(Map<String, String> topicConfig) {
+        if (topicConfig == null) {
+            return null;
+        }
+        if (topicConfig.containsKey(FEDERATION_SOURCE_CLUSTER)
+                && topicConfig.containsKey(FEDERATION_SOURCE_BOOT_ADDRESS)
+                && topicConfig.containsKey(FEDERATION_SOURCE_ZK_ADDRESS)
+                && topicConfig.containsKey(FEDERATION_CAN_READ)
+                && topicConfig.containsKey(FEDERATION_CAN_WRITE)) {
+            FederationTopicPolicies federationTopicPolicies = new FederationTopicPolicies(
+                    topicConfig.get(FEDERATION_SOURCE_CLUSTER),
+                    topicConfig.get(FEDERATION_SOURCE_BOOT_ADDRESS),
+                    topicConfig.get(FEDERATION_SOURCE_ZK_ADDRESS),
+                    Boolean.valueOf(topicConfig.getOrDefault(FEDERATION_CAN_READ, "false")),
+                    Boolean.valueOf(topicConfig.getOrDefault(FEDERATION_CAN_WRITE, "false")),
+                    Boolean.valueOf(topicConfig.getOrDefault(FEDERATION_MIGRATE_BACK, "false"))
+            );
+            return federationTopicPolicies;
+        }
+        return null;
     }
 
     public boolean needSync() {
