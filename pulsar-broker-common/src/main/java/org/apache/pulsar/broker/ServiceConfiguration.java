@@ -1822,6 +1822,11 @@ public class ServiceConfiguration implements PulsarConfiguration {
     )
     private double bookkeeperClientQuarantineRatio = 1.0;
     @FieldContext(
+            category = CATEGORY_STORAGE_BK,
+            doc = "bookie quarantine ratio to avoid all bookie quarantined"
+    )
+    private double bookkeeperClientQuarantineRatioTotal = 1.0;
+    @FieldContext(
         category = CATEGORY_STORAGE_BK,
         doc = "Enable rack-aware bookie selection policy. \n\nBK will chose bookies from"
             + " different racks when forming a new bookie ensemble")
