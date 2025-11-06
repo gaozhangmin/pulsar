@@ -21,6 +21,7 @@ package org.apache.pulsar.broker.resources;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -45,6 +46,7 @@ public class MetadataStoreCacheLoader implements Closeable {
     private final int operationTimeoutMs;
 
     private volatile List<LoadManagerReport> availableBrokers;
+    private volatile List<String> lastActiveBrokers;
     private final FutureUtil.Sequencer<Void> sequencer;
 
     private final OrderedScheduler orderedExecutor = OrderedScheduler.newSchedulerBuilder().numThreads(8)
@@ -69,7 +71,12 @@ public class MetadataStoreCacheLoader implements Closeable {
             return loadReportResources.getChildrenAsync(LOADBALANCE_BROKERS_ROOT)
                     .thenComposeAsync(brokerNodes -> {
                         return updateBrokerList(brokerNodes).thenRun(() -> {
-                            log.info("Successfully updated broker info {}", brokerNodes);
+                            if (lastActiveBrokers == null || (lastActiveBrokers != null
+                                    && (lastActiveBrokers.size() != brokerNodes.size()
+                                    || !new HashSet<>(lastActiveBrokers).containsAll(brokerNodes)))) {
+                                log.info("Successfully updated broker info {}", brokerNodes);
+                            }
+                            lastActiveBrokers = brokerNodes;
                         });
                     })
                     .exceptionally(ex -> {
@@ -81,8 +88,10 @@ public class MetadataStoreCacheLoader implements Closeable {
             if ((LOADBALANCE_BROKERS_ROOT.equals(n.getPath()) && NotificationType.ChildrenChanged.equals(n.getType()))
                     || (n.getPath() != null && n.getPath().startsWith(LOADBALANCE_BROKERS_ROOT)
                     && NotificationType.Modified.equals(n.getType()))) {
-                log.info("received broker load report change event {}, path:{}, try update brokers load cache",
+                if (NotificationType.Modified != n.getType() || log.isDebugEnabled()) {
+                    log.info("received broker load report change event {}, path:{}, try update brokers load cache",
                         n.getType(), n.getPath());
+                }
                 sequencer.sequential(tryUpdate);
             }
         });
