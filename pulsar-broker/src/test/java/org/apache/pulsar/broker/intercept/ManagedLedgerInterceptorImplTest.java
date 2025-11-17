@@ -18,7 +18,6 @@
  */
 package org.apache.pulsar.broker.intercept;
 
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
@@ -47,7 +46,7 @@ import org.apache.pulsar.common.intercept.BrokerEntryMetadataInterceptor;
 import org.apache.pulsar.common.intercept.BrokerEntryMetadataUtils;
 import org.apache.pulsar.common.intercept.ManagedLedgerPayloadProcessor;
 import org.apache.pulsar.common.protocol.Commands;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
@@ -129,10 +128,12 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         assertEquals(19, ((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex());
         List<Entry> entryList = cursor.readEntries(numberOfEntries);
         for (int i = 0 ; i < numberOfEntries; i ++) {
+            Entry entry = entryList.get(i);
             BrokerEntryMetadata metadata =
-                    Commands.parseBrokerEntryMetadataIfExist(entryList.get(i).getDataBuffer());
+                    Commands.parseBrokerEntryMetadataIfExist(entry.getDataBuffer());
             assertNotNull(metadata);
             assertEquals(metadata.getIndex(), (i + 1) * MOCK_BATCH_SIZE - 1);
+            entry.release();
         }
 
         cursor.close();
@@ -156,7 +157,9 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         ledger.addEntry("Test Message".getBytes());
         factory.getEntryCacheManager().clear();
         List<Entry> entryList = cursor.readEntries(1);
-        String message = new String(entryList.get(0).getData());
+        Entry entry = entryList.get(0);
+        String message = new String(entry.getData());
+        entry.release();
         Assert.assertTrue(message.equals("Test Message"));
         cursor.close();
         ledger.close();
@@ -451,6 +454,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 return new Processor() {
                     @Override
                     public ByteBuf process(Object contextObj, ByteBuf inputPayload) {
+                        log.info("testManagedLedgerPayloadInputProcessorFailure.process");
                         if (inputPayload.readBoolean()) {
                             throw new RuntimeException(failureMsg);
                         }
@@ -471,26 +475,38 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         var successCount = new AtomicInteger(0);
         var expectedException = new ArrayList<Exception>();
 
-        var addEntryCallback = new AsyncCallbacks.AddEntryCallback() {
-            @Override
-            public void addComplete(Position position, ByteBuf entryData, Object ctx) {
-                countDownLatch.countDown();
-                successCount.incrementAndGet();
-            }
-
-            @Override
-            public void addFailed(ManagedLedgerException exception, Object ctx) {
-                // expected
-                expectedException.add(exception);
-                countDownLatch.countDown();
-            }
-        };
+        ByteBuf shouldFail = Unpooled.buffer().writeBoolean(true);
+        ByteBuf shouldSucceed = Unpooled.buffer().writeBoolean(false);
+        byte[] shouldFailBytes = new byte[shouldFail.readableBytes()];
+        shouldFail.readBytes(shouldFailBytes);
+        byte[] shouldSucceedBytes = new byte[shouldSucceed.readableBytes()];
+        shouldSucceed.readBytes(shouldSucceedBytes);
+        shouldSucceed.release();
+        shouldFail.release();
 
         for (int i = 0; i < count; i++) {
             if (i % 2 == 0) {
-                ledger.asyncAddEntry(Unpooled.buffer().writeBoolean(true), addEntryCallback, null);
+                try {
+                    ledger.addEntry(shouldFailBytes);
+                    successCount.incrementAndGet();
+                    countDownLatch.countDown();
+                } catch (Exception t) {
+                    expectedException.add(t);
+                    countDownLatch.countDown();
+                } finally {
+                    ledger.unfenceForInterceptorException();
+                }
             } else {
-                ledger.asyncAddEntry(Unpooled.buffer().writeBoolean(false), addEntryCallback, null);
+                try {
+                    ledger.addEntry(shouldSucceedBytes);
+                    successCount.incrementAndGet();
+                    countDownLatch.countDown();
+                } catch (Exception t) {
+                    expectedException.add(t);
+                    countDownLatch.countDown();
+                } finally {
+                    ledger.unfenceForInterceptorException();
+                }
             }
         }
 

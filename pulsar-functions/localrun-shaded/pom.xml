@@ -26,7 +26,7 @@
     <parent>
         <groupId>org.apache.pulsar</groupId>
         <artifactId>pulsar-functions</artifactId>
-        <version>3.3.6.15-kwai</version>
+      <version>3.3.9-kwai</version>
         <relativePath>..</relativePath>
     </parent>
 
@@ -229,10 +229,6 @@
                                 <relocation>
                                     <pattern>net.jpountz</pattern>
                                     <shadedPattern>org.apache.pulsar.functions.runtime.shaded.net.jpountz</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>commons-configuration</pattern>
-                                    <shadedPattern>org.apache.pulsar.functions.runtime.shaded.commons-configuration</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.tukaani</pattern>

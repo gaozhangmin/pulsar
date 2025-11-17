@@ -19,6 +19,7 @@
 package org.apache.pulsar.broker.service;
 
 import static org.apache.pulsar.broker.BrokerTestUtil.newUniqueName;
+import static org.apache.pulsar.broker.service.persistent.BrokerServicePersistInternalMethodInvoker.ensureNoBacklogByInflightTask;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
@@ -54,7 +55,6 @@ import lombok.Cleanup;
 import org.apache.bookkeeper.mledger.AsyncCallbacks;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteCursorCallback;
 import org.apache.bookkeeper.mledger.Entry;
-import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerException.CursorAlreadyClosedException;
 import org.apache.bookkeeper.mledger.Position;
@@ -106,7 +106,6 @@ import org.apache.pulsar.common.protocol.Commands;
 import org.apache.pulsar.common.util.collections.ConcurrentOpenHashMap;
 import org.apache.pulsar.schema.Schemas;
 import org.awaitility.Awaitility;
-import org.awaitility.reflect.WhiteboxImpl;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -461,9 +460,7 @@ public class ReplicatorTest extends ReplicatorTestBase {
         // Verify "pendingMessages" still is correct even if error occurs.
         PersistentReplicator replicator = ensureReplicatorCreated(topic, pulsar1);
         waitReplicateFinish(topic, admin1);
-        Awaitility.await().untilAsserted(() -> {
-            assertEquals((int) WhiteboxImpl.getInternalState(replicator, "pendingMessages"), 0);
-        });
+        ensureNoBacklogByInflightTask(replicator);
     }
 
     @Test
@@ -667,6 +664,36 @@ public class ReplicatorTest extends ReplicatorTestBase {
         Thread.sleep(100);
         replicator.updateRates(); // for code-coverage
         replicator.expireMessages(1); // for code-coverage
+        ReplicatorStats status = replicator.getStats();
+        assertEquals(status.getReplicationBacklog(), 0);
+    }
+
+    @Test(timeOut = 30000)
+    public void testReplicatorExpireMsgAsync() throws Exception {
+
+        // This test is to verify that reset cursor fails on global topic
+        SortedSet<String> testDests = new TreeSet<>();
+
+        final TopicName dest = TopicName
+                .get(BrokerTestUtil.newUniqueName("persistent://pulsar/ns/clearBacklogTopic"));
+        testDests.add(dest.toString());
+
+        @Cleanup
+        MessageProducer producer1 = new MessageProducer(url1, dest);
+
+        @Cleanup
+        MessageConsumer consumer1 = new MessageConsumer(url3, dest);
+
+        // Produce from cluster1 and consume from the rest
+        producer1.produce(2);
+        PersistentTopic topic = (PersistentTopic) pulsar1.getBrokerService().getTopicReference(dest.toString()).get();
+        PersistentReplicator replicator = (PersistentReplicator) spy(
+                topic.getReplicators().get(topic.getReplicators().keys().stream().toList().get(0)));
+        replicator.readEntriesFailed(new ManagedLedgerException.InvalidCursorPositionException("failed"), null);
+        replicator.clearBacklog().get();
+        Thread.sleep(100);
+        replicator.updateRates(); // for code-coverage
+        replicator.expireMessagesAsync(1).get(); // for code-coverage
         ReplicatorStats status = replicator.getStats();
         assertEquals(status.getReplicationBacklog(), 0);
     }
@@ -1029,7 +1056,7 @@ public class ReplicatorTest extends ReplicatorTestBase {
      *
      * @throws Exception
      */
-    @Test(timeOut = 15000)
+    @Test(timeOut = 30000)
     public void testCloseReplicatorStartProducer() throws Exception {
         TopicName dest = TopicName.get(BrokerTestUtil.newUniqueName("persistent://pulsar/ns1/closeCursor"));
         // Producer on r1
@@ -1046,33 +1073,30 @@ public class ReplicatorTest extends ReplicatorTestBase {
         PersistentTopic topic = (PersistentTopic) pulsar1.getBrokerService().getTopicReference(dest.toString()).get();
         PersistentReplicator replicator = (PersistentReplicator) topic.getPersistentReplicator("r2");
 
+        // check that the replicator producer is not null
+        Awaitility.await().untilAsserted(() -> {
+            assertNotNull(replicator.getProducer());
+        });
+
         // close the cursor
-        Field cursorField = PersistentReplicator.class.getDeclaredField("cursor");
-        cursorField.setAccessible(true);
-        ManagedCursor cursor = (ManagedCursor) cursorField.get(replicator);
-        cursor.close();
-        // try to read entries
+        replicator.getCursor().close();
+
+        // try to produce entries
         producer1.produce(10);
 
+        // attempt to read entries directly from replicator cursor
         try {
-            cursor.readEntriesOrWait(10);
+            replicator.getCursor().readEntriesOrWait(10);
             fail("It should have failed");
         } catch (Exception e) {
             assertEquals(e.getClass(), CursorAlreadyClosedException.class);
         }
 
-        // replicator-readException: cursorAlreadyClosed
-        replicator.readEntriesFailed(new CursorAlreadyClosedException("Cursor already closed exception"), null);
-
         // wait replicator producer to be closed
-        Thread.sleep(100);
-
-        // Replicator producer must be closed
-        Field producerField = AbstractReplicator.class.getDeclaredField("producer");
-        producerField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        ProducerImpl<byte[]> replicatorProducer = (ProducerImpl<byte[]>) producerField.get(replicator);
-        assertNull(replicatorProducer);
+        // Replicator producer must be null after the producer has been closed
+        Awaitility.await().untilAsserted(() -> {
+            assertNull(replicator.getProducer());
+        });
     }
 
     @Test(timeOut = 30000)
@@ -1765,11 +1789,11 @@ public class ReplicatorTest extends ReplicatorTestBase {
         Producer<byte[]> persistentProducer1 = client1.newProducer().topic(topic.toString()).create();
         // Send V1 message, which will be replicated to the remote cluster by the replicator.
         persistentProducer1.send("V1".getBytes());
+        PersistentTopic persistentTopic =
+                (PersistentTopic) pulsar1.getBrokerService().getTopicReference(topic.toString()).get();
         waitReplicateFinish(topic, admin1);
 
         // Pause replicator
-        PersistentTopic persistentTopic =
-                (PersistentTopic) pulsar1.getBrokerService().getTopicReference(topic.toString()).get();
         persistentTopic.getReplicators().forEach((cluster, replicator) -> {
             PersistentReplicator persistentReplicator = (PersistentReplicator) replicator;
             pauseReplicator(persistentReplicator);
@@ -1784,7 +1808,15 @@ public class ReplicatorTest extends ReplicatorTestBase {
         // Start replicator
         persistentTopic.getReplicators().forEach((cluster, replicator) -> {
             PersistentReplicator persistentReplicator = (PersistentReplicator) replicator;
-            persistentReplicator.startProducer();
+            resumeReplicator(persistentReplicator);
+            Awaitility.await().untilAsserted(() -> {
+                CompletableFuture<Optional<Topic>> topic2 =
+                        pulsar2.getBrokerService().getTopic(topic.toString(), false);
+                assertTrue(topic2 != null && topic2.isDone() && topic2.get().isPresent());
+                assertEquals(persistentReplicator.getState(), AbstractReplicator.State.Started);
+            });
+            assertEquals(persistentReplicator.getState(), AbstractReplicator.State.Started);
+            ensureNoBacklogByInflightTask(persistentReplicator);
         });
         waitReplicateFinish(topic, admin1);
 
@@ -1872,6 +1904,13 @@ public class ReplicatorTest extends ReplicatorTestBase {
         Awaitility.await().untilAsserted(() -> {
             assertTrue(replicator.isConnected());
         });
-        replicator.closeProducerAsync(true);
+        Awaitility.await().until(() -> {
+            replicator.disconnect().join();
+            return true;
+        });
+    }
+
+    private void resumeReplicator(PersistentReplicator replicator) {
+        replicator.startProducer();
     }
 }

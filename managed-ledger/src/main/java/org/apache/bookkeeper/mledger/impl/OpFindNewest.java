@@ -98,8 +98,8 @@ class OpFindNewest implements ReadEntryCallback {
                 lastMatchedPosition = position;
                 // check last entry
                 state = State.checkLast;
-                searchPosition = ledger.getPositionAfterN(searchPosition, max, PositionBound.startExcluded);
                 PositionImpl lastPosition = ledger.getLastPosition();
+                searchPosition = ledger.getPositionAfterN(searchPosition, max, PositionBound.startExcluded);
                 if (lastPosition.compareTo(searchPosition) < 0) {
                     if (log.isDebugEnabled()) {
                         log.debug("first position {} matches, last should be {}, but moving to lastPos {}", position,
@@ -208,9 +208,8 @@ class OpFindNewest implements ReadEntryCallback {
     private PositionImpl findPreviousValidPosition(PositionImpl searchPosition, ManagedLedgerException exception) {
         PositionImpl prevPosition;
         if (exception instanceof ManagedLedgerException.LedgerNotExistException) {
-            // searchPosition.getLedgerId(), -1L
             prevPosition =
-                ledger.getPreviousPosition(new PositionImpl(searchPosition.getLedgerId(), -1L));
+                ledger.getPreviousPosition(PositionImpl.get(searchPosition.getLedgerId(), -1L));
         } else {
             prevPosition = ledger.getPreviousPosition(searchPosition);
         }
@@ -233,7 +232,7 @@ class OpFindNewest implements ReadEntryCallback {
                     .map(ledgerInfo -> ledgerInfo.getEntries() > 0)
                     .orElse(false);
                 if (nonEmptyLedger) {
-                    nextPosition = new PositionImpl(nextLedgerId, 0L);
+                    nextPosition = PositionImpl.get(nextLedgerId, 0);
                 }
             }
         } else {

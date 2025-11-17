@@ -57,7 +57,8 @@ public abstract class AbstractReplicator implements Replicator {
     protected final PulsarClientImpl client;
     protected String replicatorId;
     protected final Topic localTopic;
-
+    @VisibleForTesting
+    @Getter
     protected volatile ProducerImpl producer;
     public static final String REPL_PRODUCER_NAME_DELIMITER = "-->";
 
@@ -141,6 +142,10 @@ public abstract class AbstractReplicator implements Replicator {
         return remoteCluster;
     }
 
+    protected CompletableFuture<Void> prepareCreateProducer() {
+        return CompletableFuture.completedFuture(null);
+    }
+
     public void startProducer() {
         // Guarantee only one task call "producerBuilder.createAsync()".
         Pair<Boolean, State> setStartingRes = compareSetAndGetState(State.Disconnected, State.Starting);
@@ -167,13 +172,16 @@ public abstract class AbstractReplicator implements Replicator {
         }
 
         log.info("[{}] Starting replicator", replicatorId);
+
         // Force only replicate messages to a non-partitioned topic, to avoid auto-create a partitioned topic on
         // the remote cluster.
-        ProducerBuilderImpl builderImpl = (ProducerBuilderImpl) producerBuilder;
-        builderImpl.getConf().setNonPartitionedTopicExpected(true);
-        builderImpl.getConf().setReplProducer(true);
-        producerBuilder.createAsync().thenAccept(producer -> {
-            setProducerAndTriggerReadEntries(producer);
+        prepareCreateProducer().thenCompose(ignore -> {
+            ProducerBuilderImpl builderImpl = (ProducerBuilderImpl) producerBuilder;
+            builderImpl.getConf().setNonPartitionedTopicExpected(true);
+            builderImpl.getConf().setReplProducer(true);
+            return producerBuilder.createAsync().thenAccept(producer -> {
+                setProducerAndTriggerReadEntries(producer);
+            });
         }).exceptionally(ex -> {
             Pair<Boolean, State> setDisconnectedRes = compareSetAndGetState(State.Starting, State.Disconnected);
             if (setDisconnectedRes.getLeft()) {
@@ -198,6 +206,7 @@ public abstract class AbstractReplicator implements Replicator {
             }
             return null;
         });
+
     }
 
     /***
@@ -279,9 +288,10 @@ public abstract class AbstractReplicator implements Replicator {
     /**
      * This method only be used by {@link PersistentTopic#checkGC} now.
      */
-    public CompletableFuture<Void> disconnect(boolean failIfHasBacklog, boolean closeTheStartingProducer) {
+    @Override
+    public CompletableFuture<Void> disconnect() {
         long backlog = getNumberOfEntriesInBacklog();
-        if (failIfHasBacklog && backlog > 0) {
+        if (backlog > 0) {
             CompletableFuture<Void> disconnectFuture = new CompletableFuture<>();
             disconnectFuture.completeExceptionally(new TopicBusyException("Cannot close a replicator with backlog"));
             if (log.isDebugEnabled()) {
@@ -291,8 +301,29 @@ public abstract class AbstractReplicator implements Replicator {
         }
         log.info("[{}] Disconnect replicator at position {} with backlog {}", replicatorId,
                 getReplicatorReadPosition(), backlog);
-        return closeProducerAsync(closeTheStartingProducer);
+        return beforeDisconnect()
+            .thenCompose(__ -> closeProducerAsync(true))
+            .thenApply(__ -> {
+                afterDisconnected();
+                return null;
+            });
     }
+
+    /**
+     * This method and {@link #afterDisconnected()} are used to solve the following race condition:
+     * - Thread 1: calling disconnect.
+     *             passed the check: no backlog.
+     * - Thread 2: published a message, then the cursor.pendingRead completes.
+     * - Thread 1: continue to disconnect.
+     * - Thread 2: read entries from the cursor, and try to send messages, but the messages will be discarded because
+     *             the producer is closed.
+     * Issue: the pending reading's read position is not correct.
+     */
+    protected CompletableFuture<Void> beforeDisconnect() {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    protected void afterDisconnected() {}
 
     /**
      * This method only be used by {@link PersistentTopic#checkGC} now.
@@ -372,12 +403,15 @@ public abstract class AbstractReplicator implements Replicator {
         });
     }
 
+    protected abstract void beforeTerminate();
+
     public CompletableFuture<Void> terminate() {
         if (!tryChangeStatusToTerminating()) {
             log.info("[{}] Skip current termination since other thread is doing termination, state : {}", replicatorId,
                     state);
             return CompletableFuture.completedFuture(null);
         }
+        beforeTerminate();
         return doCloseProducerAsync(producer, () -> {
             STATE_UPDATER.set(this, State.Terminated);
             this.producer = null;

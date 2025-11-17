@@ -65,7 +65,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MAVEN_OPTS: -Xss1500k -Xmx2048m -XX:+UnlockDiagnosticVMOptions -XX:GCLockerRetryAllocationCount=100 -Daether.connector.http.reuseConnections=false -Daether.connector.requestTimeout=60000 -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.class=standard -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.wagon.http.retryHandler.requestSentEnabled=true -Dmaven.wagon.http.serviceUnavailableRetryStrategy.class=standard -Dmaven.wagon.rto=60000
+  MAVEN_OPTS: -Xss1500k -Xmx2048m -XX:+UnlockDiagnosticVMOptions -XX:+IgnoreUnrecognizedVMOptions -XX:GCLockerRetryAllocationCount=100 -Daether.connector.http.reuseConnections=false -Daether.connector.requestTimeout=60000 -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.class=standard -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.wagon.http.retryHandler.requestSentEnabled=true -Dmaven.wagon.http.serviceUnavailableRetryStrategy.class=standard -Dmaven.wagon.rto=60000
   # defines the retention period for the intermediate build artifacts needed for rerunning a failed build job
   # it's possible to rerun individual failed jobs when the build artifacts are available
   # if the artifacts have already been expired, the complete workflow can be rerun by closing and reopening the PR or by rebasing the PR
@@ -446,6 +446,7 @@ jobs:
         uses: ./.github/actions/upload-coverage
         with:
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Delete coverage files from build artifacts
         run: |
@@ -572,24 +573,28 @@ jobs:
 
           - name: Shade on Java 8
             group: SHADE_RUN
+            upload_name: SHADE_RUN_8
             runtime_jdk: 8
             setup: ./build/run_integration_group.sh SHADE_BUILD
             no_coverage: true
 
           - name: Shade on Java 11
             group: SHADE_RUN
+            upload_name: SHADE_RUN_11
             runtime_jdk: 11
             setup: ./build/run_integration_group.sh SHADE_BUILD
             no_coverage: true
 
           - name: Shade on Java 17
             group: SHADE_RUN
+            upload_name: SHADE_RUN_17
             runtime_jdk: 17
             setup: ./build/run_integration_group.sh SHADE_BUILD
             no_coverage: true
 
           - name: Shade on Java 21
             group: SHADE_RUN
+            upload_name: SHADE_RUN_21
             runtime_jdk: 21
             setup: ./build/run_integration_group.sh SHADE_BUILD
             no_coverage: true
@@ -690,7 +695,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ !success() }}
         with:
-          name: Integration-${{ matrix.group }}-surefire-reports
+          name: Integration-${{ matrix.upload_name || matrix.group }}-surefire-reports
           path: surefire-reports
           retention-days: 7
 
@@ -699,7 +704,7 @@ jobs:
         if: ${{ !success() }}
         continue-on-error: true
         with:
-          name: Integration-${{ matrix.group }}-container-logs
+          name: Integration-${{ matrix.upload_name || matrix.group }}-container-logs
           path: tests/integration/target/container-logs
           retention-days: 7
 
@@ -784,6 +789,7 @@ jobs:
         uses: ./.github/actions/upload-coverage
         with:
           flags: inttests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Delete coverage files from build artifacts
         run: |
@@ -1162,6 +1168,7 @@ jobs:
         uses: ./.github/actions/upload-coverage
         with:
           flags: systests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Delete coverage files from build artifacts
         run: |

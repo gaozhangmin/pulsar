@@ -26,11 +26,12 @@
   <parent>
     <groupId>org.apache.pulsar</groupId>
     <artifactId>pulsar</artifactId>
-    <version>3.3.6.15-kwai</version>
+    <version>3.3.9-kwai</version>
   </parent>
 
   <artifactId>pulsar-broker-common</artifactId>
   <description>Common classes used in multiple broker modules</description>
+  <name>Pulsar Broker Common</name>
 
   <dependencies>
     <dependency>
@@ -86,6 +87,12 @@
     <dependency>
       <groupId>io.rest-assured</groupId>
       <artifactId>rest-assured</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.glassfish.jersey.core</groupId>
+      <artifactId>jersey-server</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

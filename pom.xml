@@ -26,13 +26,13 @@
   <parent>
     <groupId>org.apache</groupId>
     <artifactId>apache</artifactId>
-    <version>29</version>
+    <version>35</version>
   </parent>
 
   <groupId>org.apache.pulsar</groupId>
   <artifactId>pulsar</artifactId>
 
-  <version>3.3.6.15-kwai</version>
+  <version>3.3.9-kwai</version>
 
   <name>Pulsar</name>
   <description>Pulsar is a distributed pub-sub messaging platform with a very
@@ -83,7 +83,7 @@ flexible messaging model and an intuitive client API.</description>
     <pulsar.broker.compiler.release>${maven.compiler.target}</pulsar.broker.compiler.release>
     <pulsar.client.compiler.release>8</pulsar.client.compiler.release>
 
-    <pulsar.client.python.version>3.5.0</pulsar.client.python.version>
+    <pulsar.client.python.version>3.8.0</pulsar.client.python.version>
 
     <IMAGE_JDK_MAJOR_VERSION>21</IMAGE_JDK_MAJOR_VERSION>
 
@@ -95,7 +95,7 @@ flexible messaging model and an intuitive client API.</description>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <project.build.outputTimestamp>2025-10-22T03:23:23Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2025-11-17T03:24:00Z</project.build.outputTimestamp>
     <redirectTestOutputToFile>true</redirectTestOutputToFile>
 
     <!-- By default build for local Docker platform.
@@ -136,18 +136,18 @@ flexible messaging model and an intuitive client API.</description>
     <narPluginPhase>package</narPluginPhase>
 
     <!-- apache commons -->
-    <commons-compress.version>1.26.0</commons-compress.version>
+    <commons-compress.version>1.27.1</commons-compress.version>
 
-    <bookkeeper.version>4.17.1.11-kwai</bookkeeper.version>
+    <bookkeeper.version>4.17.2-kwai</bookkeeper.version>
     <zookeeper.version>3.9.3</zookeeper.version>
-    <commons-cli.version>1.5.0</commons-cli.version>
-    <commons-text.version>1.10.0</commons-text.version>
+    <commons-cli.version>1.9.0</commons-cli.version>
+    <commons-text.version>1.13.1</commons-text.version>
     <snappy.version>1.1.10.5</snappy.version> <!-- ZooKeeper server -->
     <dropwizardmetrics.version>4.1.12.1</dropwizardmetrics.version> <!-- ZooKeeper server -->
     <curator.version>5.7.1</curator.version>
-    <netty.version>4.1.119.Final</netty.version>
+    <netty.version>4.1.127.Final</netty.version>
     <netty-iouring.version>0.0.26.Final</netty-iouring.version>
-    <jetty.version>9.4.56.v20240826</jetty.version>
+    <jetty.version>9.4.57.v20241219</jetty.version>
     <conscrypt.version>2.5.2</conscrypt.version>
     <jersey.version>2.42</jersey.version>
     <athenz.version>1.10.50</athenz.version>
@@ -157,7 +157,10 @@ flexible messaging model and an intuitive client API.</description>
     <slf4j.version>2.0.13</slf4j.version>
     <commons.collections4.version>4.4</commons.collections4.version>
     <log4j2.version>2.23.1</log4j2.version>
-    <bouncycastle.version>1.78.1</bouncycastle.version>
+    <!-- bouncycastle dependencies aren't necessarily aligned -->
+    <bouncycastle.bcprov-jdk18on.version>1.78.1</bouncycastle.bcprov-jdk18on.version>
+    <bouncycastle.bcpkix-jdk18on.version>1.81</bouncycastle.bcpkix-jdk18on.version>
+    <bouncycastle.bcprov-ext-jdk18on.version>1.78.1</bouncycastle.bcprov-ext-jdk18on.version>
     <bouncycastle.bcpkix-fips.version>1.0.7</bouncycastle.bcpkix-fips.version>
     <bouncycastle.bc-fips.version>1.0.2.5</bouncycastle.bc-fips.version>
     <jackson.version>2.14.2</jackson.version>
@@ -181,14 +184,15 @@ flexible messaging model and an intuitive client API.</description>
     <hbc-core.version>2.2.0</hbc-core.version>
     <cassandra.version>3.11.2</cassandra.version>
     <aerospike-client.version>4.5.0</aerospike-client.version>
-    <kafka-client.version>3.4.0</kafka-client.version>
+    <kafka-client.version>3.9.1</kafka-client.version>
     <rabbitmq-client.version>5.18.0</rabbitmq-client.version>
-    <aws-sdk.version>1.12.638</aws-sdk.version>
+    <aws-sdk.version>1.12.788</aws-sdk.version>
+    <aws-sdk2.version>2.32.28</aws-sdk2.version>
     <avro.version>1.11.4</avro.version>
     <joda.version>2.10.10</joda.version>
     <jclouds.version>2.6.0</jclouds.version>
     <guice.version>5.1.0</guice.version>
-    <sqlite-jdbc.version>3.42.0.0</sqlite-jdbc.version>
+    <sqlite-jdbc.version>3.47.1.0</sqlite-jdbc.version>
     <mysql-jdbc.version>8.0.11</mysql-jdbc.version>
     <postgresql-jdbc.version>42.5.5</postgresql-jdbc.version>
     <clickhouse-jdbc.version>0.4.6</clickhouse-jdbc.version>
@@ -196,10 +200,10 @@ flexible messaging model and an intuitive client API.</description>
     <openmldb-jdbc.version>0.4.4-hotfix1</openmldb-jdbc.version>
     <json-smart.version>2.5.2</json-smart.version>
     <opensearch.version>1.2.4</opensearch.version>
-    <elasticsearch-java.version>8.12.1</elasticsearch-java.version>
+    <elasticsearch-java.version>8.15.3</elasticsearch-java.version>
     <debezium.version>1.9.7.Final</debezium.version>
     <debezium.postgresql.version>42.5.5</debezium.postgresql.version>
-    <debezium.mysql.version>8.0.30</debezium.mysql.version>
+    <debezium.mysql.version>8.0.33</debezium.mysql.version>
     <!-- Override version that brings CVE-2022-3143 with debezium -->
     <wildfly-elytron.version>1.15.16.Final</wildfly-elytron.version>
     <jsonwebtoken.version>0.11.1</jsonwebtoken.version>
@@ -211,13 +215,13 @@ flexible messaging model and an intuitive client API.</description>
     <guava.version>32.1.2-jre</guava.version>
     <jcip.version>1.0</jcip.version>
     <prometheus-jmx.version>0.16.1</prometheus-jmx.version>
-    <confluent.version>6.2.8</confluent.version>
+    <confluent.version>7.9.2</confluent.version>
     <aircompressor.version>0.27</aircompressor.version>
     <asynchttpclient.version>2.12.4</asynchttpclient.version>
     <commons-lang3.version>3.18.0</commons-lang3.version>
-    <commons-configuration.version>1.10</commons-configuration.version>
-    <commons-io.version>2.18.0</commons-io.version>
-    <commons-codec.version>1.15</commons-codec.version>
+    <commons-io.version>2.19.0</commons-io.version>
+    <commons-codec.version>1.18.0</commons-codec.version>
+    <commons-logging.version>1.3.5</commons-logging.version>
     <jakarta.ws.rs-api.version>2.1.6</jakarta.ws.rs-api.version>
     <hdrHistogram.version>2.1.9</hdrHistogram.version>
     <javax.servlet-api>3.1.0</javax.servlet-api>
@@ -228,7 +232,7 @@ flexible messaging model and an intuitive client API.</description>
     <hppc.version>0.9.1</hppc.version>
     <spark-streaming_2.10.version>2.1.0</spark-streaming_2.10.version>
     <assertj-core.version>3.24.2</assertj-core.version>
-    <lombok.version>1.18.36</lombok.version>
+    <lombok.version>1.18.42</lombok.version>
     <jakarta.annotation-api.version>1.3.5</jakarta.annotation-api.version>
     <jaxb-api>2.3.1</jaxb-api>
     <jakarta.activation.version>1.2.2</jakarta.activation.version>
@@ -253,7 +257,10 @@ flexible messaging model and an intuitive client API.</description>
     <ant.version>1.10.12</ant.version>
     <seancfoley.ipaddress.version>5.5.0</seancfoley.ipaddress.version>
     <disruptor.version>3.4.3</disruptor.version>
-    <zstd-jni.version>1.5.2-3</zstd-jni.version>
+
+    <!-- zstd-jni is only used for testcase,
+    the core logic is switched to java implementation of zstd in org.apache.commons:commons-compress -->
+    <zstd-jni.version>1.5.7-3</zstd-jni.version>
     <netty-reactive-streams.version>2.0.6</netty-reactive-streams.version>
     <opentelemetry.version>1.45.0</opentelemetry.version>
     <opentelemetry.alpha.version>${opentelemetry.version}-alpha</opentelemetry.alpha.version>
@@ -261,6 +268,7 @@ flexible messaging model and an intuitive client API.</description>
     <opentelemetry.instrumentation.alpha.version>${opentelemetry.instrumentation.version}-alpha</opentelemetry.instrumentation.alpha.version>
     <opentelemetry.semconv.version>1.29.0-alpha</opentelemetry.semconv.version>
     <picocli.version>4.7.5</picocli.version>
+    <re2j.version>1.8</re2j.version>
     <completable-futures.version>0.3.6</completable-futures.version>
     <failsafe.version>3.3.2</failsafe.version>
 
@@ -304,9 +312,9 @@ flexible messaging model and an intuitive client API.</description>
     <git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
     <wagon-ssh-external.version>3.5.3</wagon-ssh-external.version>
     <os-maven-plugin.version>1.7.0</os-maven-plugin.version>
-    <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
-    <spotbugs-maven-plugin.version>4.7.3.6</spotbugs-maven-plugin.version>
-    <spotbugs.version>4.7.3</spotbugs.version>
+    <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
+    <spotbugs-maven-plugin.version>4.9.3.0</spotbugs-maven-plugin.version>
+    <spotbugs.version>4.9.3</spotbugs.version>
     <errorprone.version>2.24.0</errorprone.version>
     <errorprone-slf4j.version>0.1.21</errorprone-slf4j.version>
     <j2objc-annotations.version>1.3</j2objc-annotations.version>
@@ -661,6 +669,12 @@ flexible messaging model and an intuitive client API.</description>
       </dependency>
 
       <dependency>
+        <groupId>com.google.re2j</groupId>
+        <artifactId>re2j</artifactId>
+        <version>${re2j.version}</version>
+      </dependency>
+
+      <dependency>
         <groupId>com.spotify</groupId>
         <artifactId>completable-futures</artifactId>
         <version>${completable-futures.version}</version>
@@ -778,15 +792,15 @@ flexible messaging model and an intuitive client API.</description>
       </dependency>
 
       <dependency>
-        <groupId>commons-configuration</groupId>
-        <artifactId>commons-configuration</artifactId>
-        <version>${commons-configuration.version}</version>
-      </dependency>
-
-      <dependency>
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
         <version>${commons-io.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>commons-logging</groupId>
+        <artifactId>commons-logging</artifactId>
+        <version>${commons-logging.version}</version>
       </dependency>
 
       <dependency>
@@ -953,13 +967,19 @@ flexible messaging model and an intuitive client API.</description>
       <dependency>
         <groupId>org.bouncycastle</groupId>
         <artifactId>bcprov-jdk18on</artifactId>
-        <version>${bouncycastle.version}</version>
+        <version>${bouncycastle.bcprov-jdk18on.version}</version>
       </dependency>
 
       <dependency>
         <groupId>org.bouncycastle</groupId>
         <artifactId>bcpkix-jdk18on</artifactId>
-        <version>${bouncycastle.version}</version>
+        <version>${bouncycastle.bcpkix-jdk18on.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.bouncycastle</groupId>
+        <artifactId>bcprov-ext-jdk18on</artifactId>
+        <version>${bouncycastle.bcprov-ext-jdk18on.version}</version>
       </dependency>
 
       <dependency>
@@ -1295,6 +1315,14 @@ flexible messaging model and an intuitive client API.</description>
       </dependency>
 
       <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws-sdk2.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <dependency>
         <groupId>org.apache.distributedlog</groupId>
         <artifactId>distributedlog-core</artifactId>
         <version>${bookkeeper.version}</version>
@@ -1622,6 +1650,11 @@ flexible messaging model and an intuitive client API.</description>
         <artifactId>checker-qual</artifactId>
         <version>${checkerframework.version}</version>
       </dependency>
+      <dependency>
+        <groupId>org.jspecify</groupId>
+        <artifactId>jspecify</artifactId>
+        <version>1.0.0</version>
+      </dependency>
 
       <dependency>
         <groupId>io.rest-assured</groupId>
@@ -1936,6 +1969,8 @@ flexible messaging model and an intuitive client API.</description>
                 <exclude>**/.mvn/**</exclude>
                 <exclude>**/generated/**</exclude>
                 <exclude>**/zk-3.5-test-data/*</exclude>
+                <exclude>**/*_pb2.py</exclude>
+                <exclude>**/*_pb2_grpc.py</exclude>
               </excludes>
             </licenseSet>
           </licenseSets>
@@ -2089,6 +2124,8 @@ flexible messaging model and an intuitive client API.</description>
             <exclude>**/*.dylib</exclude>
             <exclude>**/*.patch</exclude>
             <exclude>src/test/resources/*.txt</exclude>
+            <exclude>**/*_pb2.py</exclude>
+            <exclude>**/*_pb2_grpc.py</exclude>
           </excludes>
         </configuration>
       </plugin>
@@ -2188,6 +2225,7 @@ flexible messaging model and an intuitive client API.</description>
           <configuration>
             <doclint>none</doclint>
             <notimestamp>true</notimestamp>
+            <failOnError>false</failOnError>
           </configuration>
         </plugin>
         <plugin>
@@ -2250,13 +2288,20 @@ flexible messaging model and an intuitive client API.</description>
           <groupId>com.github.spotbugs</groupId>
           <artifactId>spotbugs-maven-plugin</artifactId>
           <version>${spotbugs-maven-plugin.version}</version>
-            <dependencies>
-              <dependency>
-                <groupId>com.github.spotbugs</groupId>
-                <artifactId>spotbugs</artifactId>
-                <version>${spotbugs.version}</version>
-              </dependency>
-            </dependencies>
+          <dependencies>
+            <dependency>
+              <groupId>com.github.spotbugs</groupId>
+              <artifactId>spotbugs</artifactId>
+              <version>${spotbugs.version}</version>
+            </dependency>
+          </dependencies>
+          <configuration>
+            <!--
+            TODO: remove omitted visitors and fix issues.
+            Checks have been omitted to migrate from SpotBugs 4.7.x to 4.9.x for supporting JDK 24 builds.
+             -->
+            <omitVisitors>ConstructorThrow,FindPublicAttributes,SharedVariableAtomicityDetector,UnreadFields,MultipleInstantiationsOfSingletons,InitializeNonnullFieldsInConstructor,FindNullDeref</omitVisitors>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
@@ -2439,6 +2484,7 @@ flexible messaging model and an intuitive client API.</description>
             <artifactId>maven-javadoc-plugin</artifactId>
             <configuration>
               <doclint>none</doclint>
+              <failOnError>false</failOnError>
             </configuration>
           </plugin>
           <plugin>
@@ -2883,5 +2929,46 @@ flexible messaging model and an intuitive client API.</description>
         <IMAGE_JDK_MAJOR_VERSION>${env.IMAGE_JDK_MAJOR_VERSION}</IMAGE_JDK_MAJOR_VERSION>
       </properties>
     </profile>
+
+    <profile>
+      <id>jdk21</id>
+      <activation>
+        <jdk>21</jdk>
+      </activation>
+      <properties>
+        <!-- nifi-nar-maven-plugin >= 2.0.0 require Java 21+ -->
+        <nifi-nar-maven-plugin.version>2.1.0</nifi-nar-maven-plugin.version>
+      </properties>
+      <build>
+        <pluginManagement>
+          <plugins>
+            <plugin>
+              <groupId>org.apache.nifi</groupId>
+              <artifactId>nifi-nar-maven-plugin</artifactId>
+              <version>${nifi-nar-maven-plugin.version}</version>
+              <extensions>true</extensions>
+              <configuration>
+                <!--
+                skips nifi nar specific doc generation which isn't used for Pulsar nar files
+                see https://github.com/apache/nifi-maven/pull/35
+                -->
+                <skipDocGeneration>true</skipDocGeneration>
+                <finalName>${project.artifactId}-${project.version}</finalName>
+              </configuration>
+              <executions>
+                <execution>
+                  <id>default-nar</id>
+                  <phase>${narPluginPhase}</phase>
+                  <goals>
+                    <goal>nar</goal>
+                  </goals>
+                </execution>
+              </executions>
+            </plugin>
+          </plugins>
+        </pluginManagement>
+      </build>
+    </profile>
+
   </profiles>
 </project>

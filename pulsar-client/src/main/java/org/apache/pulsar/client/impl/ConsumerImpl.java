@@ -100,6 +100,7 @@ import org.apache.pulsar.client.impl.metrics.InstrumentProvider;
 import org.apache.pulsar.client.impl.metrics.Unit;
 import org.apache.pulsar.client.impl.metrics.UpDownCounter;
 import org.apache.pulsar.client.impl.schema.AutoConsumeSchema;
+import org.apache.pulsar.client.impl.schema.AutoProduceBytesSchema;
 import org.apache.pulsar.client.impl.transaction.TransactionImpl;
 import org.apache.pulsar.client.util.ExecutorProvider;
 import org.apache.pulsar.client.util.RetryMessageUtil;
@@ -241,6 +242,8 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
     private final AtomicReference<ClientCnx> clientCnxUsedForConsumerRegistration = new AtomicReference<>();
     private final List<Throwable> previousExceptions = new CopyOnWriteArrayList<Throwable>();
     private volatile boolean hasSoughtByTimestamp = false;
+    // This field will be set after the state becomes Failed, then the following operations will fail immediately
+    private volatile Throwable failReason = null;
 
     static <T> ConsumerImpl<T> newConsumerImpl(PulsarClientImpl client,
                                                String topic,
@@ -965,31 +968,26 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
                     cnx.sendRequestWithId(cmd, closeRequestId);
                 }
 
+                final boolean retriable = PulsarClientException.isRetriableError(e.getCause());
+                final boolean unrecoverable = isUnrecoverableError(e.getCause());
                 if (e.getCause() instanceof PulsarClientException
-                        && PulsarClientException.isRetriableError(e.getCause())
+                        && retriable
+                        && !unrecoverable
                         && System.currentTimeMillis() < SUBSCRIBE_DEADLINE_UPDATER.get(ConsumerImpl.this)) {
                     future.completeExceptionally(e.getCause());
-                } else if (!subscribeFuture.isDone()) {
+                } else if (!subscribeFuture.isDone() && !retriable) {
                     // unable to create new consumer, fail operation
                     setState(State.Failed);
+                    final Throwable throwable = PulsarClientException.wrap(e, String.format("Failed to subscribe the "
+                            + "topic %s with subscription name %s when connecting to the broker", topicName.toString(),
+                            subscription));
+                    fail(throwable);
+
                     closeConsumerTasks();
-                    subscribeFuture.completeExceptionally(
-                            PulsarClientException.wrap(e, String.format("Failed to subscribe the topic %s "
-                                            + "with subscription name %s when connecting to the broker",
-                                    topicName.toString(), subscription)));
+                    subscribeFuture.completeExceptionally(throwable);
                     client.cleanupConsumer(this);
-                } else if (e.getCause() instanceof TopicDoesNotExistException) {
-                    // The topic was deleted after the consumer was created, and we're
-                    // not allowed to recreate the topic. This can happen in few cases:
-                    //  * Regex consumer getting error after topic gets deleted
-                    //  * Regular consumer after topic is manually delete and with
-                    //    auto-topic-creation set to false
-                    // No more retries are needed in this case.
-                    setState(State.Failed);
-                    closeConsumerTasks();
-                    client.cleanupConsumer(this);
-                    log.warn("[{}][{}] Closed consumer because topic does not exist anymore {}",
-                            topic, subscription, cnx.channel().remoteAddress());
+                } else if (unrecoverable) {
+                    closeWhenReceivedUnrecoverableError(e.getCause(), cnx);
                 } else {
                     // consumer was subscribed and connected but we got some error, keep trying
                     future.completeExceptionally(e.getCause());
@@ -1002,6 +1000,37 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
             });
         }
         return future;
+    }
+
+    /***
+     * Different consumer implementation can define its additional unrecoverable error.
+     */
+    protected boolean isUnrecoverableError(Throwable t) {
+        // TopicDoesNotExistException: topic has been deleted.
+        // NotFoundException: topic has been deleted.
+        // IllegalStateException: consumer has been closed.
+        return (t instanceof TopicDoesNotExistException) || (t instanceof IllegalStateException)
+                || (t instanceof PulsarClientException.NotFoundException);
+    }
+
+    protected void closeWhenReceivedUnrecoverableError(Throwable t, ClientCnx cnx) {
+        // The topic was deleted after the consumer was created, and we're
+        // not allowed to recreate the topic. This can happen in few cases:
+        //  * Regex consumer getting error after topic gets deleted
+        //  * Regular consumer after topic is manually delete and with
+        //    auto-topic-creation set to false
+        // No more retries are needed in this case.
+        final String cnxStr = cnx == null ? "null" : String.valueOf(cnx.channel().remoteAddress());
+        log.warn("[{}][{}] {} Closed consumer because get an error that does not support to retry: {} {}",
+                topic, subscription, cnxStr, t.getClass().getName(), t.getMessage());
+        closeAsync().whenComplete((__, ex) -> {
+            if (ex == null) {
+                fail(t);
+                return;
+            }
+            log.error("[{}][{}] {} Failed to close consumer after got an error that does not support to retry: {} {}",
+                topic, subscription, cnxStr, t.getClass().getName(), t.getMessage());
+        });
     }
 
     protected void consumerIsReconnectedToBroker(ClientCnx cnx, int currentQueueSize) {
@@ -1084,13 +1113,13 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
     }
 
     @Override
-    public void connectionFailed(PulsarClientException exception) {
+    public boolean connectionFailed(PulsarClientException exception) {
         boolean nonRetriableError = !PulsarClientException.isRetriableError(exception);
         boolean timeout = System.currentTimeMillis() > lookupDeadline;
         if (nonRetriableError || timeout) {
             exception.setPreviousExceptions(previousExceptions);
             if (subscribeFuture.completeExceptionally(exception)) {
-                setState(State.Failed);
+                fail(exception);
                 if (nonRetriableError) {
                     log.info("[{}] Consumer creation failed for consumer {} with unretriableError {}",
                             topic, consumerId, exception.getMessage());
@@ -1100,10 +1129,18 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
                 closeConsumerTasks();
                 deregisterFromClientCnx();
                 client.cleanupConsumer(this);
+                return false;
+            } else {
+                Throwable actError = FutureUtil.unwrapCompletionException(exception);
+                if (isUnrecoverableError(actError)) {
+                    closeWhenReceivedUnrecoverableError(actError, null);
+                    return false;
+                }
             }
         } else {
             previousExceptions.add(exception);
         }
+        return true;
     }
 
     @Override
@@ -1202,17 +1239,8 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
         }
         negativeAcksTracker.close();
         stats.getStatTimeout().ifPresent(Timeout::cancel);
-        if (poolMessages) {
-            releasePooledMessagesAndStopAcceptNew();
-        }
-    }
-
-    /**
-     * If enabled pooled messages, we should release the messages after closing consumer and stop accept the new
-     * messages.
-     */
-    private void releasePooledMessagesAndStopAcceptNew() {
-        incomingMessages.terminate(message -> message.release());
+        //terminate incomingMessages queue, stop accept the new messages and waking up blocked thread.
+        incomingMessages.terminate(Message::release);
         clearIncomingMessages();
     }
 
@@ -1332,7 +1360,7 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
         });
     }
 
-    private void processPayloadByProcessor(final BrokerEntryMetadata brokerEntryMetadata,
+    protected void processPayloadByProcessor(final BrokerEntryMetadata brokerEntryMetadata,
                                            final MessageMetadata messageMetadata,
                                            final ByteBuf byteBuf,
                                            final MessageIdImpl messageId,
@@ -1383,7 +1411,7 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
             consumerEpoch = cmdMessage.getConsumerEpoch();
         }
         if (log.isDebugEnabled()) {
-            log.debug("[{}][{}] Received message: {}/{}", topic, subscription, messageId.getLedgerId(),
+            log.debug("[{}][{}] Received message: {}:{}", topic, subscription, messageId.getLedgerId(),
                     messageId.getEntryId());
         }
 
@@ -2220,8 +2248,11 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
                     try {
                         String originMessageIdStr = message.getMessageId().toString();
                         String originTopicNameStr = getOriginTopicNameStr(message);
+                        AutoProduceBytesSchema<byte[]> deadLetterMessageSchema =
+                            (AutoProduceBytesSchema<byte[]>) Schema.AUTO_PRODUCE_BYTES(message.getReaderSchema().get());
+                        deadLetterMessageSchema.setRequireSchemaValidation(false);
                         TypedMessageBuilder<byte[]> typedMessageBuilderNew =
-                                producerDLQ.newMessage(Schema.AUTO_PRODUCE_BYTES(message.getReaderSchema().get()))
+                                producerDLQ.newMessage(deadLetterMessageSchema)
                                         .value(message.getData())
                                         .properties(getPropertiesMap(message, originMessageIdStr, originTopicNameStr));
                         copyMessageKeysIfNeeded(message, typedMessageBuilderNew);
@@ -2243,7 +2274,8 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
                                 }).exceptionally(ex -> {
                                     if (ex instanceof PulsarClientException.ProducerQueueIsFullError) {
                                         log.warn(
-                                                "[{}] [{}] [{}] Failed to send DLQ message to {} for message id {}: {}",
+                                                "[{}] [{}] [{}] Failed to send DLQ message to {} "
+                                                        + "with ProducerQueueIsFullError for message id {}: {}",
                                                 topicName, subscription, consumerName,
                                                 deadLetterPolicy.getDeadLetterTopic(), messageId, ex.getMessage());
                                     } else {
@@ -2255,7 +2287,7 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
                                     return null;
                                 });
                     } catch (Exception e) {
-                        log.warn("[{}] [{}] [{}] Failed to send DLQ message to {} for message id {}",
+                        log.warn("[{}] [{}] [{}] Failed to process DLQ message to {} for message id {}",
                                 topicName, subscription, consumerName, deadLetterPolicy.getDeadLetterTopic(), messageId,
                                 e);
                         result.complete(false);
@@ -2280,8 +2312,11 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
                 p = deadLetterProducer;
                 if (p == null || p.isCompletedExceptionally()) {
                     p = createProducerWithBackOff(() -> {
+                        AutoProduceBytesSchema<byte[]> deadLetterProducerSchema =
+                                (AutoProduceBytesSchema<byte[]>) Schema.AUTO_PRODUCE_BYTES(schema);
+                        deadLetterProducerSchema.setRequireSchemaValidation(false);
                         CompletableFuture<Producer<byte[]>> newProducer =
-                                ((ProducerBuilderImpl<byte[]>) client.newProducer(Schema.AUTO_PRODUCE_BYTES(schema)))
+                                ((ProducerBuilderImpl<byte[]>) client.newProducer(deadLetterProducerSchema))
                                         .initialSubscriptionName(this.deadLetterPolicy.getInitialSubscriptionName())
                                         .topic(this.deadLetterPolicy.getDeadLetterTopic())
                                         .producerName(
@@ -2759,6 +2794,10 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
                 return null;
             });
         } else {
+            if (failReason != null) {
+                future.completeExceptionally(failReason);
+                return;
+            }
             long nextDelay = Math.min(backoff.next(), remainingTime.get());
             if (nextDelay <= 0) {
                 future.completeExceptionally(
@@ -3132,6 +3171,7 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
             if (MessageIdAdvUtils.isBatch(messageIdAdv)) {
                 final BitSetRecyclable bitSetRecyclable = BitSetRecyclable.create();
                 bitSetRecyclable.set(0, messageIdAdv.getBatchSize());
+                messageIdData.setBatchSize(messageIdAdv.getBatchSize());
                 if (ackType == AckType.Cumulative) {
                     MessageIdAdvUtils.acknowledge(messageIdAdv, false);
                     bitSetRecyclable.clear(0, messageIdAdv.getBatchIndex() + 1);
@@ -3179,5 +3219,10 @@ public class ConsumerImpl<T> extends ConsumerBase<T> implements ConnectionHandle
         NOT_STARTED,
         IN_PROGRESS,
         COMPLETED
+    }
+
+    private void fail(Throwable throwable) {
+        setState(State.Failed);
+        failReason = throwable;
     }
 }

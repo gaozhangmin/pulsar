@@ -1322,4 +1322,158 @@ public class DeadLetterTopicTest extends ProducerConsumerBase {
                         dlqTopic)
                 .isEqualTo(0);
     }
+
+    @Test
+    public void testDeadLetterTopicWithMaxUnackedMessagesBlocking() throws Exception {
+        final String topic = "persistent://my-property/my-ns/dead-letter-topic-unacked-blocking";
+        final String dlq = "persistent://my-property/my-ns/dead-letter-topic-unacked-blocking-my-subscription-DLQ";
+        final int maxRedeliveryCount = 3;
+        final int maxUnackedMessages = 100;
+        final int sendMessages = 1000;
+
+        admin.topics().createNonPartitionedTopic(topic);
+        admin.topicPolicies().setMaxUnackedMessagesOnConsumer(topic, maxUnackedMessages);
+        admin.topicPolicies().setMaxUnackedMessagesOnSubscription(topic, maxUnackedMessages);
+
+        Consumer<byte[]> consumer = pulsarClient.newConsumer(Schema.BYTES)
+                .topic(topic)
+                .subscriptionName("my-subscription")
+                .subscriptionType(SubscriptionType.Shared)
+                .deadLetterPolicy(DeadLetterPolicy.builder()
+                        .maxRedeliverCount(maxRedeliveryCount)
+                        .deadLetterTopic(dlq)
+                        .build())
+                .receiverQueueSize(200)
+                .negativeAckRedeliveryDelay(1, TimeUnit.MILLISECONDS)
+                .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
+                .subscribe();
+
+        Consumer<byte[]> deadLetterConsumer = pulsarClient.newConsumer(Schema.BYTES)
+                .topic(dlq)
+                .subscriptionName("my-subscription")
+                .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
+                .subscribe();
+
+        Producer<byte[]> producer = pulsarClient.newProducer(Schema.BYTES)
+                .topic(topic)
+                .create();
+
+        for (int i = 0; i < sendMessages; i++) {
+            producer.newMessage()
+                    .value(String.format("Hello Pulsar [%d]", i).getBytes())
+                    .send();
+        }
+        producer.close();
+
+        Set<String> receivedMessages = new HashSet<>();
+        int totalReceived = 0;
+
+        while (totalReceived < sendMessages * (maxRedeliveryCount + 1)) {
+            try {
+                Message<byte[]> message = consumer.receive();
+                if (message != null) {
+                    String messageContent = new String(message.getData());
+                    receivedMessages.add(messageContent);
+                    totalReceived++;
+                    log.info("Received message: {} (total: {}), redelivery count: {}", messageContent,
+                            totalReceived, message.getRedeliveryCount());
+                    consumer.negativeAcknowledge(message);
+                }
+            } catch (Exception e) {
+                log.warn("Exception while receiving message", e);
+                break;
+            }
+        }
+
+        log.info("Total messages received: {}, Expected: {}", totalReceived, sendMessages);
+        log.info("Unique messages received: {}", receivedMessages.size());
+
+        int totalInDeadLetter = 0;
+
+        while (totalInDeadLetter < sendMessages) {
+            try {
+                Message<byte[]> message = deadLetterConsumer.receive();
+                if (message != null) {
+                    String messageContent = new String(message.getData());
+                    log.info("Dead letter message received: {}", messageContent);
+                    deadLetterConsumer.acknowledge(message);
+                    totalInDeadLetter++;
+                } else {
+                    log.warn("No more messages in DLQ");
+                    break;
+                }
+            } catch (Exception e) {
+                log.warn("Exception while receiving from DLQ", e);
+                break;
+            }
+        }
+
+        log.info("Total messages in dead letter queue: {}, Expected: {}", totalInDeadLetter, sendMessages);
+        assertEquals(totalInDeadLetter, sendMessages,
+                "All messages should eventually reach DLQ, but flow control may prevent this");
+
+        deadLetterConsumer.close();
+        consumer.close();
+
+    }
+
+    // reproduce issue reported in https://github.com/apache/pulsar/issues/24541
+    @Test
+    public void sendDeadLetterTopicWithMismatchSchemaProducer() throws Exception {
+        String namespace = BrokerTestUtil.newUniqueName("my-property/my-ns");
+        admin.namespaces().createNamespace(namespace);
+        // don't enforce schema validation
+        admin.namespaces().setSchemaValidationEnforced(namespace, false);
+        // set schema compatibility strategy to always compatible
+        admin.namespaces().setSchemaCompatibilityStrategy(namespace, SchemaCompatibilityStrategy.ALWAYS_COMPATIBLE);
+        final String topic = BrokerTestUtil.newUniqueName("persistent://" + namespace
+                + "/sendDeadLetterTopicWithMismatchSchemaProducer");
+        final String retryTopic = topic + "-RETRY";
+        final String deadLetterTopic = topic + "-DLQ";
+        final Long deadLetterMessageValue = 1234567890L;
+        // create topics
+        admin.topics().createNonPartitionedTopic(topic);
+        admin.topics().createNonPartitionedTopic(deadLetterTopic);
+        admin.topics().createNonPartitionedTopic(retryTopic);
+
+        final int maxRedeliverCount = 1;
+        final String subscriptionName = "my-subscription";
+        Consumer<String> consumer = pulsarClient.newConsumer(Schema.AVRO(String.class))
+                .topic(topic)
+                .subscriptionType(SubscriptionType.Shared)
+                .subscriptionName(subscriptionName)
+                .deadLetterPolicy(DeadLetterPolicy.builder()
+                        .deadLetterTopic(deadLetterTopic)
+                        .retryLetterTopic(retryTopic)
+                        .maxRedeliverCount(maxRedeliverCount)
+                        .build())
+                .negativeAckRedeliveryDelay(1, TimeUnit.SECONDS)
+                .messageListener((Consumer::negativeAcknowledge))
+                .subscribe();
+
+        Consumer<GenericRecord> deadLetterConsumer = pulsarClient.newConsumer(Schema.AUTO_CONSUME())
+                .topic(deadLetterTopic)
+                .subscriptionType(SubscriptionType.Shared)
+                .subscriptionName(subscriptionName)
+                .subscribe();
+        Producer<Long> producer = pulsarClient.newProducer(Schema.AVRO(Long.class)).topic(topic).create();
+        producer.send(deadLetterMessageValue);
+
+        Thread.sleep(3000L);
+
+        assertThat(pulsar.getBrokerService().getTopicReference(topic).get()
+                .getSubscription(subscriptionName).getConsumers().get(0).getMessageRedeliverCounter())
+                .describedAs("redeliver count of topic %s should be less than or equal to 2 because of mismatch schema",
+                        topic)
+                .isLessThanOrEqualTo(maxRedeliverCount + 1);
+
+        Message<GenericRecord> deadLetterMessage = deadLetterConsumer.receive(3, TimeUnit.SECONDS);
+        assertNotNull(deadLetterMessage);
+        assertTrue(deadLetterMessage.getValue().getNativeObject() instanceof Long);
+        assertEquals(deadLetterMessage.getValue().getNativeObject(), deadLetterMessageValue);
+
+        producer.close();
+        consumer.close();
+        deadLetterConsumer.close();
+    }
 }

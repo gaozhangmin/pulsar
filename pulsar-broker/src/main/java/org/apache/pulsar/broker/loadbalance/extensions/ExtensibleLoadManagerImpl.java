@@ -46,7 +46,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.pulsar.broker.PulsarServerException;
 import org.apache.pulsar.broker.PulsarService;
@@ -1103,6 +1103,7 @@ public class ExtensibleLoadManagerImpl implements ExtensibleLoadManager, BrokerS
                             + "Playing the follower role.", role, isChannelOwner);
                     playFollower();
                 }
+                closeInternalTopics();
             }
         } catch (Throwable e) {
             log.error("Failed to monitor load manager state", e);

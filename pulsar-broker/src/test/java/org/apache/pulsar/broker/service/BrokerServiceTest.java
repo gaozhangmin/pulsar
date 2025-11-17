@@ -179,10 +179,11 @@ public class BrokerServiceTest extends BrokerTestBase {
         assertEquals(bundlesData.getNumBundles(), bundleNum);
         List<String> list = admin.brokers().getActiveBrokers("test");
         assertEquals(list.size(), 1);
+        BrokerService brokerService = pulsar.getBrokerService();
         admin.brokers().shutDownBrokerGracefully(1, false);
         //We can only unload one bundle per second, so it takes at least 2 seconds.
         Awaitility.await().atLeast(bundleNum - 1, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertEquals(pulsar.getBrokerService().getTopics().size(), 0);
+            assertEquals(brokerService.getTopics().size(), 0);
         });
         Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             assertNull(pulsar.getBrokerService());
@@ -1181,7 +1182,7 @@ public class BrokerServiceTest extends BrokerTestBase {
 
         // try to create topic which should fail as bundle is disable
         CompletableFuture<Optional<Topic>> futureResult = pulsar.getBrokerService()
-                .loadOrCreatePersistentTopic(topicName, true, null, null);
+                .loadOrCreatePersistentTopic(topicName, true, null);
 
         try {
             futureResult.get();
@@ -1225,7 +1226,7 @@ public class BrokerServiceTest extends BrokerTestBase {
             for (int i = 0; i < 10; i++) {
                 // try to create topic which should fail as bundle is disable
                 CompletableFuture<Optional<Topic>> futureResult = pulsar.getBrokerService()
-                        .loadOrCreatePersistentTopic(topicName + "_" + i, false, null, null);
+                        .loadOrCreatePersistentTopic(topicName + "_" + i, false, null);
                 loadFutures.add(futureResult);
             }
 
@@ -2014,6 +2015,7 @@ public class BrokerServiceTest extends BrokerTestBase {
         pulsar.getConfiguration().setMetadataSyncEventTopic(topicName);
         PulsarMetadataEventSynchronizer sync = new PulsarMetadataEventSynchronizer(pulsar, topicName);
         // set invalid client for retry
+        @Cleanup
         PulsarClientImpl client = (PulsarClientImpl) PulsarClient.builder().serviceUrl("http://invalidhost:8080")
                 .operationTimeout(1000, TimeUnit.MILLISECONDS).build();
         sync.client = client;

@@ -26,7 +26,7 @@
   <parent>
     <groupId>org.apache.pulsar</groupId>
       <artifactId>pulsar-io</artifactId>
-      <version>3.3.6.15-kwai</version>
+      <version>3.3.9-kwai</version>
   </parent>
 
   <artifactId>pulsar-io-mongo</artifactId>

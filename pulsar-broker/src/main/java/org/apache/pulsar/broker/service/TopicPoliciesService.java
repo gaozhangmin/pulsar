@@ -22,23 +22,26 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.Nonnull;
 import org.apache.pulsar.broker.service.BrokerServiceException.TopicPoliciesCacheNotInitException;
+import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.util.RetryUtil;
 import org.apache.pulsar.common.classification.InterfaceStability;
+import org.apache.pulsar.common.events.PulsarEvent;
 import org.apache.pulsar.common.naming.NamespaceBundle;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.policies.data.TopicPolicies;
 import org.apache.pulsar.common.util.Backoff;
 import org.apache.pulsar.common.util.BackoffBuilder;
 import org.apache.pulsar.common.util.FutureUtil;
-import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Topic policies service.
  */
 @InterfaceStability.Evolving
 public interface TopicPoliciesService extends AutoCloseable {
+
+    String GLOBAL_POLICIES_MSG_KEY_PREFIX = "__G__";
 
     TopicPoliciesService DISABLED = new TopicPoliciesServiceDisabled();
     long DEFAULT_GET_TOPIC_POLICY_TIMEOUT = 30_000;
@@ -121,8 +124,8 @@ public interface TopicPoliciesService extends AutoCloseable {
      * @return A CompletableFuture containing an Optional of TopicPolicies.
      * @throws NullPointerException If the topicName is null.
      */
-    @Nonnull
-    CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@Nonnull TopicName topicName, boolean isGlobal);
+    @NonNull
+    CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@NonNull TopicName topicName, boolean isGlobal);
 
     /**
      * Asynchronously retrieves topic policies.
@@ -134,8 +137,8 @@ public interface TopicPoliciesService extends AutoCloseable {
      * @return A CompletableFuture containing an Optional of TopicPolicies.
      * @throws NullPointerException If the topicName is null.
      */
-    @Nonnull
-    CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@Nonnull TopicName topicName);
+    @NonNull
+    CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@NonNull TopicName topicName);
 
     /**
      * Get policies for a topic without cache async.
@@ -190,16 +193,16 @@ public interface TopicPoliciesService extends AutoCloseable {
             return null;
         }
 
-        @NotNull
+        @NonNull
         @Override
-        public CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@NotNull TopicName topicName,
+        public CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@NonNull TopicName topicName,
                                                                                 boolean isGlobal) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
 
-        @NotNull
+        @NonNull
         @Override
-        public CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@NotNull TopicName topicName) {
+        public CompletableFuture<Optional<TopicPolicies>> getTopicPoliciesAsync(@NonNull TopicName topicName) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
 
@@ -244,5 +247,38 @@ public interface TopicPoliciesService extends AutoCloseable {
         public void close() {
             //No-op
         }
+    }
+
+    static String getEventKey(PulsarEvent event, boolean isGlobal) {
+        return wrapEventKey(TopicName.get(event.getTopicPoliciesEvent().getDomain(),
+            event.getTopicPoliciesEvent().getTenant(),
+            event.getTopicPoliciesEvent().getNamespace(),
+            event.getTopicPoliciesEvent().getTopic()).toString(), isGlobal);
+    }
+
+    static String getEventKey(TopicName topicName, boolean isGlobal) {
+        return wrapEventKey(TopicName.get(topicName.getDomain().toString(),
+            topicName.getTenant(),
+            topicName.getNamespace(),
+            TopicName.get(topicName.getPartitionedTopicName()).getLocalName()).toString(), isGlobal);
+    }
+
+    static String wrapEventKey(String originalKey, boolean isGlobalPolicies) {
+        if (!isGlobalPolicies) {
+            return originalKey;
+        }
+        return GLOBAL_POLICIES_MSG_KEY_PREFIX + originalKey;
+    }
+
+    static boolean isGlobalPolicy(Message<PulsarEvent> msg) {
+        return msg.getKey().startsWith(GLOBAL_POLICIES_MSG_KEY_PREFIX);
+    }
+
+    static TopicName unwrapEventKey(String originalKey) {
+        String tpName = originalKey;
+        if (originalKey.startsWith(GLOBAL_POLICIES_MSG_KEY_PREFIX)) {
+            tpName = originalKey.substring(GLOBAL_POLICIES_MSG_KEY_PREFIX.length());
+        }
+        return TopicName.get(tpName);
     }
 }

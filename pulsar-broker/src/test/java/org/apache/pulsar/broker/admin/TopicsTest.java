@@ -96,6 +96,7 @@ import org.mockito.stubbing.Answer;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 public class TopicsTest extends MockedPulsarServiceBaseTest {
@@ -166,10 +167,19 @@ public class TopicsTest extends MockedPulsarServiceBaseTest {
                 }).readValue(message);
     }
 
-    @Test
-    public void testProduceToPartitionedTopic() throws Exception {
+    @DataProvider(name = "partitionNumbers")
+    public Object[][] partitionNumbers() {
+        return new Object[][] {
+            //produce to single-partitioned topic
+            {1},
+            {5},
+        };
+    }
+
+    @Test(dataProvider = "partitionNumbers")
+    public void testProduceToPartitionedTopic(int numPartitions) throws Exception {
         admin.topics().createPartitionedTopic("persistent://" + testTenant + "/" + testNamespace
-                + "/" + testTopicName + "-p", 5);
+                + "/" + testTopicName + "-p", numPartitions);
         AsyncResponse asyncResponse = mock(AsyncResponse.class);
         Schema<String> schema = StringSchema.utf8();
         ProducerMessages producerMessages = new ProducerMessages();
@@ -207,7 +217,7 @@ public class TopicsTest extends MockedPulsarServiceBaseTest {
         }
         for (int index = 0; index < messagePerPartition.length; index++) {
             // We publish to each partition in round robin mode so each partition should get at most 2 message.
-            Assert.assertTrue(messagePerPartition[index] <= 2);
+            Assert.assertTrue(messagePerPartition[index] <= 10 / numPartitions);
         }
     }
 
@@ -360,7 +370,7 @@ public class TopicsTest extends MockedPulsarServiceBaseTest {
         CompletableFuture existFuture = new CompletableFuture();
         existFuture.complete(TopicExistsInfo.newNonPartitionedTopicExists());
         doReturn(future).when(nameSpaceService).getBrokerServiceUrlAsync(any(), any());
-        doReturn(existFuture).when(nameSpaceService).checkTopicExists(any());
+        doReturn(existFuture).when(nameSpaceService).checkTopicExistsAsync(any());
         CompletableFuture existBooleanFuture = new CompletableFuture();
         existBooleanFuture.complete(false);
         doReturn(existBooleanFuture).when(nameSpaceService).checkNonPartitionedTopicExists(any());
@@ -385,7 +395,7 @@ public class TopicsTest extends MockedPulsarServiceBaseTest {
         existFuture.complete(TopicExistsInfo.newTopicNotExists());
         CompletableFuture existBooleanFuture = new CompletableFuture();
         existBooleanFuture.complete(false);
-        doReturn(existFuture).when(nameSpaceService).checkTopicExists(any());
+        doReturn(existFuture).when(nameSpaceService).checkTopicExistsAsync(any());
         doReturn(existBooleanFuture).when(nameSpaceService).checkNonPartitionedTopicExists(any());
         doReturn(nameSpaceService).when(pulsar).getNamespaceService();
         AsyncResponse asyncResponse = mock(AsyncResponse.class);

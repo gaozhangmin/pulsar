@@ -26,11 +26,12 @@
   <parent>
     <groupId>org.apache.pulsar</groupId>
     <artifactId>pulsar</artifactId>
-    <version>3.3.6.15-kwai</version>
+    <version>3.3.9-kwai</version>
   </parent>
 
   <artifactId>pulsar-opentelemetry</artifactId>
   <description>OpenTelemetry Integration</description>
+  <name>Pulsar OpenTelemetry</name>
 
   <dependencies>
     <!-- OpenTelemetry dependencies -->

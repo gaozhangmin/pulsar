@@ -26,12 +26,13 @@
   <parent>
     <groupId>org.apache.pulsar</groupId>
     <artifactId>pulsar</artifactId>
-    <version>3.3.6.15-kwai</version>
+    <version>3.3.9-kwai</version>
   </parent>
 
   <artifactId>pulsar-broker-auth-sasl</artifactId>
   <packaging>jar</packaging>
   <description>SASL authentication plugin for broker</description>
+  <name>Pulsar Broker Auth SASL</name>
 
   <dependencies>
 

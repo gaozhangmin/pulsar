@@ -721,6 +721,7 @@ public class NamespacesTest extends MockedPulsarServiceBaseTest {
                 + this.testLocalNamespaces.get(2).toString() + "/unload");
         doReturn(uri).when(uriInfo).getRequestUri();
 
+        response = mock(AsyncResponse.class);
         namespaces.unloadNamespaceBundle(response, this.testTenant, this.testOtherCluster,
                 this.testLocalNamespaces.get(2).getLocalName(), "0x00000000_0xffffffff", false, null);
         captor = ArgumentCaptor.forClass(WebApplicationException.class);
@@ -730,6 +731,7 @@ public class NamespacesTest extends MockedPulsarServiceBaseTest {
                 UriBuilder.fromUri(uri).host("127.0.0.3").port(8083).toString());
 
         // check the bundle should not unload to an inactive destination broker
+        response = mock(AsyncResponse.class);
         namespaces.unloadNamespaceBundle(response, this.testTenant, this.testOtherCluster,
                 this.testLocalNamespaces.get(2).getLocalName(), "0x00000000_0xffffffff", false, "inactive_destination:8080");
         captor = ArgumentCaptor.forClass(WebApplicationException.class);
@@ -1681,6 +1683,19 @@ public class NamespacesTest extends MockedPulsarServiceBaseTest {
         } catch (PulsarAdminException e) {
             assertEquals(e.getStatusCode(), 412);
             assertEquals(e.getHttpError(), "Exceed maximum number of topics in namespace.");
+        }
+
+        // Unload the topic to remove this non-partitioned topic from `BrokerService#topics`, so when creating the
+        // consumer, it will trigger the topic loading.
+        admin.topics().unload(topic + "4");
+        final var consumers = new ArrayList<Consumer<byte[]>>();
+        for (int i = 1; i <= 4; i++) {
+            consumers.add(pulsarClient.newConsumer().topic(topic + i).subscriptionName("sub").subscribe());
+        }
+        final var topics = admin.topics().getList(namespace);
+        assertEquals(topics.size(), 10);
+        for (final var consumer : consumers) {
+            consumer.close();
         }
 
         // remove namespace policy limit, use broker configuration instead.
