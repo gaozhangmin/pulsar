@@ -21,6 +21,7 @@ package org.apache.bookkeeper.mledger.impl;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.lang.Math.min;
+import static org.apache.bookkeeper.mledger.impl.LedgerMetadataUtils.METADATA_PROPERTY_FIRST_ENTRY_INDEX;
 import static org.apache.bookkeeper.mledger.util.Errors.isNoSuchLedgerExistsException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.BoundType;
@@ -32,6 +33,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.util.Recycler;
 import io.netty.util.Recycler.Handle;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -1992,6 +1994,22 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         } else {
             return getLedgerHandle(ledgerId).thenApply(rh -> rh.getLedgerMetadata().toSafeString());
         }
+    }
+
+    public long getFirstEntryIndexFromLedgerMetadata(long ledgerId) {
+        LedgerHandle currentLedger = this.currentLedger;
+        byte[] firstEntryIndexBytes;
+        if (currentLedger != null && ledgerId == currentLedger.getId()) {
+            firstEntryIndexBytes = currentLedger.getLedgerMetadata().getCustomMetadata()
+                    .get(METADATA_PROPERTY_FIRST_ENTRY_INDEX);
+        } else {
+            firstEntryIndexBytes = getLedgerHandle(ledgerId)
+                    .thenApply(rh -> rh.getLedgerMetadata()).join()
+                    .getCustomMetadata()
+                    .get(METADATA_PROPERTY_FIRST_ENTRY_INDEX);
+        }
+        return firstEntryIndexBytes == null ? 0L :
+                Long.parseLong(new String(firstEntryIndexBytes, StandardCharsets.UTF_8));
     }
 
     @Override
@@ -4262,6 +4280,11 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 cb.createComplete(Code.UnexpectedConditionException, null, ledgerFutureHook);
                 return;
             }
+        }
+        if (managedLedgerInterceptor != null) {
+            long firstEntryIndex = managedLedgerInterceptor.getIndex() + 1;
+            finalMetadata.putAll(LedgerMetadataUtils.buildMetadataForFirstEntryIndex(firstEntryIndex));
+            log.info("[{}] Creating ledger with first entry index: {}", name, firstEntryIndex);
         }
         createdLedgerCustomMetadata = finalMetadata;
         try {

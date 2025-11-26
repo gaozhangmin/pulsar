@@ -52,6 +52,8 @@ public final class LedgerMetadataUtils {
     private static final String METADATA_PROPERTY_DELAYED_INDEX_TOPIC = "pulsar/delayedIndexTopic";
     private static final String METADATA_PROPERTY_DELAYED_INDEX_CURSOR = "pulsar/delayedIndexCursor";
 
+    public static final String METADATA_PROPERTY_FIRST_ENTRY_INDEX = "pulsar/firstEntryIndex";
+
     /**
      * Build base metadata for every ManagedLedger.
      *
@@ -63,6 +65,17 @@ public final class LedgerMetadataUtils {
                 METADATA_PROPERTY_APPLICATION, METADATA_PROPERTY_APPLICATION_PULSAR,
                 METADATA_PROPERTY_COMPONENT, METADATA_PROPERTY_COMPONENT_MANAGED_LEDGER,
                 METADATA_PROPERTY_MANAGED_LEDGER_NAME, name.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Build metadata for ManagedLedger with first entry index.
+     *
+     * @param firstEntryIndex the first entry index
+     * @return an immutable map which describes a ManagedLedger with first entry index
+     */
+    static Map<String, byte[]> buildMetadataForFirstEntryIndex(long firstEntryIndex) {
+        return Map.of(
+                METADATA_PROPERTY_FIRST_ENTRY_INDEX, String.valueOf(firstEntryIndex).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
