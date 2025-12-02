@@ -25,7 +25,7 @@
   <parent>
     <groupId>org.apache.pulsar</groupId>
     <artifactId>pulsar</artifactId>
-    <version>3.3.9-kwai</version>
+    <version>3.3.9.1-kwai</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
