@@ -67,4 +67,8 @@ public class LeaderElectionService implements AutoCloseable {
     public boolean isLeader() {
         return leaderElection.getState() == LeaderElectionState.Leading;
     }
+
+    public void addStateChangeListener(Consumer<LeaderElectionState> listener) {
+        leaderElection.addStateChangeListener(listener);
+    }
 }

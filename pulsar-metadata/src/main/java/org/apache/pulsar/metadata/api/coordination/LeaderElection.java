@@ -20,6 +20,7 @@ package org.apache.pulsar.metadata.api.coordination;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Leader election controller.
@@ -67,4 +68,6 @@ public interface LeaderElection<T> extends AutoCloseable {
      * @return a future that will track the completion of the operation
      */
     CompletableFuture<Void> asyncClose();
+
+    void addStateChangeListener(Consumer<LeaderElectionState> listener);
 }

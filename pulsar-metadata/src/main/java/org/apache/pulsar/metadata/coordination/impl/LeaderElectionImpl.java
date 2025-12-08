@@ -21,9 +21,12 @@ package org.apache.pulsar.metadata.coordination.impl;
 import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.google.common.annotations.VisibleForTesting;
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -53,7 +56,7 @@ class LeaderElectionImpl<T> implements LeaderElection<T> {
     private final MetadataSerde<T> serde;
     private final MetadataStoreExtended store;
     private final MetadataCache<T> cache;
-    private final Consumer<LeaderElectionState> stateChangesListener;
+    private final List<Consumer<LeaderElectionState>> stateChangesListeners;
     private final ScheduledFuture<?> updateCachedValueFuture;
 
     private LeaderElectionState leaderElectionState;
@@ -72,7 +75,7 @@ class LeaderElectionImpl<T> implements LeaderElection<T> {
     private static final int LEADER_ELECTION_RETRY_DELAY_SECONDS = 5;
 
     LeaderElectionImpl(MetadataStoreExtended store, Class<T> clazz, String path,
-            Consumer<LeaderElectionState> stateChangesListener,
+                       Consumer<LeaderElectionState> stateChangesListener,
                        ScheduledExecutorService executor) {
         this.path = path;
         this.serde = new JSONMetadataSerdeSimpleType<>(TypeFactory.defaultInstance().constructSimpleType(clazz, null));
@@ -83,7 +86,7 @@ class LeaderElectionImpl<T> implements LeaderElection<T> {
         this.cache = store.getMetadataCache(clazz, metadataCacheConfig);
         this.leaderElectionState = LeaderElectionState.NoLeader;
         this.internalState = InternalState.Init;
-        this.stateChangesListener = stateChangesListener;
+        this.stateChangesListeners = new CopyOnWriteArrayList<>(List.of(stateChangesListener));
         this.executor = executor;
         this.sequencer = FutureUtil.Sequencer.create();
         store.registerListener(this::handlePathNotification);
@@ -166,6 +169,22 @@ class LeaderElectionImpl<T> implements LeaderElection<T> {
         internalState = InternalState.LeaderIsPresent;
         if (this.leaderElectionState != les) {
             this.leaderElectionState = les;
+            invokeStateChangeListeners(leaderElectionState);
+        }
+    }
+
+    @Override
+    public synchronized void addStateChangeListener(Consumer<LeaderElectionState> listener) {
+        stateChangesListeners.add(Objects.requireNonNull(listener));
+        try {
+            listener.accept(leaderElectionState);
+        } catch (Throwable t) {
+            log.warn("Exception in state change listener", t);
+        }
+    }
+
+    private void invokeStateChangeListeners(LeaderElectionState leaderElectionState) {
+        for (Consumer<LeaderElectionState> stateChangesListener : stateChangesListeners) {
             try {
                 stateChangesListener.accept(leaderElectionState);
             } catch (Throwable t) {
@@ -196,11 +215,7 @@ class LeaderElectionImpl<T> implements LeaderElection<T> {
                                             internalState = InternalState.LeaderIsPresent;
                                             if (leaderElectionState != LeaderElectionState.Leading) {
                                                 leaderElectionState = LeaderElectionState.Leading;
-                                                try {
-                                                    stateChangesListener.accept(leaderElectionState);
-                                                } catch (Throwable t) {
-                                                    log.warn("Exception in state change listener", t);
-                                                }
+                                                invokeStateChangeListeners(leaderElectionState);
                                             }
                                             result.complete(leaderElectionState);
                                         }
@@ -339,11 +354,7 @@ class LeaderElectionImpl<T> implements LeaderElection<T> {
                             .exceptionally(ex -> {
                                 log.warn("Leader election for path {} has failed", path, ex);
                                 synchronized (LeaderElectionImpl.this) {
-                                    try {
-                                        stateChangesListener.accept(leaderElectionState);
-                                    } catch (Throwable t) {
-                                        log.warn("Exception in state change listener", t);
-                                    }
+                                    invokeStateChangeListeners(leaderElectionState);
 
                                     if (internalState != InternalState.Closed) {
                                         executor.schedule(() -> {
