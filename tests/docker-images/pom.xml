@@ -27,7 +27,7 @@
   <parent>
     <groupId>org.apache.pulsar.tests</groupId>
     <artifactId>tests-parent</artifactId>
-    <version>3.3.9.1-kwai</version>
+    <version>3.3.9.2-kwai</version>
   </parent>
   <artifactId>docker-images</artifactId>
   <name>Apache Pulsar :: Tests :: Docker Images</name>
