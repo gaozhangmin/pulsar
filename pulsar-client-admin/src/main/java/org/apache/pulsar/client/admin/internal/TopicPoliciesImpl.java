@@ -41,6 +41,7 @@ import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
+import org.apache.pulsar.common.policies.data.PartitionPublishRate;
 import org.apache.pulsar.common.policies.data.PersistencePolicies;
 import org.apache.pulsar.common.policies.data.PublishRate;
 import org.apache.pulsar.common.policies.data.RetentionPolicies;
@@ -763,6 +764,42 @@ public class TopicPoliciesImpl extends BaseResource implements TopicPolicies {
     public CompletableFuture<Void> removePublishRateAsync(String topic) {
         TopicName topicName = validateTopic(topic);
         WebTarget path = topicPath(topicName, "publishRate");
+        return asyncDeleteRequest(path);
+    }
+
+    @Override
+    public PartitionPublishRate getPartitionPublishRate(String topic) throws PulsarAdminException {
+        return sync(() -> getPartitionPublishRateAsync(topic));
+    }
+
+    @Override
+    public CompletableFuture<PartitionPublishRate> getPartitionPublishRateAsync(String topic) {
+        TopicName topicName = validateTopic(topic);
+        WebTarget path = topicPath(topicName, "partitionPublishRate");
+        return asyncGetRequest(path, new FutureCallback<PartitionPublishRate>(){});
+    }
+
+    @Override
+    public void setPartitionPublishRate(String topic, PartitionPublishRate publishRate) throws PulsarAdminException {
+        sync(() -> setPartitionPublishRateAsync(topic, publishRate));
+    }
+
+    @Override
+    public CompletableFuture<Void> setPartitionPublishRateAsync(String topic, PartitionPublishRate publishRate) {
+        TopicName topicName = validateTopic(topic);
+        WebTarget path = topicPath(topicName, "partitionPublishRate");
+        return asyncPostRequest(path, Entity.entity(publishRate, MediaType.APPLICATION_JSON));
+    }
+
+    @Override
+    public void removePartitionPublishRate(String topic) throws PulsarAdminException {
+        sync(() -> removePartitionPublishRateAsync(topic));
+    }
+
+    @Override
+    public CompletableFuture<Void> removePartitionPublishRateAsync(String topic) {
+        TopicName topicName = validateTopic(topic);
+        WebTarget path = topicPath(topicName, "partitionPublishRate");
         return asyncDeleteRequest(path);
     }
 

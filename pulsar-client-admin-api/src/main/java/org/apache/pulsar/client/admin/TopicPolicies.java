@@ -30,6 +30,7 @@ import org.apache.pulsar.common.policies.data.EntryFilters;
 import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPolicies;
+import org.apache.pulsar.common.policies.data.PartitionPublishRate;
 import org.apache.pulsar.common.policies.data.PersistencePolicies;
 import org.apache.pulsar.common.policies.data.PublishRate;
 import org.apache.pulsar.common.policies.data.RetentionPolicies;
@@ -1208,6 +1209,65 @@ public interface TopicPolicies {
      *              unexpected error
      */
     CompletableFuture<Void> removePublishRateAsync(String topic) throws PulsarAdminException;
+
+    /**
+     * Set message-partition-publish-rate (topics can publish this many messages per second).
+     *
+     * @param topic
+     * @param partitionPublishRate
+     *            number of messages per second
+     * @throws PulsarAdminException
+     *             Unexpected error
+     */
+    void setPartitionPublishRate(String topic, PartitionPublishRate partitionPublishRate) throws PulsarAdminException;
+
+    /**
+     * Set message-partition-publish-rate (topics can publish this many messages per second) asynchronously.
+     *
+     * @param topic
+     * @param partitionPublishRate
+     *            number of messages per second
+     */
+    CompletableFuture<Void> setPartitionPublishRateAsync(String topic, PartitionPublishRate partitionPublishRate);
+
+    /**
+     * Get message-partition-publish-rate (topics can publish this many messages per second).
+     *
+     * @param topic
+     * @return number of messages per second
+     * @throws PulsarAdminException Unexpected error
+     */
+    PartitionPublishRate getPartitionPublishRate(String topic) throws PulsarAdminException;
+
+    /**
+     * Get message-partition-publish-rate (topics can publish this many messages per second) asynchronously.
+     *
+     * @param topic
+     * @return number of messages per second
+     */
+    CompletableFuture<PartitionPublishRate> getPartitionPublishRateAsync(String topic);
+
+    /**
+     * Remove message-partition-publish-rate.
+     * <p/>
+     * Remove topic message publish rate
+     *
+     * @param topic
+     * @throws PulsarAdminException
+     *              unexpected error
+     */
+    void removePartitionPublishRate(String topic) throws PulsarAdminException;
+
+    /**
+     * Remove message-partition-publish-rate asynchronously.
+     * <p/>
+     * Remove topic message publish rate
+     *
+     * @param topic
+     * @throws PulsarAdminException
+     *              unexpected error
+     */
+    CompletableFuture<Void> removePartitionPublishRateAsync(String topic) throws PulsarAdminException;
 
     /**
      * Get the maxConsumersPerSubscription for a topic.

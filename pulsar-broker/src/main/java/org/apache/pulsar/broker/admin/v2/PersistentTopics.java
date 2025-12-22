@@ -73,6 +73,7 @@ import org.apache.pulsar.common.policies.data.EntryFilters;
 import org.apache.pulsar.common.policies.data.FederationTopicPolicies;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
+import org.apache.pulsar.common.policies.data.PartitionPublishRate;
 import org.apache.pulsar.common.policies.data.PartitionedTopicInternalStats;
 import org.apache.pulsar.common.policies.data.PersistencePolicies;
 import org.apache.pulsar.common.policies.data.PersistentOfflineTopicStats;
@@ -4382,6 +4383,112 @@ public class PersistentTopics extends PersistentTopicsBase {
             })
             .exceptionally(ex -> {
                 handleTopicPolicyException("removePublishRate", ex, asyncResponse);
+                return null;
+            });
+    }
+
+    @GET
+    @Path("/{tenant}/{namespace}/{topic}/partitionPublishRate")
+    @ApiOperation(value = "Get partition publish rate configuration for specified topic.",
+            response = PartitionPublishRate.class)
+    @ApiResponses(value = {@ApiResponse(code = 403, message = "Don't have admin permission"),
+            @ApiResponse(code = 404, message = "Namespace or topic doesn't exist"),
+            @ApiResponse(code = 405,
+                    message = "Topic level policy is disabled, please enable the topic level policy and retry"),
+            @ApiResponse(code = 409, message = "Concurrent modification")})
+    public void getPartitionPublishRate(@Suspended final AsyncResponse asyncResponse,
+            @PathParam("tenant") String tenant,
+            @PathParam("namespace") String namespace,
+            @PathParam("topic") @Encoded String encodedTopic,
+            @QueryParam("isGlobal") @DefaultValue("false") boolean isGlobal,
+            @ApiParam(value = "Whether leader broker redirected this call to this broker. For internal use.")
+            @QueryParam("authoritative") @DefaultValue("false") boolean authoritative) {
+        validateTopicName(tenant, namespace, encodedTopic);
+        validateTopicPolicyOperationAsync(topicName, PolicyName.RATE, PolicyOperation.READ)
+            .thenCompose(__ -> preValidation(authoritative))
+            .thenCompose(__ -> internalGetPartitionPublishRate(isGlobal))
+            .thenAccept(op -> asyncResponse.resume(op.isPresent() ? op.get()
+                    : Response.noContent().build()))
+            .exceptionally(ex -> {
+                handleTopicPolicyException("getPartitionPublishRate", ex, asyncResponse);
+                return null;
+            });
+    }
+
+    @POST
+    @Path("/{tenant}/{namespace}/{topic}/partitionPublishRate")
+    @ApiOperation(value = "Set message partition publish rate configuration for specified topic.")
+    @ApiResponses(value = {
+            @ApiResponse(code = 204, message = "Operation successful"),
+            @ApiResponse(code = 403, message = "Don't have admin permission"),
+            @ApiResponse(code = 404, message = "Namespace or topic doesn't exist"),
+            @ApiResponse(code = 405,
+                    message = "Topic level policy is disabled, please enable the topic level policy and retry"),
+            @ApiResponse(code = 409, message = "Concurrent modification")})
+    public void setPartitionPublishRate(@Suspended final AsyncResponse asyncResponse,
+            @PathParam("tenant") String tenant,
+            @PathParam("namespace") String namespace,
+            @PathParam("topic") @Encoded String encodedTopic,
+            @QueryParam("isGlobal") @DefaultValue("false") boolean isGlobal,
+            @ApiParam(value = "Whether leader broker redirected this call to this broker. For internal use.")
+            @QueryParam("authoritative") @DefaultValue("false") boolean authoritative,
+            @ApiParam(value = "Dispatch rate for the specified topic") PartitionPublishRate partitionPublishRate) {
+        validateTopicName(tenant, namespace, encodedTopic);
+        validateTopicPolicyOperationAsync(topicName, PolicyName.RATE, PolicyOperation.WRITE)
+            .thenCompose(__ -> preValidation(authoritative))
+            .thenCompose(__ -> internalSetPartitionPublishRate(partitionPublishRate, isGlobal))
+            .thenRun(() -> {
+                try {
+                    log.info("[{}] Successfully set topic partition publish rate:"
+                                    + " tenant={}, namespace={}, topic={}, isGlobal={}, partitionPublishRate={}",
+                            clientAppId(),
+                            tenant,
+                            namespace,
+                            topicName.getLocalName(),
+                            isGlobal,
+                            objectWriter().writeValueAsString(partitionPublishRate));
+                } catch (JsonProcessingException ignore) {}
+                asyncResponse.resume(Response.noContent().build());
+            })
+            .exceptionally(ex -> {
+                handleTopicPolicyException("setPartitionPublishRate", ex, asyncResponse);
+                return null;
+            });
+    }
+
+    @DELETE
+    @Path("/{tenant}/{namespace}/{topic}/partitionPublishRate")
+    @ApiOperation(value = "Remove message partition publish rate configuration for specified topic.")
+    @ApiResponses(value = {
+            @ApiResponse(code = 204, message = "Operation successful"),
+            @ApiResponse(code = 403, message = "Don't have admin permission"),
+            @ApiResponse(code = 404, message = "Namespace or topic doesn't exist"),
+            @ApiResponse(code = 405,
+                    message = "Topic level policy is disabled, please enable the topic level policy and retry"),
+            @ApiResponse(code = 409, message = "Concurrent modification")})
+    public void removePartitionPublishRate(@Suspended final AsyncResponse asyncResponse,
+            @PathParam("tenant") String tenant,
+            @PathParam("namespace") String namespace,
+            @PathParam("topic") @Encoded String encodedTopic,
+            @QueryParam("isGlobal") @DefaultValue("false") boolean isGlobal,
+            @ApiParam(value = "Whether leader broker redirected this call to this broker. For internal use.")
+            @QueryParam("authoritative") @DefaultValue("false") boolean authoritative) {
+        validateTopicName(tenant, namespace, encodedTopic);
+        validateTopicPolicyOperationAsync(topicName, PolicyName.RATE, PolicyOperation.WRITE)
+            .thenCompose(__ -> preValidation(authoritative))
+            .thenCompose(__ -> internalRemovePartitionPublishRate(isGlobal))
+            .thenRun(() -> {
+                log.info("[{}] Successfully remove topic partition publish rate: tenant={}, namespace={}, topic={},"
+                                + "isGlobal={}",
+                        clientAppId(),
+                        tenant,
+                        namespace,
+                        topicName.getLocalName(),
+                        isGlobal);
+                asyncResponse.resume(Response.noContent().build());
+            })
+            .exceptionally(ex -> {
+                handleTopicPolicyException("removePartitionPublishRate", ex, asyncResponse);
                 return null;
             });
     }

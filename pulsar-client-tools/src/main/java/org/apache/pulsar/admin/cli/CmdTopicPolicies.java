@@ -46,6 +46,7 @@ import org.apache.pulsar.common.policies.data.InactiveTopicDeleteMode;
 import org.apache.pulsar.common.policies.data.InactiveTopicPolicies;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
 import org.apache.pulsar.common.policies.data.OffloadedReadPriority;
+import org.apache.pulsar.common.policies.data.PartitionPublishRate;
 import org.apache.pulsar.common.policies.data.PersistencePolicies;
 import org.apache.pulsar.common.policies.data.PublishRate;
 import org.apache.pulsar.common.policies.data.RetentionPolicies;
@@ -113,6 +114,10 @@ public class CmdTopicPolicies extends CmdBase {
         addCommand("get-publish-rate", new GetPublishRate());
         addCommand("set-publish-rate", new SetPublishRate());
         addCommand("remove-publish-rate", new RemovePublishRate());
+
+        addCommand("get-partition-publish-rate", new GetPartitionPublishRate());
+        addCommand("set-partition-publish-rate", new SetPartitionPublishRate());
+        addCommand("remove-partition-publish-rate", new RemovePartitionPublishRate());
 
         addCommand("get-compaction-threshold", new GetCompactionThreshold());
         addCommand("set-compaction-threshold", new SetCompactionThreshold());
@@ -1098,6 +1103,61 @@ public class CmdTopicPolicies extends CmdBase {
         void run() throws PulsarAdminException {
             String persistentTopic = validatePersistentTopic(topicName);
             getTopicPolicies(isGlobal).removePublishRate(persistentTopic);
+        }
+    }
+
+    @Command(description = "Get publish rate for a topic partition")
+    private class GetPartitionPublishRate extends CliCommand {
+        @Parameters(description = "persistent://tenant/namespace/topic", arity = "1")
+        private String topicName;
+
+        @Option(names = {"--global", "-g"}, description = "Whether to get this policy globally. "
+                + "If set to true, broker returns global topic policies")
+        private boolean isGlobal = false;
+
+        @Override
+        void run() throws PulsarAdminException {
+            String persistentTopic = validatePersistentTopic(topicName);
+            print(getTopicPolicies(isGlobal).getPartitionPublishRate(persistentTopic));
+        }
+    }
+
+    @Command(description = "Set partition publish rate for a topic")
+    private class SetPartitionPublishRate extends CliCommand {
+        @Parameters(description = "persistent://tenant/namespace/topic", arity = "1")
+        private String topicName;
+
+        @Option(names = {"--msg-partition-publish-rate", "-m"}, description = "message-partition-publish-rate "
+                + "(default -1 will be overwrite if not passed)", required = false)
+        private int msgPartitionPublishRate = -1;
+
+        @Option(names = {"--byte-partition-publish-rate", "-b"}, description = "byte-partition-publish-rate "
+                + "(default -1 will be overwrite if not passed)", required = false)
+        private long bytePartitionPublishRate = -1;
+
+        @Option(names = {"--global", "-g"}, description = "Whether to set this policy globally.")
+        private boolean isGlobal = false;
+
+        @Override
+        void run() throws PulsarAdminException {
+            String persistentTopic = validatePersistentTopic(topicName);
+            getTopicPolicies(isGlobal).setPartitionPublishRate(persistentTopic,
+                    new PartitionPublishRate(msgPartitionPublishRate, bytePartitionPublishRate));
+        }
+    }
+
+    @Command(description = "Remove publish rate for a topic partition")
+    private class RemovePartitionPublishRate extends CliCommand {
+        @Parameters(description = "persistent://tenant/namespace/topic", arity = "1")
+        private String topicName;
+
+        @Option(names = {"--global", "-g"}, description = "Whether to remove this policy globally. ")
+        private boolean isGlobal = false;
+
+        @Override
+        void run() throws PulsarAdminException {
+            String persistentTopic = validatePersistentTopic(topicName);
+            getTopicPolicies(isGlobal).removePartitionPublishRate(persistentTopic);
         }
     }
 

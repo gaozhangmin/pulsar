@@ -25,7 +25,7 @@
   <parent>
     <groupId>org.apache.pulsar.tests</groupId>
     <artifactId>tests-parent</artifactId>
-    <version>3.3.9.2-kwai</version>
+    <version>3.3.9.3-kwai</version>
   </parent>
 
   <artifactId>integration</artifactId>

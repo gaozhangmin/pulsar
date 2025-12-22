@@ -71,6 +71,7 @@ public class TopicPolicies {
     private DispatchRateImpl subscriptionDispatchRate;
     private Long compactionThreshold;
     private PublishRate publishRate;
+    private PartitionPublishRate partitionPublishRate;
     private SubscribeRate subscribeRate;
     private Integer deduplicationSnapshotIntervalSeconds;
     private Integer maxMessageSize;
@@ -187,6 +188,10 @@ public class TopicPolicies {
 
     public boolean isPublishRateSet() {
         return publishRate != null;
+    }
+
+    public boolean isPartitionPublishRateSet() {
+        return partitionPublishRate != null;
     }
 
     public boolean isSubscribeRateSet() {
