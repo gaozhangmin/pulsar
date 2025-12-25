@@ -3946,6 +3946,10 @@ public class PersistentTopic extends AbstractTopic implements Topic, AddEntryCal
                 } catch (IOException e) {
                     log.warn("[{}] [{}] Error while getting the oldest message", topic, cursor.toString(), e);
                     res.complete(false);
+                } finally {
+                    if (entry != null) {
+                        entry.release();
+                    }
                 }
 
             }
