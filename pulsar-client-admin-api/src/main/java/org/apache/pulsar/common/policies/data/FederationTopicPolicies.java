@@ -38,6 +38,11 @@ public class FederationTopicPolicies {
     public static final String FEDERATION_CAN_READ = "can_read";
     public static final String FEDERATION_CAN_WRITE = "can_write";
     public static final String FEDERATION_MIGRATE_BACK = "migrate_back";
+    public static final String FEDERATION_TYPE = "type";
+
+    public static final String TYPE_MIGRATING = "migrating";
+    public static final String TYPE_MIGRATED = "migrated";
+    public static final String TYPE_NORMAL = "normal";
 
     private String sourceCluster;
     private String sourceBootstrap;
@@ -45,20 +50,22 @@ public class FederationTopicPolicies {
     private Boolean canRead;
     private Boolean canWrite;
     private Boolean migrateBack;
+    private String type;
 
     public FederationTopicPolicies() {
-        this("", "", "", false, false, false);
+        this("", "", "", false, false, false, TYPE_NORMAL);
     }
 
     public FederationTopicPolicies(String sourceCluster, String sourceBootstrap,
                                    String sourceZkAddress, Boolean canRead,
-            Boolean canWrite, Boolean migrateBack) {
+            Boolean canWrite, Boolean migrateBack, String type) {
         this.sourceCluster = sourceCluster;
         this.sourceBootstrap = sourceBootstrap;
         this.sourceZkAddress = sourceZkAddress;
         this.canRead = canRead;
         this.canWrite = canWrite;
         this.migrateBack = migrateBack;
+        this.type = type;
     }
 
     public static FederationTopicPolicies createFederationTopicPolicies(Map<String, String> topicConfig) {
@@ -76,7 +83,8 @@ public class FederationTopicPolicies {
                     topicConfig.get(FEDERATION_SOURCE_ZK_ADDRESS),
                     Boolean.valueOf(topicConfig.getOrDefault(FEDERATION_CAN_READ, "false")),
                     Boolean.valueOf(topicConfig.getOrDefault(FEDERATION_CAN_WRITE, "false")),
-                    Boolean.valueOf(topicConfig.getOrDefault(FEDERATION_MIGRATE_BACK, "false"))
+                    Boolean.valueOf(topicConfig.getOrDefault(FEDERATION_MIGRATE_BACK, "false")),
+                    topicConfig.getOrDefault(FEDERATION_TYPE, TYPE_NORMAL)
             );
             return federationTopicPolicies;
         }
@@ -84,7 +92,15 @@ public class FederationTopicPolicies {
     }
 
     public boolean needSync() {
-        return !canWrite && !canRead;
+        return !canWrite && !canRead && typeIsMigrating();
+    }
+
+    public boolean typeIsMigrating() {
+        return TYPE_MIGRATING.equals(type);
+    }
+
+    public boolean typeIsMigrated() {
+        return TYPE_MIGRATED.equals(type);
     }
 
     @Override
@@ -102,7 +118,8 @@ public class FederationTopicPolicies {
                 && sourceZkAddress.equals(that.sourceZkAddress)
                 && canRead.equals(that.canRead)
                 && canWrite.equals(that.canWrite)
-                && migrateBack.equals(that.migrateBack);
+                && migrateBack.equals(that.migrateBack)
+                && type.equals(that.type);
     }
 
     @Override
@@ -118,6 +135,7 @@ public class FederationTopicPolicies {
                 + ", canRead=" + canRead
                 + ", canWrite=" + canWrite
                 + ", migrateBack=" + migrateBack
+                + ", type='" + type + '\''
                 + '}';
     }
 }

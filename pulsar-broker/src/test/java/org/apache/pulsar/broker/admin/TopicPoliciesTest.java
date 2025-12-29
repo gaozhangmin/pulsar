@@ -3825,7 +3825,8 @@ public class TopicPoliciesTest extends MockedPulsarServiceBaseTest {
                 "sourceZkAddress",
                 true,
                 false,
-                true
+                true,
+                "normal"
         );
         log.info("Federation topic policies: {} will set to the topic: {}", federationPolicies, testTopic);
 
@@ -3846,7 +3847,8 @@ public class TopicPoliciesTest extends MockedPulsarServiceBaseTest {
                 "sourceZkAddress",
                 true,
                 false,
-                true
+                true,
+                "normal"
         );
         log.info("Federation topic policies: {} will set to the topic: {}", federationPolicies, testTopic);
 
@@ -3876,7 +3878,8 @@ public class TopicPoliciesTest extends MockedPulsarServiceBaseTest {
                 "nsSourceZkAddress",
                 true,
                 true,
-                false
+                false,
+                "normal"
         );
         admin.topicPolicies().setFederationTopicPolicies(topic, topicPolicies);
         Awaitility.await().untilAsserted(()

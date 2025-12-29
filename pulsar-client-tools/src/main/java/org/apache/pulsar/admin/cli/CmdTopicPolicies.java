@@ -2095,6 +2095,9 @@ public class CmdTopicPolicies extends CmdBase {
         @Option(names = { "--migrate-back", "-mb" }, description = "Whether to migrate back to the source cluster")
         private Boolean migrateBack;
 
+        @Option(names = { "--type", "-t" }, description = "Federation type (migrating, migrated, normal)")
+        private String type = "normal";
+
         @Option(names = { "--global", "-g" }, description = "Whether to set this policy globally. "
                 + "If set to true, the policy will be replicated to other clusters asynchronously")
         private boolean isGlobal = false;
@@ -2103,7 +2106,7 @@ public class CmdTopicPolicies extends CmdBase {
         void run() throws PulsarAdminException {
             String persistentTopic = validatePersistentTopic(topicName);
             FederationTopicPolicies policies = new FederationTopicPolicies(
-                    sourceCluster, sourceBootstrap, sourceZkAddress, canRead, canWrite, migrateBack);
+                    sourceCluster, sourceBootstrap, sourceZkAddress, canRead, canWrite, migrateBack, type);
             getTopicPolicies(isGlobal).setFederationTopicPolicies(persistentTopic, policies);
         }
     }
