@@ -623,9 +623,8 @@ public abstract class AdminResource extends PulsarWebResource {
                     }
                 })
                 .thenCompose(__ -> provisionPartitionedTopicPath(numPartitions, createLocalTopicOnly,
-                        filterFederationKeys(properties)))
+                        properties))
                 .thenCompose(__ -> tryCreatePartitionsAsync(numPartitions))
-                .thenCompose(__ -> internalSetFederationTopicPolicies(properties))
                 .thenCompose(__ -> {
                     FederationTopicPolicies federationPolicies =
                             FederationTopicPolicies.createFederationTopicPolicies(properties);
@@ -1050,25 +1049,5 @@ public abstract class AdminResource extends PulsarWebResource {
                         throw new RestException(Status.NOT_FOUND, getTopicNotFoundErrorMessage(topicName.toString()));
                     }
                 });
-    }
-
-    /**
-     * Filters out federation-related keys from the properties map.
-     * This prevents federation keys from being persisted in topic metadata.
-     */
-    private Map<String, String> filterFederationKeys(Map<String, String> properties) {
-        if (properties == null || properties.isEmpty()) {
-            return properties;
-        }
-
-        Map<String, String> filteredProperties = new HashMap<>(properties);
-        filteredProperties.remove(FederationTopicPolicies.FEDERATION_SOURCE_CLUSTER);
-        filteredProperties.remove(FederationTopicPolicies.FEDERATION_SOURCE_BOOT_ADDRESS);
-        filteredProperties.remove(FederationTopicPolicies.FEDERATION_SOURCE_ZK_ADDRESS);
-        filteredProperties.remove(FederationTopicPolicies.FEDERATION_CAN_READ);
-        filteredProperties.remove(FederationTopicPolicies.FEDERATION_CAN_WRITE);
-        filteredProperties.remove(FederationTopicPolicies.FEDERATION_MIGRATE_BACK);
-
-        return filteredProperties;
     }
 }
