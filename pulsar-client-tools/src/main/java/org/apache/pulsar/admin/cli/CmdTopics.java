@@ -275,6 +275,7 @@ public class CmdTopics extends CmdBase {
         addCommand("set-schema-validation-enforce", new SetSchemaValidationEnforced());
 
         addCommand("trim-topic", new TrimTopic());
+        addCommand("get-position-by-offset", new GetPositionByOffset());
     }
 
     @Command(description = "Get the list of topics under a namespace.")
@@ -3050,6 +3051,22 @@ public class CmdTopics extends CmdBase {
         void run() throws PulsarAdminException {
             String topic = validateTopicName(topicName);
             getAdmin().topics().trimTopic(topic);
+        }
+    }
+
+    @Command(description = "Get offset by position for a topic")
+    private class GetPositionByOffset extends CliCommand {
+        @Parameters(description = "persistent://tenant/namespace/topic", arity = "1")
+        private String topicName;
+
+        @Option(names = { "-o", "--offset" },
+                description = "The offset to look up position for", required = true)
+        private long offset;
+
+        @Override
+        void run() throws PulsarAdminException {
+            String persistentTopic = validatePersistentTopic(topicName);
+            print(getTopics().getPositionByOffset(persistentTopic, offset));
         }
     }
 }

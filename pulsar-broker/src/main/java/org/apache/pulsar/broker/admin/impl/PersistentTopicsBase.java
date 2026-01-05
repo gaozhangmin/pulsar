@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import javax.ws.rs.WebApplicationException;
@@ -136,6 +137,7 @@ import org.apache.pulsar.common.policies.data.SchemaCompatibilityStrategy;
 import org.apache.pulsar.common.policies.data.SubscribeRate;
 import org.apache.pulsar.common.policies.data.SubscriptionPolicies;
 import org.apache.pulsar.common.policies.data.TopicOperation;
+import org.apache.pulsar.common.policies.data.TopicPartitionOffsetResponse;
 import org.apache.pulsar.common.policies.data.TopicPolicies;
 import org.apache.pulsar.common.policies.data.TopicStats;
 import org.apache.pulsar.common.policies.data.impl.AutoSubscriptionCreationOverrideImpl;
@@ -147,6 +149,7 @@ import org.apache.pulsar.common.protocol.Commands;
 import org.apache.pulsar.common.stats.AnalyzeSubscriptionBacklogResult;
 import org.apache.pulsar.common.util.DateFormatter;
 import org.apache.pulsar.common.util.FutureUtil;
+import org.apache.pulsar.common.util.ObjectMapperFactory;
 import org.apache.pulsar.common.util.collections.BitSetRecyclable;
 import org.apache.pulsar.compaction.Compactor;
 import org.apache.pulsar.metadata.api.MetadataStoreException;
@@ -5540,5 +5543,270 @@ public class PersistentTopicsBase extends AdminResource {
                             }
                             return null;
                         }));
+    }
+
+    protected CompletableFuture<Response> internalGetPositionByOffset(long offset, boolean authoritative) {
+        CompletableFuture<Void> future = validateTopicOperationAsync(topicName, TopicOperation.GET_STATS);
+        return future.thenCompose(__ -> {
+                    if (topicName.isGlobal()) {
+                        return validateGlobalNamespaceOwnershipAsync(namespaceName);
+                    } else {
+                        return CompletableFuture.completedFuture(null);
+                    }
+                }).thenCompose(__ -> validateTopicOwnershipAsync(topicName, authoritative))
+                .thenCompose(__ -> getTopicReferenceAsync(topicName))
+                .thenCompose(topic -> {
+                    if (!(topic instanceof PersistentTopic persistentTopic)) {
+                        throw new RestException(Status.METHOD_NOT_ALLOWED,
+                                "Get offset by position on a non-persistent topic is not allowed");
+                    }
+
+                    ManagedLedgerImpl managedLedger = (ManagedLedgerImpl) persistentTopic.getManagedLedger();
+
+                    int partition = topicName.getPartitionIndex();
+
+                    // Get log start and end offsets
+                    long logStartOffset =
+                            managedLedger.getFirstEntryIndexFromLedgerMetadata(
+                                    managedLedger.getLedgersInfo().firstKey());
+                    long logEndOffset = managedLedger.getManagedLedgerInterceptor().getIndex();
+
+                    if (offset < logStartOffset || offset >= logEndOffset) {
+                        throw new RestException(Status.BAD_REQUEST,
+                                "Offset " + offset + " is out of range [" + logStartOffset + ", " + logEndOffset + ")");
+                    }
+
+                    // Use asyncFindPosition with custom predicate to find the position by offset
+                    return managedLedger.asyncFindPosition(new FindEntryByOffset(managedLedger, offset))
+                            .thenCompose(position -> {
+                                PositionImpl positionImpl = (PositionImpl) position;
+
+                                // Read entry to validate position and get metadata
+                                CompletableFuture<Response> responseCompletableFuture = new CompletableFuture<>();
+
+                                managedLedger.asyncReadEntry(positionImpl, new AsyncCallbacks.ReadEntryCallback() {
+                                    @Override
+                                    public void readEntryComplete(Entry entry, Object ctx) {
+                                        try {
+                                            TopicPartitionOffsetResponse response = new TopicPartitionOffsetResponse();
+                                            response.setTopic(topicName.toString());
+                                            response.setPartition(partition);
+                                            response.setOffset(offset);
+                                            response.setLedgerId(positionImpl.getLedgerId());
+                                            response.setEntryId(positionImpl.getEntryId());
+                                            response.setLogStartOffset(logStartOffset);
+                                            response.setLogEndOffset(logEndOffset);
+
+                                            // Get ledger metadata from the managed ledger
+                                            TopicPartitionOffsetResponse.LedgerMetadata ledgerMeta =
+                                                    new TopicPartitionOffsetResponse.LedgerMetadata();
+
+                                            // Get ledger info from managed ledger
+                                            var ledgerInfoOpt = managedLedger
+                                                    .getOptionalLedgerInfo(positionImpl.getLedgerId());
+                                            if (ledgerInfoOpt.isPresent()) {
+                                                var ledgerInfo = ledgerInfoOpt.get();
+                                                long timestamp = ledgerInfo.getTimestamp();
+                                                // If timestamp is 0, it means the creation time is not available
+                                                // This can happen when ledger metadata is incomplete or corrupted
+                                                ledgerMeta.setCreationTime(timestamp > 0 ? timestamp : -1);
+                                                ledgerMeta.setLength(ledgerInfo.getSize());
+                                                ledgerMeta.setLastEntryId(ledgerInfo.getEntries() - 1);
+                                                ledgerMeta.setState(managedLedger.getState().toString());
+                                            } else {
+                                                // Fallback values if ledger info is not available
+                                                // This usually happens when the ledger has been deleted or is corrupted
+                                                ledgerMeta.setCreationTime(-1L);  // Use -1 to indicate unknown
+                                                ledgerMeta.setLength(0L);
+                                                ledgerMeta.setLastEntryId(-1L);
+                                                ledgerMeta.setState("UNKNOWN");
+                                            }
+
+                                            // Get ensemble information from BookKeeper
+                                            getEnsembleInfo(managedLedger, positionImpl.getLedgerId(), ledgerMeta)
+                                                    .thenRun(() -> {
+                                                        response.setLedgerMetadata(ledgerMeta);
+
+                                                        String getLedgerCommand = String.format(
+                                                                "bookkeeper shell entryfile -l %d -e %d",
+                                                                response.getLedgerId(), response.getEntryId());
+                                                        response.setGetLedgerCommand(getLedgerCommand);
+
+                                                        responseCompletableFuture.complete(buildJsonResponse(response,
+                                                                "application/json"));
+                                                    })
+                                                    .exceptionally(throwable -> {
+                                                        log.warn("Failed to get ensemble info for ledger {}, "
+                                                                        + "using defaults",
+                                                                positionImpl.getLedgerId(), throwable);
+                                                        response.setLedgerMetadata(ledgerMeta);
+
+                                                        String getLedgerCommand = String.format(
+                                                                "bookkeeper shell entryfile -l %d -e %d",
+                                                                response.getLedgerId(), response.getEntryId());
+                                                        response.setGetLedgerCommand(getLedgerCommand);
+
+                                                        responseCompletableFuture.complete(buildJsonResponse(response,
+                                                                "application/json"));
+                                                        return null;
+                                                    });
+                                        } catch (Exception e) {
+                                            log.error("Error building response", e);
+                                            responseCompletableFuture.complete(buildErrorResponse(
+                                                    Status.INTERNAL_SERVER_ERROR,
+                                                    "Error building response: "
+                                                            + e.getMessage(), "application/json"));
+                                        } finally {
+                                            if (entry != null) {
+                                                entry.release();
+                                            }
+                                        }
+                                    }
+
+                                    @Override
+                                    public void readEntryFailed(ManagedLedgerException exception, Object ctx) {
+                                        log.error("Failed to read entry at position: " + positionImpl, exception);
+                                        responseCompletableFuture.complete(buildErrorResponse(
+                                                Status.INTERNAL_SERVER_ERROR,
+                                                "Failed to read entry: "
+                                                        + exception.getMessage(), "application/json"));
+                                    }
+                                }, null);
+
+                                return responseCompletableFuture;
+                            });
+                });
+    }
+
+    private static class FindEntryByOffset implements Predicate<Entry> {
+        private final ManagedLedger managedLedger;
+        private final long targetOffset;
+        private final boolean skipMessagesWithoutIndex;
+
+        public FindEntryByOffset(ManagedLedger managedLedger, long targetOffset, boolean skipMessagesWithoutIndex) {
+            this.managedLedger = managedLedger;
+            this.targetOffset = targetOffset;
+            this.skipMessagesWithoutIndex = skipMessagesWithoutIndex;
+        }
+
+        public FindEntryByOffset(ManagedLedger managedLedger, long targetOffset) {
+            this(managedLedger, targetOffset, false);
+        }
+
+        @Override
+        public boolean test(Entry entry) {
+            if (entry == null) {
+                return false;
+            }
+
+            try {
+                long currentOffset = peekOffsetFromEntry(entry);
+                if (currentOffset < 0 && skipMessagesWithoutIndex) {
+                    // Skip entries without index metadata if requested
+                    return true; // continue searching
+                }
+
+                // Return true to continue if current offset is less than target
+                return currentOffset < targetOffset;
+            } catch (Exception e) {
+                log.debug("[{}] Error extracting offset from entry at position {}: {}",
+                    managedLedger.getName(), entry.getPosition(), e.getMessage());
+                if (skipMessagesWithoutIndex) {
+                    return true; // continue searching if we can't read metadata
+                }
+                return false; // stop searching on error
+            } finally {
+                entry.release();
+            }
+        }
+
+        /**
+         * Extract offset from entry's broker metadata.
+         * Returns -1 if no offset/index metadata is found.
+         */
+        private long peekOffsetFromEntry(Entry entry) {
+            try {
+                ByteBuf entryBuffer = entry.getDataBuffer();
+                if (entryBuffer == null || entryBuffer.readableBytes() == 0) {
+                    return -1;
+                }
+
+                // Use Commands utility to peek broker entry metadata
+                BrokerEntryMetadata brokerMetadata = Commands.peekBrokerEntryMetadataIfExist(entryBuffer);
+                if (brokerMetadata != null && brokerMetadata.hasIndex()) {
+                    return brokerMetadata.getIndex();
+                }
+
+                // Fall back to position-based offset if no metadata
+                PositionImpl position = (PositionImpl) entry.getPosition();
+                return position.getEntryId();
+            } catch (Exception e) {
+                // Log at debug level as this might happen frequently for entries without metadata
+                log.debug("[{}] Failed to extract offset from entry: {}",
+                    managedLedger.getName(), e.getMessage());
+                return -1;
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "FindEntryByOffset{targetOffset=" + targetOffset
+                    + ", skipMessagesWithoutIndex=" + skipMessagesWithoutIndex + "}";
+        }
+    }
+
+    private CompletableFuture<Void> getEnsembleInfo(ManagedLedger managedLedger, long ledgerId,
+                                                    TopicPartitionOffsetResponse.LedgerMetadata ledgerMeta) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        // Async get ledger metadata
+        pulsar().getBookKeeperClient().getLedgerMetadata(ledgerId)
+                .thenAccept(ledgerMetadata -> {
+                    try {
+                        // Extract ensemble information
+                        var ensembleMap = ledgerMetadata.getAllEnsembles();
+                        if (!ensembleMap.isEmpty()) {
+                            // Get the first ensemble (current one)
+                            var firstEnsemble = ensembleMap.firstEntry().getValue();
+                            List<String> ensembleList = firstEnsemble.stream()
+                                    .map(bookieAddress -> bookieAddress.toString())
+                                    .collect(Collectors.toList());
+                            ledgerMeta.setEnsemble(ensembleList);
+                        }
+
+                        ledgerMeta.setWriteQuorum(ledgerMetadata.getWriteQuorumSize());
+                        ledgerMeta.setAckQuorum(ledgerMetadata.getAckQuorumSize());
+
+                        future.complete(null);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse ledger metadata for ledger {}", ledgerId, e);
+                        future.complete(null); // Complete anyway with partial data
+                    }
+                })
+                .exceptionally(throwable -> {
+                    log.warn("Failed to get ledger metadata for ledger {}", ledgerId, throwable);
+                    future.complete(null); // Complete anyway with partial data
+                    return null;
+                });
+
+        return future;
+    }
+
+    private Response buildJsonResponse(Object content, String mediaType) {
+        try {
+            String json = ObjectMapperFactory.getThreadLocal().writeValueAsString(content);
+            return Response.ok(json).type(mediaType).build();
+        } catch (Exception e) {
+            log.error("Failed to serialize response to JSON", e);
+            return Response.status(Status.INTERNAL_SERVER_ERROR)
+                    .entity("Failed to serialize response").build();
+        }
+    }
+
+    private Response buildErrorResponse(Status status, String message, String mediaType) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", message);
+        error.put("status", String.valueOf(status.getStatusCode()));
+        return buildJsonResponse(error, mediaType).status(status.getStatusCode()).build();
     }
 }

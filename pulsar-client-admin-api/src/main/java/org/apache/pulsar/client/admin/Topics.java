@@ -47,6 +47,7 @@ import org.apache.pulsar.common.policies.data.PersistentTopicInternalStats;
 import org.apache.pulsar.common.policies.data.PublishRate;
 import org.apache.pulsar.common.policies.data.RetentionPolicies;
 import org.apache.pulsar.common.policies.data.SubscribeRate;
+import org.apache.pulsar.common.policies.data.TopicPartitionOffsetResponse;
 import org.apache.pulsar.common.policies.data.TopicStats;
 import org.apache.pulsar.common.stats.AnalyzeSubscriptionBacklogResult;
 
@@ -4558,4 +4559,23 @@ public interface Topics {
     default CompletableFuture<Void> createShadowTopicAsync(String shadowTopic, String sourceTopic) {
         return createShadowTopicAsync(shadowTopic, sourceTopic, null);
     }
+
+    /**
+     * Get offset by position for a topic.
+     *
+     * @param topic Topic name
+     * @param offset The offset to look up position for
+     * @return Response containing position and metadata information
+     * @throws PulsarAdminException Unexpected error
+     */
+    TopicPartitionOffsetResponse getPositionByOffset(String topic, long offset) throws PulsarAdminException;
+
+    /**
+     * Get offset by position for a topic asynchronously.
+     *
+     * @param topic Topic name
+     * @param offset The offset to look up position for
+     * @return Response containing position and metadata information
+     */
+    CompletableFuture<TopicPartitionOffsetResponse> getPositionByOffsetAsync(String topic, long offset);
 }

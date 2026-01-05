@@ -89,6 +89,7 @@ import org.apache.pulsar.common.policies.data.PersistentTopicInternalStats;
 import org.apache.pulsar.common.policies.data.PublishRate;
 import org.apache.pulsar.common.policies.data.RetentionPolicies;
 import org.apache.pulsar.common.policies.data.SubscribeRate;
+import org.apache.pulsar.common.policies.data.TopicPartitionOffsetResponse;
 import org.apache.pulsar.common.policies.data.TopicStats;
 import org.apache.pulsar.common.protocol.Commands;
 import org.apache.pulsar.common.stats.AnalyzeSubscriptionBacklogResult;
@@ -2817,6 +2818,32 @@ public class TopicsImpl extends BaseResource implements Topics {
                 return createPartitionedTopicAsync(shadowTopic, sourceTopicMeta.partitions, shadowProperties);
             }
         });
+    }
+
+    @Override
+    public TopicPartitionOffsetResponse getPositionByOffset(String topic, long offset) throws PulsarAdminException {
+        return sync(() -> getPositionByOffsetAsync(topic, offset));
+    }
+
+    @Override
+    public CompletableFuture<TopicPartitionOffsetResponse> getPositionByOffsetAsync(String topic, long offset) {
+        TopicName tn = validateTopic(topic);
+        WebTarget path = topicPath(tn, "PositionByOffset");
+        path = path.queryParam("offset", offset);
+        final CompletableFuture<TopicPartitionOffsetResponse> future = new CompletableFuture<>();
+        asyncGetRequest(path,
+                new InvocationCallback<TopicPartitionOffsetResponse>() {
+                    @Override
+                    public void completed(TopicPartitionOffsetResponse response) {
+                        future.complete(response);
+                    }
+
+                    @Override
+                    public void failed(Throwable throwable) {
+                        future.completeExceptionally(getApiException(throwable.getCause()));
+                    }
+                });
+        return future;
     }
 
     private static final Logger log = LoggerFactory.getLogger(TopicsImpl.class);
