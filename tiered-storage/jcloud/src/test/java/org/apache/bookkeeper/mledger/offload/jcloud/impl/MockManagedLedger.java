@@ -346,6 +346,11 @@ public class MockManagedLedger implements ManagedLedger {
     }
 
     @Override
+    public CompletableFuture<Position> asyncFindPosition(long offset, Predicate<Entry> predicate) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
     public ManagedLedgerInterceptor getManagedLedgerInterceptor() {
         return null;
     }
@@ -405,5 +410,20 @@ public class MockManagedLedger implements ManagedLedger {
     public boolean isMigrated() {
         // no-op
         return false;
+    }
+
+    @Override
+    public CompletableFuture<Void> asyncAddLedgerProperty(long ledgerId, String key, String value) {
+        return null;
+    }
+
+    @Override
+    public CompletableFuture<Void> asyncRemoveLedgerProperty(long ledgerId, String key) {
+        return null;
+    }
+
+    @Override
+    public CompletableFuture<String> asyncGetLedgerProperty(long ledgerId, String key) {
+        return null;
     }
 }

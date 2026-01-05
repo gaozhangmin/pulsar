@@ -49,6 +49,8 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
     LedgerHandle ledger;
     long entryId;
     private int numberOfMessages;
+    private Long offsetIndex;
+
 
     @SuppressWarnings("unused")
     private static final AtomicReferenceFieldUpdater<OpAddEntry, AddEntryCallback> callbackUpdater =
@@ -224,6 +226,14 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
         }
 
         this.entryId = entryId;
+        if (this.entryId == 0
+                && ml.getManagedLedgerInterceptor() != null
+                && offsetIndex != null) {
+            if (log.isDebugEnabled()) {
+                log.debug("[{}] Setting first entry index {} for ledger {}", ml.getName(), offsetIndex, lh.getId());
+            }
+            ml.setFirstEntryIndexForCurrentLedger(offsetIndex);
+        }
         if (log.isDebugEnabled()) {
             log.debug("[{}] [{}] write-complete: ledger-id={} entry-id={} size={} rc={}", this, ml.getName(),
                     lh == null ? -1 : lh.getId(), entryId, dataLength, rc);
@@ -389,6 +399,10 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
     public void setData(ByteBuf data) {
         this.dataLength = data.readableBytes();
         this.data = data;
+    }
+
+    public void setOffsetIndex(Long offsetIndex) {
+        this.offsetIndex = offsetIndex;
     }
 
     private final Handle<OpAddEntry> recyclerHandle;

@@ -40,6 +40,7 @@ import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.bookkeeper.mledger.impl.OpAddEntry;
 import org.apache.bookkeeper.mledger.impl.PositionImpl;
 import org.apache.bookkeeper.mledger.intercept.ManagedLedgerInterceptor;
+import org.apache.bookkeeper.mledger.proto.MLDataFormats;
 import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.apache.pulsar.common.api.proto.BrokerEntryMetadata;
 import org.apache.pulsar.common.intercept.BrokerEntryMetadataInterceptor;
@@ -60,6 +61,7 @@ import java.util.Set;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
 
 @Test(groups = "broker")
 public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase {
@@ -108,7 +110,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
     @Test
     public void testAddBrokerEntryMetadata() throws Exception {
-        final int MOCK_BATCH_SIZE = 2;
+        final int mockBatchSize = 2;
         int numberOfEntries = 10;
         final String ledgerAndCursorName = "topicEntryMetadataSequenceId";
 
@@ -122,7 +124,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         ManagedCursorImpl cursor = (ManagedCursorImpl) ledger.openCursor(ledgerAndCursorName);
 
         for ( int i = 0 ; i < numberOfEntries; i ++) {
-            ledger.addEntry(("message" + i).getBytes(), MOCK_BATCH_SIZE);
+            ledger.addEntry(("message" + i).getBytes(), mockBatchSize);
         }
 
         assertEquals(19, ((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex());
@@ -132,7 +134,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
             BrokerEntryMetadata metadata =
                     Commands.parseBrokerEntryMetadataIfExist(entry.getDataBuffer());
             assertNotNull(metadata);
-            assertEquals(metadata.getIndex(), (i + 1) * MOCK_BATCH_SIZE - 1);
+            assertEquals(metadata.getIndex(), (i + 1) * mockBatchSize - 1);
             entry.release();
         }
 
@@ -210,20 +212,20 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
     @Test(timeOut = 20000)
     public void testRecoveryIndex() throws Exception {
-        final int MOCK_BATCH_SIZE = 2;
+        final int mockBatchSize = 2;
         ManagedLedgerInterceptor interceptor = new ManagedLedgerInterceptorImpl(getBrokerEntryMetadataInterceptors(),null);
 
         ManagedLedgerConfig config = new ManagedLedgerConfig();
         config.setManagedLedgerInterceptor(interceptor);
         ManagedLedger ledger = factory.open("my_recovery_index_test_ledger", config);
 
-        ledger.addEntry("dummy-entry-1".getBytes(StandardCharsets.UTF_8), MOCK_BATCH_SIZE);
+        ledger.addEntry("dummy-entry-1".getBytes(StandardCharsets.UTF_8), mockBatchSize);
 
         ManagedCursor cursor = ledger.openCursor("c1");
 
-        ledger.addEntry("dummy-entry-2".getBytes(StandardCharsets.UTF_8), MOCK_BATCH_SIZE);
+        ledger.addEntry("dummy-entry-2".getBytes(StandardCharsets.UTF_8), mockBatchSize);
 
-        assertEquals(((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(), MOCK_BATCH_SIZE * 2 - 1);
+        assertEquals(((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(), mockBatchSize * 2 - 1);
 
         ledger.close();
 
@@ -237,7 +239,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         cursor = ledger.openCursor("c1");
 
         assertEquals(ledger.getNumberOfEntries(), 2);
-        assertEquals(((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(), MOCK_BATCH_SIZE * 2 - 1);
+        assertEquals(((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(), mockBatchSize * 2 - 1);
 
 
         List<Entry> entries = cursor.readEntries(100);
@@ -250,9 +252,9 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
     @Test
     public void testFindPositionByIndex() throws Exception {
-        final int MOCK_BATCH_SIZE = 2;
+        final int mockBatchSize = 2;
         final int maxEntriesPerLedger = 5;
-        int maxSequenceIdPerLedger = MOCK_BATCH_SIZE * maxEntriesPerLedger;
+        int maxSequenceIdPerLedger = mockBatchSize * maxEntriesPerLedger;
         ManagedLedgerInterceptor interceptor = new ManagedLedgerInterceptorImpl(getBrokerEntryMetadataInterceptors(),null);
 
 
@@ -265,7 +267,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
         long firstLedgerId = -1;
         for (int i = 0; i < maxEntriesPerLedger; i++) {
-            firstLedgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), MOCK_BATCH_SIZE).getLedgerId();
+            firstLedgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), mockBatchSize).getLedgerId();
         }
 
         assertEquals(((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(), 9);
@@ -274,20 +276,20 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         PositionImpl position = null;
         for (int index = 0; index <= ((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(); index ++) {
             position = (PositionImpl) ledger.asyncFindPosition(new IndexSearchPredicate(index)).get();
-            assertEquals(position.getEntryId(), (index % maxSequenceIdPerLedger) / MOCK_BATCH_SIZE);
+            assertEquals(position.getEntryId(), (index % maxSequenceIdPerLedger) / mockBatchSize);
         }
 
         // roll over ledger
         long secondLedgerId = -1;
         for (int i = 0; i < maxEntriesPerLedger; i++) {
-            secondLedgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), MOCK_BATCH_SIZE).getLedgerId();
+            secondLedgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), mockBatchSize).getLedgerId();
         }
         assertEquals(((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(), 19);
         assertNotEquals(firstLedgerId, secondLedgerId);
 
         for (int index = 0; index <= ((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(); index ++) {
             position = (PositionImpl) ledger.asyncFindPosition(new IndexSearchPredicate(index)).get();
-            assertEquals(position.getEntryId(), (index % maxSequenceIdPerLedger) / MOCK_BATCH_SIZE);
+            assertEquals(position.getEntryId(), (index % maxSequenceIdPerLedger) / mockBatchSize);
         }
 
         // reopen ledger
@@ -299,14 +301,14 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
         long thirdLedgerId = -1;
         for (int i = 0; i < maxEntriesPerLedger; i++) {
-            thirdLedgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), MOCK_BATCH_SIZE).getLedgerId();
+            thirdLedgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), mockBatchSize).getLedgerId();
         }
         assertEquals(((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(), 29);
         assertNotEquals(secondLedgerId, thirdLedgerId);
 
         for (int index = 0; index <= ((ManagedLedgerInterceptorImpl) ledger.getManagedLedgerInterceptor()).getIndex(); index ++) {
             position = (PositionImpl) ledger.asyncFindPosition(new IndexSearchPredicate(index)).get();
-            assertEquals(position.getEntryId(), (index % maxSequenceIdPerLedger) / MOCK_BATCH_SIZE);
+            assertEquals(position.getEntryId(), (index % maxSequenceIdPerLedger) / mockBatchSize);
         }
         cursor.close();
         ledger.close();
@@ -314,7 +316,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
     @Test
     public void testAddEntryFailed() throws Exception {
-        final int MOCK_BATCH_SIZE = 2;
+        final int mockBatchSize = 2;
         final String ledgerAndCursorName = "testAddEntryFailed";
 
         ManagedLedgerInterceptor interceptor =
@@ -334,7 +336,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
         CountDownLatch countDownLatch = new CountDownLatch(1);
         try {
-            ledger.asyncAddEntry(buffer, MOCK_BATCH_SIZE, new AsyncCallbacks.AddEntryCallback() {
+            ledger.asyncAddEntry(buffer, mockBatchSize, new AsyncCallbacks.AddEntryCallback() {
                 @Override
                 public void addComplete(Position position, ByteBuf entryData, Object ctx) {
                     countDownLatch.countDown();
@@ -357,7 +359,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
 
     @Test
     public void testBeforeAddEntryWithException() throws Exception {
-        final int MOCK_BATCH_SIZE = 2;
+        final int mockBatchSize = 2;
         final String ledgerAndCursorName = "testBeforeAddEntryWithException";
 
         ManagedLedgerInterceptor interceptor =
@@ -371,7 +373,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         ManagedLedger ledger = factory.open(ledgerAndCursorName, config);
         CountDownLatch countDownLatch = new CountDownLatch(1);
         try {
-            ledger.asyncAddEntry(buffer, MOCK_BATCH_SIZE, new AsyncCallbacks.AddEntryCallback() {
+            ledger.asyncAddEntry(buffer, mockBatchSize, new AsyncCallbacks.AddEntryCallback() {
                 @Override
                 public void addComplete(Position position, ByteBuf entryData, Object ctx) {
                     countDownLatch.countDown();
@@ -519,4 +521,270 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         ledger.close();
     }
 
+    private ManagedLedgerConfig createTestConfig(int maxEntriesPerLedger) {
+        ManagedLedgerInterceptor interceptor =
+                new ManagedLedgerInterceptorImpl(getBrokerEntryMetadataInterceptors(), null);
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setManagedLedgerInterceptor(interceptor);
+        config.setMaxEntriesPerLedger(maxEntriesPerLedger);
+        return config;
+    }
+
+    private long addEntriesToLedger(ManagedLedger ledger, int numEntries, int batchSize) throws Exception {
+        long ledgerId = -1;
+        for (int i = 0; i < numEntries; i++) {
+            ledgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), batchSize).getLedgerId();
+        }
+        return ledgerId;
+    }
+
+    private void verifyStartOffsetPerLedger(ManagedLedger ledger, long ledgerId, long expectedFirstIndex) throws Exception {
+        MLDataFormats.ManagedLedgerInfo.LedgerInfo ledgerInfo = ledger.getLedgersInfo().get(ledgerId);
+        assertEquals(ledgerInfo.getPropertiesCount(), 1);
+        assertEquals(Long.parseLong(ledger.asyncGetLedgerProperty(ledgerId, "firstEntryIndex").get()), expectedFirstIndex);
+    }
+
+    private void verifyPositionsByOffset(ManagedLedger ledger, long maxOffset, int batchSize, int maxEntriesPerLedger) throws Exception {
+        int maxSequenceIdPerLedger = batchSize * maxEntriesPerLedger;
+        for (long offset = 0; offset <= maxOffset; offset++) {
+            PositionImpl position = (PositionImpl) ledger.asyncFindPosition(offset, new IndexSearchPredicate(offset)).get();
+            assertEquals(position.getEntryId(), (offset % maxSequenceIdPerLedger) / batchSize,
+                    String.format("Failed at offset %d, expected entryId: %d, actual: %d",
+                                 offset, (offset % maxSequenceIdPerLedger) / batchSize, position.getEntryId()));
+        }
+    }
+
+    private void verifyMissingFirstEntryIndex(ManagedLedger ledger, long ledgerId) throws Exception {
+        String property = ledger.asyncGetLedgerProperty(ledgerId, "firstEntryIndex").get();
+        assertNull(property, "Expected firstEntryIndex property to be null for ledger " + ledgerId);
+    }
+
+    private ManagedLedger reopenLedger(String ledgerName, ManagedLedgerConfig config,
+                                       ManagedLedgerFactoryImpl factoryToShutdown) throws Exception {
+        if (factoryToShutdown != null) {
+            factoryToShutdown.shutdown();
+        }
+        ManagedLedgerFactoryImpl newFactory = new ManagedLedgerFactoryImpl(metadataStore, bkc);
+        return newFactory.open(ledgerName, config);
+    }
+
+    @Test
+    public void testFindPositionByOffset() throws Exception {
+        final int mockBatchSize = 2;
+        final int maxEntriesPerLedger = 5;
+        ManagedLedgerConfig managedLedgerConfig = createTestConfig(maxEntriesPerLedger);
+
+        ManagedLedger ledger = factory.open("my_ml_broker_entry_offset_test_ledger", managedLedgerConfig);
+
+        // Add entries to first ledger
+        long firstLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 9);
+        long earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(firstLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
+        // Test finding position by offset using the new method
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
+
+        // Roll over to second ledger
+        long secondLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 19);
+        assertNotEquals(firstLedgerId, secondLedgerId);
+        earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(secondLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset);
+        // Test with both ledgers
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
+
+        // Test edge cases
+        // Test offset 0 (should find first position)
+        PositionImpl position = (PositionImpl) ledger.asyncFindPosition(0, new IndexSearchPredicate(0)).get();
+        assertEquals(position.getEntryId(), 0);
+        // Test offset beyond current index (should handle gracefully)
+        long beyondIndex = ledger.getManagedLedgerInterceptor().getIndex() + 100;
+        position = (PositionImpl) ledger.asyncFindPosition(beyondIndex, new IndexSearchPredicate(beyondIndex)).get();
+        assertNotNull(position);
+
+
+        // Reopen ledger and test again
+        ledger = reopenLedger("my_ml_broker_entry_offset_test_ledger", managedLedgerConfig, null);
+        // Add more entries to third ledger
+        long thirdLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+        assertNotEquals(secondLedgerId, thirdLedgerId);
+        earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(thirdLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset);
+        // Test with all three ledgers after reopen
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
+        ledger.close();
+    }
+
+    @Test
+    public void testFindPositionByOffsetWithMissingFirstEntryIndex() throws Exception {
+        final int mockBatchSize = 2;
+        final int maxEntriesPerLedger = 5;
+        int maxSequenceIdPerLedger = mockBatchSize * maxEntriesPerLedger;
+        final String ledgerName = "my_ml_test_missing_firstEntryIndex";
+
+        ManagedLedgerConfig managedLedgerConfig = createTestConfig(maxEntriesPerLedger);
+
+        ManagedLedger ledger = factory.open(ledgerName, managedLedgerConfig);
+
+        // Add entries to create three ledgers
+        long firstLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        long secondLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        long thirdLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertNotEquals(firstLedgerId, secondLedgerId);
+        assertNotEquals(secondLedgerId, thirdLedgerId);
+
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+
+        // Verify initial state - all ledgers should have firstEntryIndex property
+        long earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(firstLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
+        earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(secondLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset);
+        earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(thirdLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset);
+
+        // Test normal case before removing properties
+        PositionImpl position = (PositionImpl) ledger.asyncFindPosition(15, new IndexSearchPredicate(15)).get();
+        assertEquals(position.getEntryId(), (15 % maxSequenceIdPerLedger) / mockBatchSize);
+
+        // Remove first ledger's firstEntryIndex property
+        ledger.asyncRemoveLedgerProperty(firstLedgerId, "firstEntryIndex").get();
+        ledger.close();
+
+        // Reopen and test after removing first ledger's firstEntryIndex
+        @Cleanup("shutdown")
+        ManagedLedgerFactoryImpl factory1 = new ManagedLedgerFactoryImpl(metadataStore, bkc);
+        ledger = factory1.open(ledgerName, managedLedgerConfig);
+
+        verifyMissingFirstEntryIndex(ledger, firstLedgerId);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+
+        // Test that position finding still works correctly after removing first ledger's firstEntryIndex
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
+        // Remove second ledger's firstEntryIndex property
+        ledger.asyncRemoveLedgerProperty(secondLedgerId, "firstEntryIndex").get();
+        ledger.close();
+
+        // Reopen and test after removing second ledger's firstEntryIndex
+        @Cleanup("shutdown")
+        ManagedLedgerFactoryImpl factory2 = new ManagedLedgerFactoryImpl(metadataStore, bkc);
+        ledger = factory2.open(ledgerName, managedLedgerConfig);
+
+        verifyMissingFirstEntryIndex(ledger, firstLedgerId);
+        verifyMissingFirstEntryIndex(ledger, secondLedgerId);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+
+        // Test that position finding still works correctly after removing second ledger's firstEntryIndex
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
+        // Remove third ledger's firstEntryIndex property
+        ledger.asyncRemoveLedgerProperty(thirdLedgerId, "firstEntryIndex").get();
+        ledger.close();
+
+        // Reopen and test after removing all firstEntryIndex properties
+        @Cleanup("shutdown")
+        ManagedLedgerFactoryImpl factory3 = new ManagedLedgerFactoryImpl(metadataStore, bkc);
+        ledger = factory3.open(ledgerName, managedLedgerConfig);
+
+        // Verify all properties are now missing
+        verifyMissingFirstEntryIndex(ledger, firstLedgerId);
+        verifyMissingFirstEntryIndex(ledger, secondLedgerId);
+        verifyMissingFirstEntryIndex(ledger, thirdLedgerId);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+
+        // Test that position finding still works correctly even with all firstEntryIndex properties removed
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
+        // Test edge cases with all properties missing
+        // Test offset 0 (should still find first position)
+        position = (PositionImpl) ledger.asyncFindPosition(0, new IndexSearchPredicate(0)).get();
+        assertEquals(position.getEntryId(), 0);
+
+        // Test middle offset
+        position = (PositionImpl) ledger.asyncFindPosition(15, new IndexSearchPredicate(15)).get();
+        assertEquals(position.getEntryId(), (15 % maxSequenceIdPerLedger) / mockBatchSize);
+
+        // Test last offset
+        position = (PositionImpl) ledger.asyncFindPosition(29, new IndexSearchPredicate(29)).get();
+        assertEquals(position.getEntryId(), (29 % maxSequenceIdPerLedger) / mockBatchSize);
+
+        ledger.close();
+    }
+
+    @Test
+    public void testSetFirstEntryIndex() throws Exception {
+        final int mockBatchSize = 2;
+        final int maxEntriesPerLedger = 5;
+        final String ledgerName = "my_ml_broker_entry_metadata_test_ledger";
+
+        ManagedLedgerConfig managedLedgerConfig = createTestConfig(maxEntriesPerLedger);
+
+        ManagedLedger ledger = factory.open(ledgerName, managedLedgerConfig);
+
+        long firstLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 9);
+        long earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(firstLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
+
+        // roll over ledger
+        long secondLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 19);
+        assertNotEquals(firstLedgerId, secondLedgerId);
+        assertNotEquals(firstLedgerId, secondLedgerId);
+        long earliestOffset2 = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(secondLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset2);
+
+        // reopen ledger
+        ledger.close();
+
+        // / Reopen the same managed-ledger
+        @Cleanup("shutdown")
+        ManagedLedgerFactoryImpl factory2 = new ManagedLedgerFactoryImpl(metadataStore, bkc);
+        ledger = factory2.open(ledgerName, managedLedgerConfig);
+
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset2);
+
+        long thirdLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+        assertNotEquals(secondLedgerId, thirdLedgerId);
+        earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(thirdLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset);
+
+        ledger.close();
+    }
 }

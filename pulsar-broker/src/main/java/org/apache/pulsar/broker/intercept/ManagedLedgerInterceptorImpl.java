@@ -91,6 +91,9 @@ public class ManagedLedgerInterceptorImpl implements ManagedLedgerInterceptor {
            return op;
        }
         op.setData(Commands.addBrokerEntryMetadata(op.getData(), brokerEntryMetadataInterceptors, numberOfMessages));
+        if (appendIndexMetadataInterceptor != null) {
+            op.setOffsetIndex(appendIndexMetadataInterceptor.getIndex());
+        }
         return op;
     }
 
