@@ -20,6 +20,7 @@ package org.apache.pulsar.broker.stats.prometheus;
 
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
+import static org.apache.pulsar.common.naming.TopicName.PARTITIONED_TOPIC_SUFFIX;
 import java.util.List;
 import lombok.Cleanup;
 import org.apache.bookkeeper.mledger.ManagedLedger;
@@ -161,5 +162,163 @@ public class NamespaceStatsAggregatorTest {
                 null,
                 "consumer_id",
                 "0");
+    }
+
+    @Test
+    public void testGenerateTopicStorageSizeAggregation() {
+        // given
+        final String namespace = "tenant/cluster/ns";
+        final String baseTopicName = "my-topic";
+
+        // prepare multi-layer topic map
+        ConcurrentOpenHashMap bundlesMap = ConcurrentOpenHashMap.newBuilder().build();
+        ConcurrentOpenHashMap topicsMap = ConcurrentOpenHashMap.newBuilder().build();
+        bundlesMap.put("my-bundle", topicsMap);
+        multiLayerTopicsMap.put(namespace, bundlesMap);
+
+        // Prepare managed ledger
+        ManagedLedger ml1 = createMockManagedLedger(1000L); // partition 0 storage size
+        ManagedLedger ml2 = createMockManagedLedger(2000L); // partition 1 storage size
+        ManagedLedger ml3 = createMockManagedLedger(3000L); // partition 2 storage size
+
+        // Prepare partitioned topics
+        PersistentTopic partition0 = createMockTopic(ml1);
+        PersistentTopic partition1 = createMockTopic(ml2);
+        PersistentTopic partition2 = createMockTopic(ml3);
+
+        // Add partitioned topics to map
+        topicsMap.put(baseTopicName + PARTITIONED_TOPIC_SUFFIX + "0", partition0);
+        topicsMap.put(baseTopicName + PARTITIONED_TOPIC_SUFFIX + "1", partition1);
+        topicsMap.put(baseTopicName + PARTITIONED_TOPIC_SUFFIX + "2", partition2);
+
+        @Cleanup("releaseAll")
+        PrometheusMetricStreams metricStreams = Mockito.spy(new PrometheusMetricStreams());
+
+        // when - call with includeTopicMetrics = false to trigger aggregation
+        NamespaceStatsAggregator.generate(pulsar, false, false,
+                false, false, metricStreams);
+
+        // then - verify aggregated storage size metric (1000 + 2000 + 3000 = 6000)
+        verifyTopicMetric(metricStreams, "pulsar_storage_size", 6000L, baseTopicName);
+    }
+
+    @Test
+    public void testGenerateTopicStorageSizeWithNonPartitionedTopic() {
+        // given
+        final String namespace = "tenant/cluster/ns";
+        final String topicName = "non-partitioned-topic";
+
+        // prepare multi-layer topic map
+        ConcurrentOpenHashMap bundlesMap = ConcurrentOpenHashMap.newBuilder().build();
+        ConcurrentOpenHashMap topicsMap = ConcurrentOpenHashMap.newBuilder().build();
+        bundlesMap.put("my-bundle", topicsMap);
+        multiLayerTopicsMap.put(namespace, bundlesMap);
+
+        // Prepare managed ledger for non-partitioned topic
+        ManagedLedger ml = createMockManagedLedger(5000L);
+
+        // Prepare non-partitioned topic
+        PersistentTopic topic = createMockTopic(ml);
+        topicsMap.put(topicName, topic);
+
+        @Cleanup("releaseAll")
+        PrometheusMetricStreams metricStreams = Mockito.spy(new PrometheusMetricStreams());
+
+        // when - call with includeTopicMetrics = false
+        NamespaceStatsAggregator.generate(pulsar, false, false,
+                false, false, metricStreams);
+
+        // then - verify storage size metric for non-partitioned topic
+        verifyTopicMetric(metricStreams, "pulsar_storage_size", 5000L, topicName);
+    }
+
+    @Test
+    public void testGenerateTopicStorageSizeMixedTopics() {
+        // given
+        final String namespace = "tenant/cluster/ns";
+        final String partitionedTopicName = "partitioned-topic";
+        final String nonPartitionedTopicName = "single-topic";
+
+        // prepare multi-layer topic map
+        ConcurrentOpenHashMap bundlesMap = ConcurrentOpenHashMap.newBuilder().build();
+        ConcurrentOpenHashMap topicsMap = ConcurrentOpenHashMap.newBuilder().build();
+        bundlesMap.put("my-bundle", topicsMap);
+        multiLayerTopicsMap.put(namespace, bundlesMap);
+
+        // Prepare managed ledgers
+        ManagedLedger ml1 = createMockManagedLedger(1000L); // partitioned topic partition 0
+        ManagedLedger ml2 = createMockManagedLedger(2000L); // partitioned topic partition 1
+        ManagedLedger ml3 = createMockManagedLedger(4000L); // non-partitioned topic
+
+        // Prepare topics
+        PersistentTopic partition0 = createMockTopic(ml1);
+        PersistentTopic partition1 = createMockTopic(ml2);
+        PersistentTopic singleTopic = createMockTopic(ml3);
+
+        // Add topics to map
+        topicsMap.put(partitionedTopicName + PARTITIONED_TOPIC_SUFFIX + "0", partition0);
+        topicsMap.put(partitionedTopicName + PARTITIONED_TOPIC_SUFFIX + "1", partition1);
+        topicsMap.put(nonPartitionedTopicName, singleTopic);
+
+        @Cleanup("releaseAll")
+        PrometheusMetricStreams metricStreams = Mockito.spy(new PrometheusMetricStreams());
+
+        // when - call with includeTopicMetrics = false
+        NamespaceStatsAggregator.generate(pulsar, false, false,
+                false, false, metricStreams);
+
+        // then - verify both topics have correct aggregated storage sizes
+        verifyTopicMetric(metricStreams, "pulsar_storage_size", 3000L, partitionedTopicName); // 1000 + 2000
+        verifyTopicMetric(metricStreams, "pulsar_storage_size", 4000L, nonPartitionedTopicName);
+    }
+
+    private ManagedLedger createMockManagedLedger(long storageSize) {
+        ManagedLedger ml = Mockito.mock(ManagedLedger.class);
+        ManagedLedgerMBeanImpl mlBeanStats = Mockito.mock(ManagedLedgerMBeanImpl.class);
+
+        // Setup storage size
+        when(mlBeanStats.getStoredMessagesSize()).thenReturn(storageSize);
+
+        // Setup required stats buckets
+        StatsBuckets statsBuckets = new StatsBuckets(ManagedLedgerMBeanImpl.ENTRY_LATENCY_BUCKETS_USEC);
+        when(mlBeanStats.getInternalAddEntryLatencyBuckets()).thenReturn(statsBuckets);
+        when(mlBeanStats.getInternalLedgerAddEntryLatencyBuckets()).thenReturn(statsBuckets);
+        when(mlBeanStats.getInternalEntrySizeBuckets()).thenReturn(
+                new StatsBuckets(ManagedLedgerMBeanImpl.ENTRY_SIZE_BUCKETS_BYTES));
+
+        when(ml.getStats()).thenReturn(mlBeanStats);
+        return ml;
+    }
+
+    private PersistentTopic createMockTopic(ManagedLedger ml) {
+        PersistentTopic topic = Mockito.mock(PersistentTopic.class);
+        ConcurrentOpenHashMap bundlesMap = ConcurrentOpenHashMap.newBuilder().build();
+        ConcurrentOpenHashMap topicsMap = ConcurrentOpenHashMap.newBuilder().build();
+        ConcurrentOpenHashMap subscriptionsMaps = ConcurrentOpenHashMap.newBuilder().build();
+
+        // Setup basic topic properties
+        TopicStatsImpl topicStats = new TopicStatsImpl();
+        when(topic.getStats(false, false, false)).thenReturn(topicStats);
+        when(topic.getBrokerService()).thenReturn(broker);
+        when(topic.getSubscriptions()).thenReturn(subscriptionsMaps);
+        when(topic.getReplicators()).thenReturn(ConcurrentOpenHashMap.<String,Replicator>newBuilder().build());
+        when(topic.getManagedLedger()).thenReturn(ml);
+        when(topic.getBacklogQuota(Mockito.any())).thenReturn(Mockito.mock(BacklogQuota.class));
+
+        PersistentTopicMetrics persistentTopicMetrics = new PersistentTopicMetrics();
+        when(topic.getPersistentTopicMetrics()).thenReturn(persistentTopicMetrics);
+
+        return topic;
+    }
+
+    private void verifyTopicMetric(PrometheusMetricStreams metricStreams, String metricName, Number value, String topicName) {
+        Mockito.verify(metricStreams).writeSample(metricName,
+                value,
+                "cluster",
+                null,
+                "namespace",
+                "tenant/cluster/ns",
+                "topic",
+                topicName);
     }
 }

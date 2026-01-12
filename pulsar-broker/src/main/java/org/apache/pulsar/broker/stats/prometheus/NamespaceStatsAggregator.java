@@ -35,6 +35,7 @@ import org.apache.pulsar.broker.service.persistent.PersistentTopic;
 import org.apache.pulsar.broker.service.persistent.PersistentTopicMetrics;
 import org.apache.pulsar.broker.service.persistent.PersistentTopicMetrics.BacklogQuotaMetrics;
 import org.apache.pulsar.broker.stats.prometheus.metrics.PrometheusLabels;
+import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.policies.data.BacklogQuota.BacklogQuotaType;
 import org.apache.pulsar.common.policies.data.stats.ConsumerStatsImpl;
 import org.apache.pulsar.common.policies.data.stats.NonPersistentSubscriptionStatsImpl;
@@ -86,6 +87,8 @@ public class NamespaceStatsAggregator {
         pulsar.getBrokerService().getMultiLayerTopicMap().forEach((namespace, bundlesMap) -> {
             namespaceStats.reset();
             topicsCount.reset();
+            // Track storage size by base topic name (without partition suffix)
+            Map<String, Long> topicStorageSizeMap = new HashMap<>();
 
             bundlesMap.forEach((bundle, topicsMap) -> topicsMap.forEach((name, topic) -> {
                 getTopicStats(topic, topicStats, includeConsumerMetrics, includeProducerMetrics,
@@ -101,9 +104,19 @@ public class NamespaceStatsAggregator {
                     TopicStats.printTopicStats(stream, topicStats, compactorMXBean, cluster, namespace, name,
                             splitTopicAndPartitionIndexLabel);
                 } else {
+                    // Aggregate storage size by base topic name
+                    String baseTopicName = getBaseTopicName(name);
+                    topicStorageSizeMap.merge(baseTopicName, topicStats.managedLedgerStats.storageSize, Long::sum);
                     namespaceStats.updateStats(topicStats);
                 }
             }));
+
+            // Output aggregated topic-level storage size metrics when includeTopicMetrics is false
+            if (!includeTopicMetrics) {
+                topicStorageSizeMap.forEach((baseTopicName, totalStorageSize) ->
+                    TopicStats.writeTopicMetric(stream, "pulsar_storage_size", totalStorageSize,
+                            cluster, namespace, baseTopicName, splitTopicAndPartitionIndexLabel));
+            }
 
             if (!includeTopicMetrics) {
                 // Only include namespace level stats if we don't have the per-topic, otherwise we're going to
@@ -583,6 +596,18 @@ public class NamespaceStatsAggregator {
                             "remote_cluster", remoteCluster)
             );
         }
+    }
+
+    /**
+     * Extracts the base topic name from a potentially partitioned topic name.
+     * For example: "my-topic-partition-0" -> "my-topic", "my-topic" -> "my-topic"
+     */
+    private static String getBaseTopicName(String topicName) {
+        int partitionIndex = topicName.indexOf(TopicName.PARTITIONED_TOPIC_SUFFIX);
+        if (partitionIndex > 0) {
+            return topicName.substring(0, partitionIndex);
+        }
+        return topicName;
     }
 
 
