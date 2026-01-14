@@ -46,6 +46,7 @@ import org.apache.bookkeeper.mledger.impl.PositionImpl;
 import org.apache.bookkeeper.mledger.intercept.ManagedLedgerInterceptor;
 import org.apache.bookkeeper.mledger.util.RangeCache;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.pulsar.common.util.ShutdownUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,6 +173,9 @@ public class RangeEntryCacheImpl implements EntryCache {
             cachedData = ALLOCATOR.directBuffer(size, size);
         } catch (Throwable t) {
             log.warn("[{}] Failed to allocate buffer for entry cache: {}", ml.getName(), t.getMessage());
+            if (t instanceof OutOfMemoryError) {
+                ShutdownUtil.triggerImmediateForcefulShutdown();
+            }
             return null;
         }
 
