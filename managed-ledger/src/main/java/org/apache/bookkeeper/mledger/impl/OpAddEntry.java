@@ -232,7 +232,7 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
             if (log.isDebugEnabled()) {
                 log.debug("[{}] Setting first entry index {} for ledger {}", ml.getName(), offsetIndex, lh.getId());
             }
-            ml.setFirstEntryIndexForCurrentLedger(offsetIndex);
+            ml.setFirstEntryIndexForCurrentLedger(offsetIndex - numberOfMessages + 1);
         }
         if (log.isDebugEnabled()) {
             log.debug("[{}] [{}] write-complete: ledger-id={} entry-id={} size={} rc={}", this, ml.getName(),

@@ -584,7 +584,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 new PositionImpl(firstLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset - 1);
         // Test finding position by offset using the new method
         verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
 
@@ -597,7 +597,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 new PositionImpl(secondLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset - 1);
         // Test with both ledgers
         verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
 
@@ -622,7 +622,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 new PositionImpl(thirdLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset - 1);
         // Test with all three ledgers after reopen
         verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
 
@@ -654,17 +654,17 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 new PositionImpl(firstLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset - 1);
         earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
                 new PositionImpl(secondLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset - 1);
         earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
                 new PositionImpl(thirdLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset - 1);
 
         // Test normal case before removing properties
         PositionImpl position = (PositionImpl) ledger.asyncFindPosition(15, new IndexSearchPredicate(15)).get();
@@ -752,7 +752,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 new PositionImpl(firstLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset - 1);
 
         // roll over ledger
         long secondLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
@@ -763,7 +763,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 new PositionImpl(secondLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset2);
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset2 - 1);
 
         // reopen ledger
         ledger.close();
@@ -773,8 +773,8 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         ManagedLedgerFactoryImpl factory2 = new ManagedLedgerFactoryImpl(metadataStore, bkc);
         ledger = factory2.open(ledgerName, managedLedgerConfig);
 
-        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset);
-        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset2);
+        verifyStartOffsetPerLedger(ledger, firstLedgerId, earliestOffset - 1);
+        verifyStartOffsetPerLedger(ledger, secondLedgerId, earliestOffset2 - 1);
 
         long thirdLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
         assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
@@ -783,7 +783,7 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
                 new PositionImpl(thirdLedgerId, 0), false,
                 -2, true,
                 5).get();
-        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset);
+        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset - 1);
 
         ledger.close();
     }
