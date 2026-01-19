@@ -478,24 +478,6 @@ public class PulsarService implements AutoCloseable, ShutdownService {
     public CompletableFuture<Void> closeAsync(boolean waitForWebServiceToStop) {
         mutex.lock();
         try {
-            if (brokerService != null) {
-                if (!ExtensibleLoadManagerImpl.isLoadManagerExtensionEnabled(this)) {
-                    brokerService.unloadNamespaceBundlesGracefully();
-                }
-
-                try {
-                    // Close protocol handler channels first with proper shutdown sequence
-                    // This will handle: EventLoopGroups → Channels → Protocol Handler Channels
-                    List<CompletableFuture<Void>> channelCloseFutures =
-                            brokerService.closeProtocolHandlerChannels();
-                    // Wait for all protocol handler channels to close before closing protocol handlers
-                    FutureUtil.waitForAll(channelCloseFutures).get();
-                    LOG.info("Protocol handler channels closed successfully");
-                } catch (Exception e) {
-                    LOG.warn("Failed to close protocol handler channels", e);
-                }
-            }
-
             // Close protocol handler before unloading namespace bundles because protocol handlers might maintain
             // Pulsar clients that could send lookup requests that affect unloading.
             if (protocolHandlers != null) {
@@ -509,7 +491,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
             if (topicPoliciesService != null) {
                 topicPoliciesService.close();
             }
-            if (brokerService != null && ExtensibleLoadManagerImpl.isLoadManagerExtensionEnabled(this)) {
+            if (brokerService != null) {
                 brokerService.unloadNamespaceBundlesGracefully();
             }
             // It only tells the Pulsar clients that this service is not ready to serve for the lookup requests

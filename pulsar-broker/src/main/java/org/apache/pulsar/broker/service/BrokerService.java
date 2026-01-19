@@ -294,8 +294,6 @@ public class BrokerService implements Closeable {
     private volatile DelayedDeliveryTrackerFactory fallbackDelayedDeliveryTrackerFactory;
     private final ServerBootstrap defaultServerBootstrap;
     private final List<EventLoopGroup> protocolHandlersWorkerGroups = new ArrayList<>();
-    // Protocol handler channels for explicit lifecycle management
-    private final List<Channel> protocolHandlerChannels = new ArrayList<>(2);
 
     @Getter
     private final BundlesQuotas bundlesQuotas;
@@ -551,8 +549,7 @@ public class BrokerService implements Closeable {
         }
         bootstrap.childHandler(initializer);
         try {
-            Channel ch = bootstrap.bind(address).sync().channel();
-            protocolHandlerChannels.add(ch);
+            bootstrap.bind(address).sync();
         } catch (Exception e) {
             throw new IOException("Failed to bind protocol `" + protocol + "` on " + address, e);
         }
@@ -3874,25 +3871,5 @@ public class BrokerService implements Closeable {
         private final boolean createIfMissing;
         private final CompletableFuture<Optional<Topic>> topicFuture;
         private final Map<String, String> properties;
-    }
-
-    /**
-     * Close protocol handler channels explicitly with proper shutdown sequence.
-     * This method should be called from PulsarService before protocolHandlers.close()
-     * to ensure proper resource cleanup timing.
-     *
-     * Shutdown sequence: EventLoopGroups → Listen Channels → Protocol Handler Channels
-     *
-     * @return List of CompletableFuture for tracking the close operations
-     */
-    public List<CompletableFuture<Void>> closeProtocolHandlerChannels() {
-        List<CompletableFuture<Void>> closeFutures = new ArrayList<>();
-        protocolHandlerChannels.forEach(ch -> {
-            if (ch.isOpen()) {
-                closeFutures.add(closeChannel(ch));
-            }
-        });
-        protocolHandlerChannels.clear(); // Clear the list after closing
-        return closeFutures;
     }
 }
