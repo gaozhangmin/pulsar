@@ -144,6 +144,7 @@ import org.apache.pulsar.common.conf.InternalConfigurationData;
 import org.apache.pulsar.common.configuration.PulsarConfigurationLoader;
 import org.apache.pulsar.common.configuration.VipStatus;
 import org.apache.pulsar.common.naming.NamespaceBundle;
+import org.apache.pulsar.common.naming.NamespaceBundles;
 import org.apache.pulsar.common.naming.NamespaceName;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.naming.TopicVersion;
@@ -304,6 +305,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
     // key is listener name, value is pulsar address and pulsar ssl address
     private Map<String, AdvertisedListener> advertisedListeners;
     private volatile HealthChecker healthChecker;
+    private Consumer<Notification> namespaceBundleListener;
 
     public PulsarService(ServiceConfiguration config) {
         this(config, Optional.empty(), (exitCode) -> LOG.info("Process termination requested with code {}. "
@@ -1275,6 +1277,10 @@ public class PulsarService implements AutoCloseable, ShutdownService {
                         if (getConfiguration().isLoadBalancerEnabled()) {
                             startLoadBalancerTasks();
                         }
+                        registerNamespaceBundleListener();
+                        // Logic 1: Load unowned namespace bundles for public/default
+                        loadUnownedNamespaceBundles();
+                        // Logic 2: Register ZK listener for /namespace/public/default
                     } else {
                         if (leaderElectionService != null) {
                             final Optional<LeaderBroker> currentLeader = leaderElectionService.getCurrentLeader();
@@ -1315,6 +1321,70 @@ public class PulsarService implements AutoCloseable, ShutdownService {
                     new LoadResourceQuotaUpdaterTask(loadManager), resourceQuotaUpdateInterval,
                     resourceQuotaUpdateInterval, TimeUnit.MILLISECONDS);
         }
+    }
+
+    /*
+     * Load unowned namespace bundles for public/default namespace when broker becomes leader
+     */
+    private void loadUnownedNamespaceBundles() {
+        NamespaceName namespaceName = NamespaceName.get("public/default");
+        Optional<NamespaceBundles> bundlesOpt = nsService.getNamespaceBundleFactory()
+                .getBundlesIfPresent(namespaceName);
+
+        if (bundlesOpt.isPresent()) {
+            NamespaceBundles bundles = bundlesOpt.get();
+            for (NamespaceBundle bundle : bundles.getBundles()) {
+                // Check bundle ownership asynchronously
+                nsService.isNamespaceBundleOwned(bundle)
+                        .thenAccept(isOwned -> {
+                            if (!isOwned) {
+                                try {
+                                    LOG.info("Loading unowned namespace bundle: {}", bundle.getBundleRange());
+                                    String bundleRange = bundle.getBundleRange();
+                                    getAdminClient().namespaces().loadNamespaceBundleAsync(
+                                            namespaceName.toString(), bundleRange,
+                                            false, false);
+                                } catch (Exception e) {
+                                    LOG.warn("Failed to load namespace bundle: {}", bundle, e);
+                                }
+                            }
+                        })
+                        .exceptionally(ex -> {
+                            LOG.warn("Failed to check ownership for namespace bundle: {}", bundle, ex);
+                            return null;
+                        });
+            }
+        }
+    }
+
+    /*
+     * Register ZK listener to monitor /namespace/public/default path
+     */
+    private void registerNamespaceBundleListener() {
+        String namespacePath = "/namespace/public/default";
+        namespaceBundleListener = (notification) -> {
+            if (!leaderElectionService.isLeader()) {
+                return;
+            }
+            if (notification.getType() == NotificationType.Deleted) {
+                String deletedPath = notification.getPath();
+                if (deletedPath.startsWith(namespacePath + "/")) {
+                    String bundleRange = deletedPath.substring(deletedPath.lastIndexOf('/') + 1);
+                    try {
+                        LOG.info("Detected deleted namespace bundle path: {}, reloading bundle: {}",
+                                deletedPath, bundleRange);
+                        getAdminClient().namespaces().loadNamespaceBundleAsync(
+                                "public/default", bundleRange,
+                                false, false);
+                    } catch (Exception e) {
+                        LOG.error("Failed to reload namespace bundle: {}", bundleRange, e);
+                    }
+                }
+            }
+        };
+
+        // Register the listener with the metadata store
+        localMetadataStore.registerListener(namespaceBundleListener);
     }
 
     protected void acquireSLANamespace() {
