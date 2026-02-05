@@ -37,6 +37,7 @@ import org.apache.bookkeeper.mledger.AsyncCallbacks.AddEntryCallback;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.mledger.intercept.ManagedLedgerInterceptor;
+import org.apache.pulsar.common.protocol.Commands;
 
 
 /**
@@ -50,6 +51,7 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
     long entryId;
     private int numberOfMessages;
     private Long offsetIndex;
+    private Long extractedTimestamp;
 
 
     @SuppressWarnings("unused")
@@ -119,6 +121,14 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
         op.state = State.OPEN;
         op.payloadProcessorHandle = null;
         op.timeoutTriggered = timeoutTriggered;
+
+        // Extract timestamp at creation time to avoid issues with payload processors
+        try {
+            op.extractedTimestamp = Commands.getEntryTimestamp(data.duplicate());
+        } catch (Exception e) {
+            op.extractedTimestamp = null;
+        }
+
         ml.mbean.addAddEntrySample(op.dataLength);
         return op;
     }
@@ -227,12 +237,26 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
 
         this.entryId = entryId;
         if (this.entryId == 0
-                && ml.getManagedLedgerInterceptor() != null
-                && offsetIndex != null) {
-            if (log.isDebugEnabled()) {
-                log.debug("[{}] Setting first entry index {} for ledger {}", ml.getName(), offsetIndex, lh.getId());
+                && ledger.getId() == ml.getCurrentLedger().getId()
+                && ml.getManagedLedgerInterceptor() != null) {
+            if (offsetIndex != null) {
+                String startOffset = Long.toString(offsetIndex - numberOfMessages + 1);
+                ml.updateCurrentLedgerProps(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS, startOffset);
+                if (log.isDebugEnabled()) {
+                    log.debug("[{}] Setting props {}:{} for ledger {}", ml.getName(),
+                            ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS, offsetIndex, lh.getId());
+                }
             }
-            ml.setFirstEntryIndexForCurrentLedger(offsetIndex - numberOfMessages + 1);
+            if (extractedTimestamp != null) {
+                ml.updateCurrentLedgerProps(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS,
+                        Long.toString(extractedTimestamp));
+                if (log.isInfoEnabled()) {
+                    log.info("[{}] Setting props {}:{} for ledger {}", ml.getName(),
+                            ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS, extractedTimestamp, lh.getId());
+                }
+            }
+
+
         }
         if (log.isDebugEnabled()) {
             log.debug("[{}] [{}] write-complete: ledger-id={} entry-id={} size={} rc={}", this, ml.getName(),
@@ -433,6 +457,7 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
         lastInitTime = -1;
         payloadProcessorHandle = null;
         timeoutTriggered = null;
+        extractedTimestamp = null;
         recyclerHandle.recycle(this);
     }
 

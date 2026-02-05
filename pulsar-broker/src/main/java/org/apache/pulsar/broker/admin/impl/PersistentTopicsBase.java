@@ -5577,7 +5577,7 @@ public class PersistentTopicsBase extends AdminResource {
                     }
 
                     // Use asyncFindPosition with custom predicate to find the position by offset
-                    return managedLedger.asyncFindPosition(new FindEntryByOffset(managedLedger, offset))
+                    return managedLedger.asyncFindPosition(offset, new FindEntryByOffset(managedLedger, offset))
                             .thenCompose(position -> {
                                 PositionImpl positionImpl = (PositionImpl) position;
 

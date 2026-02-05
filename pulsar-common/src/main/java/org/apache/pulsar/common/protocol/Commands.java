@@ -496,7 +496,11 @@ public class Commands {
             return brokerEntryMetadata.getBrokerTimestamp();
         }
         // otherwise get the publish_time
-        return parseMessageMetadata(headersAndPayloadWithBrokerEntryMetadata).getPublishTime();
+        MessageMetadata messageMetadata = Commands.parseMessageMetadata(headersAndPayloadWithBrokerEntryMetadata);
+        if (messageMetadata.hasPublishTime()) {
+            return messageMetadata.getPublishTime();
+        }
+        throw new IOException("Cannot find timestamp in both BrokerEntryMetadata and MessageMetadata");
     }
 
     public static BaseCommand newMessageCommand(long consumerId, long ledgerId, long entryId, int partition,

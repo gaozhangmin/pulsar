@@ -147,8 +147,10 @@ import org.slf4j.LoggerFactory;
 
 
 public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
+    public static final String FIRST_ENTRY_INDEX_PROPS = "firstEntryIndex";
+    public static final String FIRST_ENTRY_TIMESTAMP_PROPS = "firstEntryTimestamp";
+
     private static final long MegaByte = 1024 * 1024;
-    private static final String FIRST_ENTRY_INDEX_PROPS = "firstEntryIndex";
 
     protected static final int AsyncOperationTimeoutSeconds = 30;
 
@@ -945,11 +947,11 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     }
 
     /**
-     * Set the firstEntryIndex property for the current ledger.
+     * update  properties for the current ledger.
      * This is called when the first entry is about to be added to ensure accuracy.
      */
-    public void setFirstEntryIndexForCurrentLedger(Long firstEntryIndex) {
-        if (currentLedger == null || firstEntryIndex == null) {
+    public void updateCurrentLedgerProps(String key, String value) {
+        if (currentLedger == null) {
             return;
         }
         long ledgerId = currentLedger.getId();
@@ -957,21 +959,22 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         LedgerInfo currentInfo = ledgers.get(ledgerId);
         if (currentInfo != null) {
             Map<String, String> newPropertiesMap = new HashMap<>();
-            newPropertiesMap.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(firstEntryIndex));
+            newPropertiesMap.put(key, value);
             LedgerInfo updatedInfo = updateLedgerProps(currentInfo, newPropertiesMap);
             ledgers.put(ledgerId, updatedInfo);
 
             // Asynchronously update the metadata store
-            asyncAddLedgerProperty(ledgerId, FIRST_ENTRY_INDEX_PROPS, Long.toString(firstEntryIndex))
+            asyncAddLedgerProperty(ledgerId, key, value)
                 .whenComplete((result, throwable) -> {
                     if (throwable != null) {
-                        log.error("[{}] Failed to persist first entry index for ledger {}", name, ledgerId, throwable);
+                        log.error("[{}] Failed persisted current ledger props {}: {} for ledger {}",
+                                name, key, value, ledgerId);
                         // Note: We keep the in-memory update even if persistence fails
                         // to maintain consistency within this session
                     } else {
                         if (log.isDebugEnabled()) {
-                            log.debug("[{}] Successfully persisted first entry index {} for ledger {}",
-                                    name, firstEntryIndex, ledgerId);
+                            log.debug("[{}] Successfully persisted current ledger props {}: {} for ledger {}",
+                                    name, key, value, ledgerId);
                         }
 
                     }
@@ -2279,6 +2282,20 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
             String firstEntryIndexStr = asyncGetLedgerProperty(ledgerId, FIRST_ENTRY_INDEX_PROPS).get();
             if (firstEntryIndexStr != null && !firstEntryIndexStr.isEmpty()) {
                 return Long.parseLong(firstEntryIndexStr);
+            }
+        } catch (Exception e) {
+            if (log.isDebugEnabled()) {
+                log.debug("[{}] Failed to get first entry index for ledger {}", name, ledgerId, e);
+            }
+        }
+        return -1L;
+    }
+
+    public long getFirstEntryTimestampFromLedgerMetadata(long ledgerId) {
+        try {
+            String firstEntryTimestampStr = asyncGetLedgerProperty(ledgerId, FIRST_ENTRY_TIMESTAMP_PROPS).get();
+            if (firstEntryTimestampStr != null && !firstEntryTimestampStr.isEmpty()) {
+                return Long.parseLong(firstEntryTimestampStr);
             }
         } catch (Exception e) {
             if (log.isDebugEnabled()) {

@@ -1,0 +1,242 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.pulsar.broker.intercept;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+import com.google.common.base.Predicate;
+import com.google.common.collect.Range;
+import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.bookkeeper.mledger.AsyncCallbacks.FindEntryCallback;
+import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntryCallback;
+import org.apache.bookkeeper.mledger.Entry;
+import org.apache.bookkeeper.mledger.ManagedLedgerException;
+import org.apache.bookkeeper.mledger.Position;
+import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
+import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl.PositionBound;
+import org.apache.bookkeeper.mledger.impl.PositionImpl;
+
+/**
+ * Used to find Entry/Offset from ManagedLedger.
+ * Copy from org.apache.bookkeeper.mledger.impl.OpFindNewest.
+ * only different is here we passed in ManagedLedgerImpl directly.
+ */
+@Slf4j
+class OpFindNewestEntry implements ReadEntryCallback {
+    private final ManagedLedgerImpl managedLedger;
+    private final PositionImpl startPosition;
+    private final FindEntryCallback callback;
+    private final Predicate<Entry> condition;
+    private final Object ctx;
+
+    enum State {
+        checkFirst, checkLast, searching
+    }
+
+    PositionImpl searchPosition;
+    long min;
+    long max;
+    Position lastMatchedPosition = null;
+    State state;
+
+    public OpFindNewestEntry(ManagedLedgerImpl managedLedger, PositionImpl startPosition, Predicate<Entry> condition,
+                             long numberOfEntries, FindEntryCallback callback, Object ctx) {
+        this.managedLedger = managedLedger;
+        this.startPosition = startPosition;
+        this.callback = callback;
+        this.condition = condition;
+        this.ctx = ctx;
+
+        this.min = 0;
+        this.max = numberOfEntries;
+
+        this.searchPosition = startPosition;
+        this.state = State.checkFirst;
+    }
+
+    @Override
+    public void readEntryComplete(Entry entry, Object ctx) {
+        final Position position = entry.getPosition();
+        switch (state) {
+            case checkFirst:
+                if (!condition.apply(entry)) {
+                    callback.findEntryComplete(startPosition, this.ctx);
+                    return;
+                } else {
+                    lastMatchedPosition = position;
+
+                    // check last entry
+                    state = State.checkLast;
+                    searchPosition = managedLedger.getPositionAfterN(searchPosition, max, PositionBound.startExcluded);
+                    find();
+                }
+                break;
+            case checkLast:
+                if (condition.apply(entry)) {
+                    callback.findEntryComplete(position, this.ctx);
+                    return;
+                } else {
+                    // start binary search
+                    state = State.searching;
+                    searchPosition = managedLedger.getPositionAfterN(startPosition, mid(), PositionBound.startExcluded);
+                    find();
+                }
+                break;
+            case searching:
+                if (condition.apply(entry)) {
+                    // mid - last
+                    lastMatchedPosition = position;
+                    min = mid();
+                } else {
+                    // start - mid
+                    max = mid() - 1;
+                }
+
+                if (max <= min) {
+                    callback.findEntryComplete(lastMatchedPosition, this.ctx);
+                    return;
+                }
+                searchPosition = managedLedger.getPositionAfterN(startPosition, mid(), PositionBound.startExcluded);
+                find();
+        }
+    }
+
+    @Override
+    public void readEntryFailed(ManagedLedgerException exception, Object ctx) {
+        if (exception instanceof ManagedLedgerException.NonRecoverableLedgerException
+                && managedLedger.getConfig().isAutoSkipNonRecoverableData()) {
+            try {
+                log.info("[{}] Ledger {} is not recoverable, skip non-recoverable data, state:{}",
+                        managedLedger.getName(),
+                        searchPosition, state);
+                checkArgument(state == State.checkFirst || state == State.checkLast
+                        || state == State.searching);
+                if (state == State.checkFirst) {
+                    // If we failed to read the first entry, try next valid position
+                    PositionImpl nextPosition = findNextValidPosition(searchPosition, exception);
+                    if (nextPosition != null && nextPosition.getEntryId() != -1) {
+                        long numberOfEntries =
+                                managedLedger.getNumberOfEntries(Range.closedOpen(searchPosition, nextPosition));
+                        searchPosition = nextPosition;
+                        min += numberOfEntries;
+                        find();
+                        return;
+                    }
+                } else if (state == State.checkLast) {
+                    PositionImpl prevPosition = findPreviousValidPosition(searchPosition, exception);
+                    if (prevPosition != null && prevPosition.getEntryId() != -1) {
+                        long numberOfEntries =
+                                managedLedger.getNumberOfEntries(Range.openClosed(prevPosition, searchPosition));
+                        searchPosition = prevPosition;
+                        max -= numberOfEntries;
+                        find();
+                        return;
+                    }
+                } else if (state == State.searching) {
+                    // In searching state, if we failed to read the mid entry, try next valid position
+                    PositionImpl nextPosition = findNextValidPosition(searchPosition, exception);
+                    if (nextPosition != null && nextPosition.getEntryId() != -1) {
+                        searchPosition = nextPosition;
+                        find();
+                        return;
+                    } else {
+                        // If we can't find next valid position, try previous valid position
+                        PositionImpl prevPosition = findPreviousValidPosition(searchPosition, exception);
+                        if (prevPosition != null && prevPosition.getEntryId() != -1) {
+                            searchPosition = prevPosition;
+                            find();
+                            return;
+                        }
+                    }
+                }
+
+                // If don't find any entry, return the last matched position
+                log.warn("[{}] Failed to find next valid entry. Returning last matched position: {}",
+                        managedLedger.getName(), lastMatchedPosition);
+                callback.findEntryComplete(lastMatchedPosition, this.ctx);
+                return;
+            } catch (Exception e) {
+                callback.findEntryFailed(
+                        new ManagedLedgerException("Failed to skip non-recoverable data during search position", e),
+                        Optional.ofNullable(searchPosition), this.ctx);
+                return;
+            }
+        }
+
+        callback.findEntryFailed(exception, Optional.ofNullable(searchPosition), this.ctx);
+    }
+
+    private PositionImpl findNextValidPosition(PositionImpl searchPosition, Exception exception) {
+        PositionImpl nextPosition = null;
+        if (exception instanceof ManagedLedgerException.LedgerNotExistException) {
+            Long nextLedgerId = managedLedger.getNextValidLedger(searchPosition.getLedgerId());
+            if (nextLedgerId != null) {
+                Boolean nonEmptyLedger = managedLedger.getOptionalLedgerInfo(nextLedgerId)
+                        .map(ledgerInfo -> ledgerInfo.getEntries() > 0)
+                        .orElse(false);
+                if (nonEmptyLedger) {
+                    nextPosition = new PositionImpl(nextLedgerId, 0L);
+                }
+            }
+        } else {
+            nextPosition = managedLedger.getNextValidPosition(searchPosition);
+        }
+
+        if (nextPosition != null) {
+            var maxPosition = managedLedger.getPositionAfterN(startPosition, max, PositionBound.startExcluded);
+            if (maxPosition.compareTo(nextPosition) < 0) {
+                // If the next position is out of the max position, an invalid position is returned
+                nextPosition = null;
+            }
+        }
+        return nextPosition;
+    }
+
+    private PositionImpl findPreviousValidPosition(PositionImpl searchPosition, ManagedLedgerException exception) {
+        PositionImpl prevPosition;
+        if (exception instanceof ManagedLedgerException.LedgerNotExistException) {
+            // searchPosition.getLedgerId(), -1L
+            prevPosition =
+                    managedLedger.getPreviousPosition(new PositionImpl(searchPosition.getLedgerId(), -1L));
+        } else {
+            prevPosition = managedLedger.getPreviousPosition(searchPosition);
+        }
+        if (prevPosition.getEntryId() != -1) {
+            var minPosition = managedLedger.getPositionAfterN(startPosition, min, PositionBound.startExcluded);
+            if (minPosition.compareTo(prevPosition) > 0) {
+                // If the previous position is out of the min position, an invalid position is returned
+                prevPosition = null;
+            }
+        }
+        return prevPosition;
+    }
+
+    public void find() {
+        if (managedLedger.hasMoreEntries(searchPosition)) {
+            managedLedger.asyncReadEntry(searchPosition, this, null);
+        } else {
+            callback.findEntryComplete(lastMatchedPosition, this.ctx);
+        }
+    }
+
+    private long mid() {
+        return min + Math.max((max - min) / 2, 1);
+    }
+}

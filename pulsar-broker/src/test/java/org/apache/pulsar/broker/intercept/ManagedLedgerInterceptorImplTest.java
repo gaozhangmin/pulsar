@@ -58,10 +58,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.pulsar.common.protocol.Commands.serializeMetadataAndPayload;
+import org.apache.pulsar.common.api.proto.MessageMetadata;
+
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 @Test(groups = "broker")
 public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase {
@@ -534,14 +539,53 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
     private long addEntriesToLedger(ManagedLedger ledger, int numEntries, int batchSize) throws Exception {
         long ledgerId = -1;
         for (int i = 0; i < numEntries; i++) {
-            ledgerId = ledger.addEntry("dummy-entry".getBytes(StandardCharsets.UTF_8), batchSize).getLedgerId();
+            // Create message content
+            String message = "dummy-entry-" + i;
+            ByteBuf recordsWrapper = Unpooled.wrappedBuffer(message.getBytes(UTF_8));
+            
+            // Create message metadata with batch size
+            MessageMetadata messageMetadata = getMessageMetadataWithNumberMessages(batchSize);
+            
+            // Serialize metadata and payload
+            ByteBuf buf = serializeMetadataAndPayload(
+                Commands.ChecksumType.None,
+                messageMetadata,
+                recordsWrapper);
+                
+            // Use async add entry with callback
+            CompletableFuture<Position> future = new CompletableFuture<>();
+            ledger.asyncAddEntry(buf, batchSize, new AsyncCallbacks.AddEntryCallback() {
+                @Override
+                public void addComplete(Position position, ByteBuf entryData, Object ctx) {
+                    future.complete(position);
+                }
+
+                @Override
+                public void addFailed(ManagedLedgerException exception, Object ctx) {
+                    future.completeExceptionally(exception);
+                }
+            }, null);
+            
+            Position position = future.get();
+            ledgerId = ((PositionImpl) position).getLedgerId();
         }
         return ledgerId;
     }
 
+    protected static MessageMetadata getMessageMetadataWithNumberMessages(int numMessages) {
+        final MessageMetadata metadata = new MessageMetadata();
+        metadata.setProducerName("test-producer");
+        metadata.setSequenceId(0L);
+        metadata.setPublishTime(System.currentTimeMillis());
+        metadata.setNumMessagesInBatch(numMessages);
+        return metadata;
+    }
+
     private void verifyStartOffsetPerLedger(ManagedLedger ledger, long ledgerId, long expectedFirstIndex) throws Exception {
         MLDataFormats.ManagedLedgerInfo.LedgerInfo ledgerInfo = ledger.getLedgersInfo().get(ledgerId);
-        assertEquals(ledgerInfo.getPropertiesCount(), 1);
+        assertEquals(ledgerInfo.getPropertiesCount(), 2);
+        assertNotNull(ledger.asyncGetLedgerProperty(ledgerId, "firstEntryTimestamp").get());
+        assertTrue(Long.parseLong(ledger.asyncGetLedgerProperty(ledgerId, "firstEntryTimestamp").get()) > 0);
         assertEquals(Long.parseLong(ledger.asyncGetLedgerProperty(ledgerId, "firstEntryIndex").get()), expectedFirstIndex);
     }
 
@@ -549,9 +593,10 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         int maxSequenceIdPerLedger = batchSize * maxEntriesPerLedger;
         for (long offset = 0; offset <= maxOffset; offset++) {
             PositionImpl position = (PositionImpl) ledger.asyncFindPosition(offset, new IndexSearchPredicate(offset)).get();
-            assertEquals(position.getEntryId(), (offset % maxSequenceIdPerLedger) / batchSize,
-                    String.format("Failed at offset %d, expected entryId: %d, actual: %d",
-                                 offset, (offset % maxSequenceIdPerLedger) / batchSize, position.getEntryId()));
+            PositionImpl positionOld = (PositionImpl) ledger.asyncFindPosition(new IndexSearchPredicate(offset)).get();
+            assertEquals(position.getEntryId(), (offset % maxSequenceIdPerLedger) / batchSize);
+            //optimized search method results should be same as old method
+            assertEquals(position, positionOld);
         }
     }
 
@@ -731,6 +776,102 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         // Test last offset
         position = (PositionImpl) ledger.asyncFindPosition(29, new IndexSearchPredicate(29)).get();
         assertEquals(position.getEntryId(), (29 % maxSequenceIdPerLedger) / mockBatchSize);
+
+        ledger.close();
+    }
+
+    @Test
+    public void testOffsetFinderOptimizedVsNonOptimizedConsistency() throws Exception {
+        final int mockBatchSize = 2;
+        final int maxEntriesPerLedger = 5;
+        final String ledgerName = "testOffsetFinderConsistency";
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(2);
+        Set<String> interceptorNames = new HashSet<>();
+        interceptorNames.add("org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor");
+        ManagedLedgerInterceptor interceptor = new ManagedLedgerInterceptorImpl(
+                BrokerEntryMetadataUtils.loadBrokerEntryMetadataInterceptors(interceptorNames,
+                Thread.currentThread().getContextClassLoader()),null);
+        config.setManagedLedgerInterceptor(interceptor);
+
+
+        ManagedLedger ledger = factory.open(ledgerName, config);
+        OffsetFinder offsetFinder1 = new OffsetFinder((ManagedLedgerImpl) ledger);
+        OffsetFinder offsetFinder2 = new OffsetFinder((ManagedLedgerImpl) ledger);
+
+        // Add entries across multiple ledgers
+        addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize); // First ledger
+        Thread.sleep(100);
+        addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize); // Second ledger
+        Thread.sleep(100);
+        addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize); // Third ledger
+
+        // Wait a bit to ensure entries have different timestamps
+        Thread.sleep(2000);
+        long currentTime = System.currentTimeMillis();
+
+        // Test multiple timestamps
+        long[] timestampsToTest = {
+            currentTime - 1000, // Past timestamp
+            currentTime - 500,  // Recent past
+            currentTime,        // Current time
+            currentTime + 1000  // Future timestamp
+        };
+
+        for (long timestamp : timestampsToTest) {
+            // Test optimized search
+            CompletableFuture<Position> optimizedResult = new CompletableFuture<>();
+            offsetFinder1.findMessages(timestamp, new AsyncCallbacks.FindEntryCallback() {
+                @Override
+                public void findEntryComplete(Position position, Object ctx) {
+                    optimizedResult.complete(position);
+                }
+
+                @Override
+                public void findEntryFailed(ManagedLedgerException exception,
+                                            java.util.Optional<Position> position, Object ctx) {
+                    optimizedResult.completeExceptionally(exception);
+                }
+            }, true); // optimizeSearch = true
+
+            // Test non-optimized search
+            CompletableFuture<Position> nonOptimizedResult = new CompletableFuture<>();
+            offsetFinder2.findMessages(timestamp, new AsyncCallbacks.FindEntryCallback() {
+                @Override
+                public void findEntryComplete(Position position, Object ctx) {
+                    nonOptimizedResult.complete(position);
+                }
+
+                @Override
+                public void findEntryFailed(ManagedLedgerException exception,
+                                            java.util.Optional<Position> position, Object ctx) {
+                    nonOptimizedResult.completeExceptionally(exception);
+                }
+            }, false); // optimizeSearch = false
+
+            // Wait for both searches to complete and compare results
+            Position optimizedPos = optimizedResult.get();
+            Position nonOptimizedPos = nonOptimizedResult.get();
+
+            // Both methods should return the same position
+            if (optimizedPos == null && nonOptimizedPos == null) {
+                // Both found no matching position - this is consistent
+                log.info("Timestamp {}: Both search methods returned null (no matching position)", timestamp);
+                continue;
+            }
+            log.info("Timestamp {}: Optimized Position = {}, Non-Optimized Position = {}",
+                    timestamp, optimizedPos, nonOptimizedPos);
+            if (optimizedPos != null && nonOptimizedPos != null) {
+                assertEquals(optimizedPos, nonOptimizedPos,
+                    String.format("Optimized and non-optimized search results should be identical for timestamp %d. " +
+                                "Optimized: %s, Non-optimized: %s", timestamp, optimizedPos, nonOptimizedPos));
+            } else {
+                assertEquals(optimizedPos, nonOptimizedPos,
+                    String.format("One search method returned null while the other didn't for timestamp %d. " +
+                                "Optimized: %s, Non-optimized: %s", timestamp, optimizedPos, nonOptimizedPos));
+            }
+        }
 
         ledger.close();
     }
