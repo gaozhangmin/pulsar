@@ -646,6 +646,30 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         // Test with both ledgers
         verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
 
+        // Roll over to second ledger
+        long thirdLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+        assertNotEquals(secondLedgerId, thirdLedgerId);
+        earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(thirdLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, thirdLedgerId, earliestOffset - 1);
+        // Test with both ledgers
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
+        // Roll over to second ledger
+        long forthLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 39);
+        assertNotEquals(thirdLedgerId, forthLedgerId);
+        earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
+                new PositionImpl(forthLedgerId, 0), false,
+                -2, true,
+                5).get();
+        verifyStartOffsetPerLedger(ledger, forthLedgerId, earliestOffset - 1);
+        // Test with both ledgers
+        verifyPositionsByOffset(ledger, ledger.getManagedLedgerInterceptor().getIndex(), mockBatchSize, maxEntriesPerLedger);
+
 
         // Test edge cases
         // Test offset 0 (should find first position)
@@ -660,8 +684,8 @@ public class ManagedLedgerInterceptorImplTest  extends MockedBookKeeperTestCase 
         // Reopen ledger and test again
         ledger = reopenLedger("my_ml_broker_entry_offset_test_ledger", managedLedgerConfig, null);
         // Add more entries to third ledger
-        long thirdLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
-        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 29);
+        long fifthLedgerId = addEntriesToLedger(ledger, maxEntriesPerLedger, mockBatchSize);
+        assertEquals(ledger.getManagedLedgerInterceptor().getIndex(), 49);
         assertNotEquals(secondLedgerId, thirdLedgerId);
         earliestOffset = MessageMetadataUtils.getOffsetOfPosition((ManagedLedgerImpl) ledger,
                 new PositionImpl(thirdLedgerId, 0), false,

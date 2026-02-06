@@ -2052,8 +2052,8 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
 
         // Find the appropriate starting ledger by checking first entry indices
         findStartingLedgerForOffset(offset)
-            .thenCompose(startLedgerId -> {
-                if (startLedgerId == null) {
+            .thenCompose(searchRes -> {
+                if (searchRes == null) {
                     // No suitable ledger found, return first position
                     Long firstLedgerId = ledgers.firstKey();
                     PositionImpl startPosition = firstLedgerId == null ? null : new PositionImpl(firstLedgerId, 0);
@@ -2061,8 +2061,8 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 }
 
                 // Use the optimized starting position
-                PositionImpl startPosition = new PositionImpl(startLedgerId, 0);
-                return asyncFindPosition(startPosition, predicate);
+                PositionImpl startPosition = new PositionImpl(searchRes.ledgerId, 0);
+                return asyncFindPosition(startPosition, searchRes.maxSearchEntries, predicate);
             })
             .whenComplete((position, throwable) -> {
                 if (throwable != null) {
@@ -2078,8 +2078,8 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     /**
      * Find the first ledger where we should start searching based on the target offset.
      */
-    private CompletableFuture<Long> findStartingLedgerForOffset(long targetOffset) {
-        CompletableFuture<Long> result = new CompletableFuture<>();
+    private CompletableFuture<LedgerSearchResult> findStartingLedgerForOffset(long targetOffset) {
+        CompletableFuture<LedgerSearchResult> result = new CompletableFuture<>();
 
         if (ledgers.isEmpty()) {
             result.complete(null);
@@ -2092,12 +2092,26 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         return result;
     }
 
+    /**
+     * Result class to hold ledger ID and max search entries.
+     */
+    private static class LedgerSearchResult {
+        final Long ledgerId;
+        final Long maxSearchEntries;
+
+        LedgerSearchResult(Long ledgerId, Long maxSearchEntries) {
+            this.ledgerId = ledgerId;
+            this.maxSearchEntries = maxSearchEntries;
+        }
+    }
+
     private void checkLedgersRecursively(java.util.Iterator<Long> ledgerIterator,
                                          long targetOffset,
-                                         CompletableFuture<Long> result) {
+                                         CompletableFuture<LedgerSearchResult> result) {
         if (!ledgerIterator.hasNext()) {
             // No suitable ledger found, use the last ledger
-            result.complete(ledgers.isEmpty() ? null : ledgers.lastKey());
+            result.complete(ledgers.isEmpty() ? null :
+                    new LedgerSearchResult(ledgers.lastKey(), getNumberOfEntries() - 1));
             return;
         }
 
@@ -2109,7 +2123,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         log.warn("[{}] Failed to get first entry index for ledger {}, "
                                         + "using this ledger as starting point",
                                 name, ledgerId, throwable);
-                        result.complete(ledgerId);
+                        result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
 
@@ -2117,7 +2131,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                     if (firstEntryIndexStr == null || firstEntryIndexStr.isEmpty()) {
                         log.debug("[{}] First entry index missing for ledger {}, using this ledger as starting point",
                                 name, ledgerId);
-                        result.complete(ledgerId);
+                        result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
 
@@ -2128,7 +2142,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         log.warn("[{}] Invalid first entry index value '{}' for ledger {}, "
                                         + "using this ledger as starting point",
                                 name, firstEntryIndexStr, ledgerId, e);
-                        result.complete(ledgerId);
+                        result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
 
@@ -2143,7 +2157,8 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                     || nextFirstIndexStr == null
                                                     || nextFirstIndexStr.isEmpty()) {
                                                 // Next ledger has no firstEntryIndex or error, use current ledger
-                                                result.complete(ledgerId);
+                                                result.complete(new LedgerSearchResult(ledgers.firstKey(),
+                                                        getNumberOfEntries() - 1));
                                                 return;
                                             }
 
@@ -2151,28 +2166,49 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                 long nextFirstIndex = Long.parseLong(nextFirstIndexStr);
                                                 if (nextFirstIndex > targetOffset) {
                                                     // Next ledger is not suitable, use current ledger
-                                                    result.complete(ledgerId);
+                                                    long max = getLedgerEntries(ledgerId);
+                                                    result.complete(new LedgerSearchResult(ledgerId, max));
                                                 } else {
                                                     // Continue checking next ledgers
                                                     checkLedgersRecursively(ledgerIterator, targetOffset, result);
                                                 }
                                             } catch (NumberFormatException e) {
                                                 // Next ledger has invalid firstEntryIndex, use current ledger
-                                                result.complete(ledgerId);
+                                                result.complete(new LedgerSearchResult(ledgers.firstKey(),
+                                                        getNumberOfEntries() - 1));
                                             }
                                         });
                             } else {
-                                result.complete(ledgerId);
+                                long max = getLedgerEntries(ledgerId);
+                                result.complete(new LedgerSearchResult(ledgerId, max));
                             }
                         } else {
-                            result.complete(ledgerId);
+                            long max = getLedgerEntries(ledgerId);
+                            result.complete(new LedgerSearchResult(ledgerId, max));
                         }
                     } else {
                         // This ledger's first entry is greater than target, use previous ledger if exists
                         Long prevLedgerId = ledgers.lowerKey(ledgerId);
-                        result.complete(prevLedgerId != null ? prevLedgerId : ledgerId);
+                        if (prevLedgerId == null) {
+                            result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
+                        } else {
+                            long max = getLedgerEntries(prevLedgerId);
+                            result.complete(new LedgerSearchResult(prevLedgerId, max));
+                        }
+
                     }
                 });
+    }
+
+    private long getLedgerEntries(long ledgerId) {
+        if (ledgerId == currentLedger.getId()) {
+            return currentLedgerEntries - 1;
+        }
+        LedgerInfo li = ledgers.get(ledgerId);
+        if (li != null) {
+            return li.getEntries() - 1;
+        }
+        return 0;
     }
 
     @Override
@@ -2187,6 +2223,36 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         }
         return asyncFindPosition(startPosition, predicate);
 
+    }
+
+    private CompletableFuture<Position> asyncFindPosition(PositionImpl startPosition,
+                                                          long maxSearchEntries,
+                                                          Predicate<Entry> predicate) {
+        CompletableFuture<Position> future = new CompletableFuture<>();
+        AsyncCallbacks.FindEntryCallback findEntryCallback = new AsyncCallbacks.FindEntryCallback() {
+            @Override
+            public void findEntryComplete(Position position, Object ctx) {
+                final Position finalPosition;
+                if (position == null) {
+                    finalPosition = startPosition;
+                    log.info("[{}] Unable to find1 position for predicate {}. Use the first position {} instead.", name,
+                            predicate, startPosition);
+                } else {
+                    finalPosition = getNextValidPosition((PositionImpl) position);
+                }
+                future.complete(finalPosition);
+            }
+
+            @Override
+            public void findEntryFailed(ManagedLedgerException exception, Optional<Position> failedReadPosition,
+                                        Object ctx) {
+                log.warn("[{}] Unable to find position for predicate {}.", name, predicate);
+                future.complete(null);
+            }
+        };
+        OpFindNewest op = new OpFindNewest(this, startPosition, predicate, maxSearchEntries, findEntryCallback, null);
+        op.find();
+        return future;
     }
 
     private CompletableFuture<Position> asyncFindPosition(PositionImpl startPosition, Predicate<Entry> predicate) {

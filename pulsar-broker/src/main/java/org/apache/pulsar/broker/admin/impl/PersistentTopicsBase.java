@@ -5575,7 +5575,7 @@ public class PersistentTopicsBase extends AdminResource {
                         throw new RestException(Status.BAD_REQUEST,
                                 "Offset " + offset + " is out of range [" + logStartOffset + ", " + logEndOffset + ")");
                     }
-
+                    long timeStart = System.currentTimeMillis();
                     // Use asyncFindPosition with custom predicate to find the position by offset
                     return managedLedger.asyncFindPosition(offset, new FindEntryByOffset(managedLedger, offset))
                             .thenCompose(position -> {
@@ -5596,6 +5596,7 @@ public class PersistentTopicsBase extends AdminResource {
                                             response.setEntryId(positionImpl.getEntryId());
                                             response.setLogStartOffset(logStartOffset);
                                             response.setLogEndOffset(logEndOffset);
+                                            response.setLatency(System.currentTimeMillis() - timeStart);
 
                                             // Get ledger metadata from the managed ledger
                                             TopicPartitionOffsetResponse.LedgerMetadata ledgerMeta =
