@@ -24,7 +24,7 @@
   <parent>
     <groupId>org.apache.pulsar</groupId>
     <artifactId>pulsar-functions</artifactId>
-    <version>3.3.9.8-kwai</version>
+    <version>3.3.9.9-kwai</version>
   </parent>
 
   <artifactId>pulsar-functions-api-examples-builtin</artifactId>
