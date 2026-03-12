@@ -1363,7 +1363,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
     private void registerNamespaceBundleListener() {
         String namespacePath = "/namespace/public/default";
         namespaceBundleListener = (notification) -> {
-            if (!leaderElectionService.isLeader()) {
+            if (leaderElectionService == null || !leaderElectionService.isLeader()) {
                 return;
             }
             if (notification.getType() == NotificationType.Deleted) {
