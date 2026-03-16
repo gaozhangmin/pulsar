@@ -1343,7 +1343,12 @@ public class PulsarService implements AutoCloseable, ShutdownService {
                                     String bundleRange = bundle.getBundleRange();
                                     getAdminClient().namespaces().loadNamespaceBundleAsync(
                                             namespaceName.toString(), bundleRange,
-                                            false, false);
+                                            false, false)
+                                            .exceptionally(loadEx -> {
+                                                LOG.warn("Failed to load namespace bundle: {}",
+                                                        bundle.getBundleRange(), loadEx);
+                                                return null;
+                                            });
                                 } catch (Exception e) {
                                     LOG.warn("Failed to load namespace bundle: {}", bundle, e);
                                 }
@@ -1375,7 +1380,11 @@ public class PulsarService implements AutoCloseable, ShutdownService {
                                 deletedPath, bundleRange);
                         getAdminClient().namespaces().loadNamespaceBundleAsync(
                                 "public/default", bundleRange,
-                                false, false);
+                                false, false)
+                                .exceptionally(loadEx -> {
+                                    LOG.error("Failed to reload namespace bundle: {}", bundleRange, loadEx);
+                                    return null;
+                                });
                     } catch (Exception e) {
                         LOG.error("Failed to reload namespace bundle: {}", bundleRange, e);
                     }
