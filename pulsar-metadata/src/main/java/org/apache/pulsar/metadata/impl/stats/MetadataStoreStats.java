@@ -19,11 +19,10 @@
 package org.apache.pulsar.metadata.impl.stats;
 
 import io.prometheus.client.Counter;
-import io.prometheus.client.Histogram;
+import io.prometheus.client.Summary;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class MetadataStoreStats implements AutoCloseable {
-    private static final double[] BUCKETS = new double[]{1, 3, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000};
     private static final String OPS_TYPE_LABEL_NAME = "type";
     private static final String METADATA_STORE_LABEL_NAME = "name";
     private static final String STATUS = "status";
@@ -36,24 +35,31 @@ public final class MetadataStoreStats implements AutoCloseable {
 
     protected static final String PREFIX = "pulsar_metadata_store_";
 
-    private static final Histogram OPS_LATENCY = Histogram
+    private static final Summary OPS_LATENCY = Summary
             .build(PREFIX + "ops_latency", "-")
             .unit("ms")
-            .buckets(BUCKETS)
+            .quantile(0.5, 0.01D)
+            .quantile(0.75, 0.01D)
+            .quantile(0.95, 0.01D)
+            .quantile(0.99, 0.01D)
+            .quantile(0.999, 0.01D)
+            .quantile(0.9999, 0.01D)
+            .quantile(1.0, 0.01D)
             .labelNames(METADATA_STORE_LABEL_NAME, OPS_TYPE_LABEL_NAME, STATUS)
             .register();
+
     private static final Counter PUT_BYTES = Counter
             .build(PREFIX + "put", "-")
             .unit("bytes")
             .labelNames(METADATA_STORE_LABEL_NAME)
             .register();
 
-    private final Histogram.Child getOpsSucceedChild;
-    private final Histogram.Child delOpsSucceedChild;
-    private final Histogram.Child putOpsSucceedChild;
-    private final Histogram.Child getOpsFailedChild;
-    private final Histogram.Child delOpsFailedChild;
-    private final Histogram.Child putOpsFailedChild;
+    private final Summary.Child getOpsSucceedChild;
+    private final Summary.Child delOpsSucceedChild;
+    private final Summary.Child putOpsSucceedChild;
+    private final Summary.Child getOpsFailedChild;
+    private final Summary.Child delOpsFailedChild;
+    private final Summary.Child putOpsFailedChild;
     private final Counter.Child putBytesChild;
     private final String metadataStoreName;
     private final AtomicBoolean closed = new AtomicBoolean(false);

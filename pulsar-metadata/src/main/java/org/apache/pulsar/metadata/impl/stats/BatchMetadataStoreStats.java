@@ -19,44 +19,61 @@
 package org.apache.pulsar.metadata.impl.stats;
 
 import io.prometheus.client.Gauge;
-import io.prometheus.client.Histogram;
+import io.prometheus.client.Summary;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class BatchMetadataStoreStats implements AutoCloseable {
-    private static final double[] BUCKETS = new double[]{1, 5, 10, 20, 50, 100, 200, 500, 1000};
     private static final String NAME = "name";
 
     private static final Gauge EXECUTOR_QUEUE_SIZE = Gauge
             .build("pulsar_batch_metadata_store_executor_queue_size", "-")
             .labelNames(NAME)
             .register();
-    private static final Histogram OPS_WAITING = Histogram
+    private static final Summary OPS_WAITING = Summary
             .build("pulsar_batch_metadata_store_queue_wait_time", "-")
             .unit("ms")
+            .quantile(0.5, 0.01D)
+            .quantile(0.75, 0.01D)
+            .quantile(0.95, 0.01D)
+            .quantile(0.99, 0.01D)
+            .quantile(0.999, 0.01D)
+            .quantile(0.9999, 0.01D)
+            .quantile(1.0, 0.01D)
             .labelNames(NAME)
-            .buckets(BUCKETS)
             .register();
-    private static final Histogram BATCH_EXECUTE_TIME = Histogram
+    private static final Summary BATCH_EXECUTE_TIME = Summary
             .build("pulsar_batch_metadata_store_batch_execute_time", "-")
             .unit("ms")
+            .quantile(0.5, 0.01D)
+            .quantile(0.75, 0.01D)
+            .quantile(0.95, 0.01D)
+            .quantile(0.99, 0.01D)
+            .quantile(0.999, 0.01D)
+            .quantile(0.9999, 0.01D)
+            .quantile(1.0, 0.01D)
             .labelNames(NAME)
-            .buckets(BUCKETS)
             .register();
-    private static final Histogram OPS_PER_BATCH = Histogram
+    private static final Summary OPS_PER_BATCH = Summary
             .build("pulsar_batch_metadata_store_batch_size", "-")
+            .quantile(0.5, 0.01D)
+            .quantile(0.75, 0.01D)
+            .quantile(0.95, 0.01D)
+            .quantile(0.99, 0.01D)
+            .quantile(0.999, 0.01D)
+            .quantile(0.9999, 0.01D)
+            .quantile(1.0, 0.01D)
             .labelNames(NAME)
-            .buckets(BUCKETS)
             .register();
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final ThreadPoolExecutor executor;
     private final String metadataStoreName;
 
-    private final Histogram.Child batchOpsWaitingChild;
-    private final Histogram.Child batchExecuteTimeChild;
-    private final Histogram.Child opsPerBatchChild;
+    private final Summary.Child batchOpsWaitingChild;
+    private final Summary.Child batchExecuteTimeChild;
+    private final Summary.Child opsPerBatchChild;
 
     public BatchMetadataStoreStats(String metadataStoreName, ExecutorService executor) {
         if (executor instanceof ThreadPoolExecutor tx) {
