@@ -40,6 +40,7 @@ import org.apache.pulsar.client.api.Reader;
 import org.apache.pulsar.common.naming.TopicName;
 import org.apache.pulsar.common.policies.data.ClusterData;
 import org.apache.pulsar.common.policies.data.TenantInfo;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 
 public class PulsarClientBasedHandler implements ProtocolHandler {
 
@@ -129,6 +130,11 @@ public class PulsarClientBasedHandler implements ProtocolHandler {
 
     @Override
     public Map<InetSocketAddress, ChannelInitializer<SocketChannel>> newChannelInitializers() {
+        return Map.of();
+    }
+
+    @Override
+    public Map<String, NamespaceBundleStats> getBundleStatus() {
         return Map.of();
     }
 

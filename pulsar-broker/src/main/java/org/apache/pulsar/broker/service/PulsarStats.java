@@ -30,6 +30,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import lombok.Getter;
 import org.apache.pulsar.broker.PulsarService;
+import org.apache.pulsar.broker.ServiceConfiguration;
+import org.apache.pulsar.broker.protocol.ProtocolHandlers;
 import org.apache.pulsar.broker.service.nonpersistent.NonPersistentTopic;
 import org.apache.pulsar.broker.service.persistent.PersistentTopic;
 import org.apache.pulsar.broker.stats.BrokerOperabilityMetrics;
@@ -61,6 +63,8 @@ public class PulsarStats implements Closeable {
     private List<NonPersistentTopic> tempNonPersistentTopics;
     private final BrokerOperabilityMetrics brokerOperabilityMetrics;
     private final boolean exposePublisherStats;
+    private ProtocolHandlers protocolHandlers;
+    private ServiceConfiguration conf;
 
     private final ReentrantReadWriteLock bufferLock = new ReentrantReadWriteLock();
 
@@ -85,6 +89,8 @@ public class PulsarStats implements Closeable {
         this.exposePublisherStats = pulsar.getConfiguration().isExposePublisherStats();
         this.updatedAt = 0;
 
+        this.protocolHandlers = pulsar.getProtocolHandlers();
+        this.conf = pulsar.getConfiguration();
     }
 
     @Override
@@ -211,6 +217,11 @@ public class PulsarStats implements Closeable {
 
             // json end
             topicStatsStream.endObject();
+
+            // update bundle stats with handlers
+            if (conf.isAddBundleStatsWithHdls()) {
+                updateBundleStatsWithHandlers();
+            }
         } catch (Exception e) {
             log.error("Unable to update topic stats", e);
         }
@@ -230,6 +241,35 @@ public class PulsarStats implements Closeable {
             bufferLock.writeLock().unlock();
         }
         updatedAt = System.currentTimeMillis();
+    }
+
+    private void updateBundleStatsWithHandlers() {
+        if (protocolHandlers == null) {
+            return;
+        }
+
+        Map<String, Map<String, NamespaceBundleStats>> bundleStatsFromHdls = protocolHandlers.getBundleStatus();
+        if (bundleStatsFromHdls != null) {
+            bundleStatsFromHdls.forEach((namespaceName, bundles) -> {
+                if (bundles == null || bundles.isEmpty()) {
+                    return;
+                }
+                bundles.forEach((bundle, stats) -> {
+                    if (stats == null) {
+                        return;
+                    }
+                    NamespaceBundleStats currentBundleStats = bundleStats.computeIfAbsent(bundle,
+                            k -> {
+                                NamespaceBundleStats newStats = new NamespaceBundleStats();
+                                newStats.reset();
+                                return newStats;
+                            });
+                    //only msgRateOut and msgThroughputOut are provided by protocol handlers new
+                    currentBundleStats.msgRateOut += stats.msgRateOut;
+                    currentBundleStats.msgThroughputOut += stats.msgThroughputOut;
+                });
+            });
+        }
     }
 
     public synchronized NamespaceBundleStats invalidBundleStats(String bundleName) {

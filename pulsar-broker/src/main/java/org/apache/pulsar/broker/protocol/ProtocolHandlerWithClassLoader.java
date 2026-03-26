@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.service.BrokerService;
 import org.apache.pulsar.common.nar.NarClassLoader;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 
 /**
  * A protocol handler with its classloader.
@@ -102,6 +103,17 @@ class ProtocolHandlerWithClassLoader implements ProtocolHandler {
         try {
             Thread.currentThread().setContextClassLoader(classLoader);
             return handler.newChannelInitializers();
+        } finally {
+            Thread.currentThread().setContextClassLoader(prevClassLoader);
+        }
+    }
+
+    @Override
+    public Map<String, NamespaceBundleStats> getBundleStatus() {
+        ClassLoader prevClassLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            Thread.currentThread().setContextClassLoader(classLoader);
+            return handler.getBundleStatus();
         } finally {
             Thread.currentThread().setContextClassLoader(prevClassLoader);
         }

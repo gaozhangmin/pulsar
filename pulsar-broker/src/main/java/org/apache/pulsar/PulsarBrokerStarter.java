@@ -52,6 +52,7 @@ import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.common.allocator.PulsarByteBufAllocator;
 import org.apache.pulsar.common.naming.NamespaceBundleSplitAlgorithm;
 import org.apache.pulsar.common.protocol.Commands;
+import org.apache.pulsar.common.stats.Rate;
 import org.apache.pulsar.common.util.DirectMemoryUtils;
 import org.apache.pulsar.common.util.ShutdownUtil;
 import org.apache.pulsar.docs.tools.CmdGenerateDocs;
@@ -229,6 +230,7 @@ public class PulsarBrokerStarter {
             }
 
             // init stats provider
+            Rate.setMinCalculatePeriodSecondsFistTime(brokerConfig.getMinCalculatePeriodSecondsFistTime());
             if (starterArguments.runBookie || starterArguments.runBookieAutoRecovery) {
                 checkState(isNotBlank(starterArguments.bookieConfigFile),
                     "No configuration file for Bookie");

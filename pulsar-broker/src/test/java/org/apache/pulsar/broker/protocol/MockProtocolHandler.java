@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.Map;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.service.BrokerService;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 
 class MockProtocolHandler implements ProtocolHandler {
 
@@ -57,6 +58,11 @@ class MockProtocolHandler implements ProtocolHandler {
 
     @Override
     public Map<InetSocketAddress, ChannelInitializer<SocketChannel>> newChannelInitializers() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, NamespaceBundleStats> getBundleStatus() {
         return Collections.emptyMap();
     }
 

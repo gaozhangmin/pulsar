@@ -28,6 +28,7 @@ import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.service.BrokerService;
 import org.apache.pulsar.broker.service.BrokerTestBase;
 import org.apache.pulsar.common.util.PortManager;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -109,6 +110,11 @@ public abstract class SimpleProtocolHandlerTestsBase extends BrokerTestBase {
                     });
                 }
             });
+        }
+
+        @Override
+        public Map<String, NamespaceBundleStats> getBundleStatus() {
+            return Map.of();
         }
 
         @Override

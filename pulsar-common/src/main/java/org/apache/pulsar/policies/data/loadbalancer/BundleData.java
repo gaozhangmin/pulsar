@@ -32,6 +32,8 @@ public class BundleData {
     // and the bundle update period.
     private TimeAverageMessageData longTermData;
 
+    private String bundle;
+
     // number of topics present under this bundle
     private int topics;
 
@@ -47,7 +49,8 @@ public class BundleData {
      * @param numLongSamples
      *            Number of long term samples to use.
      */
-    public BundleData(final int numShortSamples, final int numLongSamples) {
+    public BundleData(String bundle, final int numShortSamples, final int numLongSamples) {
+        this.bundle = bundle;
         shortTermData = new TimeAverageMessageData(numShortSamples);
         longTermData = new TimeAverageMessageData(numLongSamples);
     }
@@ -63,7 +66,9 @@ public class BundleData {
      * @param defaultStats
      *            The stats to default to before the first sample is received.
      */
-    public BundleData(final int numShortSamples, final int numLongSamples, final NamespaceBundleStats defaultStats) {
+    public BundleData(String bundle, final int numShortSamples, final int numLongSamples,
+                      final NamespaceBundleStats defaultStats) {
+        this.bundle = bundle;
         shortTermData = new TimeAverageMessageData(numShortSamples, defaultStats);
         longTermData = new TimeAverageMessageData(numLongSamples, defaultStats);
     }
@@ -102,5 +107,9 @@ public class BundleData {
 
     public void setTopics(int topics) {
         this.topics = topics;
+    }
+
+    public String getBundle() {
+        return bundle;
     }
 }

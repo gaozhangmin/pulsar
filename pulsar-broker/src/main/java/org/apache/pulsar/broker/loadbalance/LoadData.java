@@ -18,8 +18,12 @@
  */
 package org.apache.pulsar.broker.loadbalance;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.pulsar.broker.namespace.NamespaceService;
 import org.apache.pulsar.common.naming.NamespaceBundle;
@@ -41,6 +45,11 @@ public class LoadData {
     private final Map<String, BundleData> bundleData;
 
     /**
+     * Map from bundle names to their time-sensitive aggregated data.
+     */
+    private final LoadingCache<String, BundleData> cachedBundleData;
+
+    /**
      * Map from recently unloaded bundles to the timestamp of when they were last loaded.
      */
     private final Map<String, Long> recentlyUnloadedBundles;
@@ -52,6 +61,13 @@ public class LoadData {
         this.brokerData = new ConcurrentHashMap<>();
         this.bundleData = new ConcurrentHashMap<>();
         this.recentlyUnloadedBundles = new ConcurrentHashMap<>();
+        this.cachedBundleData = CacheBuilder.newBuilder().expireAfterWrite(24L, TimeUnit.HOURS)
+                .build(new CacheLoader<>() {
+                    @Override
+                    public BundleData load(String bundle) {
+                        return LoadData.this.bundleData.get(bundle);
+                    }
+                });
     }
 
     public Map<String, BrokerData> getBrokerData() {
@@ -60,6 +76,10 @@ public class LoadData {
 
     public Map<String, BundleData> getBundleData() {
         return bundleData;
+    }
+
+    public LoadingCache<String, BundleData> getCachedBundleData() {
+        return cachedBundleData;
     }
 
     public Map<String, BundleData> getBundleDataForLoadShedding() {

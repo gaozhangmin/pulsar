@@ -29,6 +29,7 @@ import java.util.Objects;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.protocol.ProtocolHandler;
 import org.apache.pulsar.broker.service.BrokerService;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 
 
 public class EchoProtocolHandler implements ProtocolHandler {
@@ -88,6 +89,11 @@ public class EchoProtocolHandler implements ProtocolHandler {
         String hostAndPort = getProtocolDataToAdvertise();
         String[] parsed = hostAndPort.split(":");
         return new InetSocketAddress(parsed[0], Integer.parseInt(parsed[1]));
+    }
+
+    @Override
+    public Map<String, NamespaceBundleStats> getBundleStatus() {
+        return Map.of();
     }
 
     @Override

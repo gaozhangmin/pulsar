@@ -26,6 +26,7 @@ import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.service.BrokerService;
 import org.apache.pulsar.common.classification.InterfaceAudience;
 import org.apache.pulsar.common.classification.InterfaceStability;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 
 /**
  * The protocol handler interface for support additional protocols on Pulsar brokers.
@@ -92,6 +93,11 @@ public interface ProtocolHandler extends AutoCloseable {
      * @return the list of channel initializers for the ports that this protocol handler listens on.
      */
     Map<InetSocketAddress, ChannelInitializer<SocketChannel>> newChannelInitializers();
+
+    /**
+     * get bundle stats from protocol handler.
+     */
+    Map<String, NamespaceBundleStats> getBundleStatus();
 
     @Override
     void close();

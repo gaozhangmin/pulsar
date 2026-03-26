@@ -390,6 +390,7 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
             Optional<BundleData> optBundleData =
                     pulsarResources.getLoadBalanceResources().getBundleDataResources().getBundleData(bundle).join();
             if (optBundleData.isPresent()) {
+                loadData.getCachedBundleData().put(bundle, optBundleData.get());
                 return optBundleData.get();
             }
 
@@ -397,7 +398,7 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
                     .getQuota(bundle).join();
             if (optQuota.isPresent()) {
                 ResourceQuota quota = optQuota.get();
-                bundleData = new BundleData(NUM_SHORT_SAMPLES, NUM_LONG_SAMPLES);
+                bundleData = new BundleData(bundle, NUM_SHORT_SAMPLES, NUM_LONG_SAMPLES);
                 // Initialize from existing resource quotas if new API ZNodes do not exist.
                 final TimeAverageMessageData shortTermData = bundleData.getShortTermData();
                 final TimeAverageMessageData longTermData = bundleData.getLongTermData();
@@ -420,7 +421,7 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
             log.warn("Error when trying to find bundle {} on metadata store: {}", bundle, e);
         }
         if (bundleData == null) {
-            bundleData = new BundleData(NUM_SHORT_SAMPLES, NUM_LONG_SAMPLES, defaultStats);
+            bundleData = new BundleData(bundle, NUM_SHORT_SAMPLES, NUM_LONG_SAMPLES, defaultStats);
         }
         return bundleData;
     }
@@ -552,7 +553,9 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
                 activeBundles.add(bundle);
                 if (bundleData.containsKey(bundle)) {
                     // If we recognize the bundle, add these stats as a new sample.
-                    bundleData.get(bundle).update(stats);
+                    BundleData data = bundleData.get(bundle);
+                    data.update(stats);
+                    loadData.getCachedBundleData().put(bundle, data);
                 } else {
                     // Otherwise, attempt to find the bundle data on metadata store.
                     // If it cannot be found, use the latest stats as the first sample.
@@ -871,8 +874,9 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
                 final String bundleRange = LoadManagerShared.getBundleRangeFromBundleName(bundle);
                 // Set bundle affinity broker to preallocatedBundleToBroker.
                 final String affinityBroker = setNamespaceBundleAffinity(bundleRange, null);
-                if (StringUtils.isNotBlank(affinityBroker) && getAvailableBrokers().contains(affinityBroker)) {
-                    preallocatedBundleToBroker.put(bundle, affinityBroker);
+                if (StringUtils.isNotBlank(affinityBroker) && getAvailableBrokers().contains(affinityBroker)
+                        && loadData.getBrokerData().containsKey(affinityBroker)) {
+                    preallocateBundle(bundle, affinityBroker);
                 }
                 if (preallocatedBundleToBroker.containsKey(bundle)) {
                     // If the given bundle is already in preallocated, return the selected broker.
@@ -898,7 +902,6 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
                 key -> getBundleDataOrDefault(bundle));
         loadData.getBrokerData().get(broker).getPreallocatedBundleData().put(bundle, data);
         preallocatedBundleToBroker.put(bundle, broker);
-
         final String namespaceName = LoadManagerShared.getNamespaceNameFromBundleName(bundle);
         final String bundleRange = LoadManagerShared.getBundleRangeFromBundleName(bundle);
         final ConcurrentOpenHashMap<String, ConcurrentOpenHashSet<String>> namespaceToBundleRange =

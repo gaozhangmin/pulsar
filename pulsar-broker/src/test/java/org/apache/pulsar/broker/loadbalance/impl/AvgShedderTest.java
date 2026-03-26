@@ -19,6 +19,9 @@
 package org.apache.pulsar.broker.loadbalance.impl;
 
 import com.google.common.collect.Multimap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.loadbalance.LoadData;
 import org.apache.pulsar.policies.data.loadbalancer.BrokerData;
@@ -30,6 +33,7 @@ import org.apache.pulsar.policies.data.loadbalancer.TimeAverageMessageData;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import static org.apache.pulsar.broker.loadbalance.impl.AvgShedderKop.selectSmallestByValue;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
@@ -279,5 +283,20 @@ public class AvgShedderTest {
                 fail();
             }
         }
+    }
+
+    @Test
+    private void testSelectSmallestByValue() {
+        Map<String, Double> map = new HashMap<>();
+        map.put("broker1", 10.0);
+        map.put("broker2", 20.0);
+        map.put("broker3", 30.0);
+        List<String> smallest = selectSmallestByValue(map, 0.5);
+        assertEquals(smallest.size(), 2);
+        assertEquals(smallest.get(0), "broker1");
+        assertEquals(smallest.get(1), "broker2");
+        List<String> smallest1 = selectSmallestByValue(map, 0.1);
+        assertEquals(smallest1.size(), 1);
+        assertEquals(smallest1.get(0), "broker1");
     }
 }

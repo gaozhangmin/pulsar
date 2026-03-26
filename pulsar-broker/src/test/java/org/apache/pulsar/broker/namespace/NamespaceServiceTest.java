@@ -665,7 +665,7 @@ public class NamespaceServiceTest extends BrokerTestBase {
         NamespaceBundleStats defaultStats = new NamespaceBundleStats();
         defaultStats.msgThroughputIn = 100000;
         defaultStats.msgThroughputOut = 100000;
-        BundleData bd = new BundleData(10, 19, defaultStats);
+        BundleData bd = new BundleData(bundle, 10, 19, defaultStats);
         bd.setTopics(10);
         byte[] data = ObjectMapperFactory.getMapper().writer().writeValueAsBytes(bd);
         pulsar.getLocalMetadataStore().put(path, data, Optional.empty());

@@ -1466,6 +1466,13 @@ public class ServiceConfiguration implements PulsarConfiguration {
     )
     private int topicFencingTimeoutSeconds = 0;
 
+    @FieldContext(
+            category = CATEGORY_SERVER,
+            dynamic = true,
+            doc = "bundle stats, add protocol handler info or not"
+    )
+    private boolean addBundleStatsWithHdls = true;
+
     /**** --- Messaging Protocol. --- ****/
 
     @FieldContext(
@@ -2529,6 +2536,13 @@ public class ServiceConfiguration implements PulsarConfiguration {
     @FieldContext(
             dynamic = true,
             category = CATEGORY_LOAD_BALANCER,
+            doc = "In AvgShedder strategy, out weight to select broker."
+    )
+    private boolean loadBalancerAvgShedderThresholdHitBoth = false;
+
+    @FieldContext(
+            dynamic = true,
+            category = CATEGORY_LOAD_BALANCER,
             doc = "In the UniformLoadShedder and AvgShedder strategy, the minimum message that triggers unload."
     )
     private int minUnloadMessage = 1000;
@@ -2548,6 +2562,35 @@ public class ServiceConfiguration implements PulsarConfiguration {
                     + "evenly between the highest and lowest brokers."
     )
     private double maxUnloadPercentage = 0.2;
+
+    @FieldContext(
+            dynamic = true,
+            category = CATEGORY_LOAD_BALANCER,
+            doc = "In AvgShedder strategy, use throughput to select broker or select bundle to shed, "
+                    + "otherwise use rate."
+    )
+    private boolean loadBalancerUseThroughputElseRate = true;
+
+    @FieldContext(
+            dynamic = true,
+            category = CATEGORY_LOAD_BALANCER,
+            doc = "In AvgShedder strategy, use score to select broker when broker restart."
+    )
+    private boolean loadBalancerGetExpectedBrokerByScore = false;
+
+    @FieldContext(
+            dynamic = true,
+            category = CATEGORY_LOAD_BALANCER,
+            doc = "In AvgShedder strategy, get expected broker ratio."
+    )
+    private double loadBalancerGetExpectedBrokerRatio = 0.1;
+
+    @FieldContext(
+            dynamic = true,
+            category = CATEGORY_LOAD_BALANCER,
+            doc = "In AvgShedder strategy, out weight to select broker."
+    )
+    private double loadBalancerSelectBrokerOutWeight = 1.0;
 
     @FieldContext(
         dynamic = true,
@@ -3207,6 +3250,13 @@ public class ServiceConfiguration implements PulsarConfiguration {
             doc = "Enable expose the broker bundles metrics."
     )
     private boolean exposeBundlesMetricsInPrometheus = false;
+
+    @FieldContext(
+            category = CATEGORY_METRICS,
+            doc = "Min calculate period seconds for the firs time. When the runtime is too short,"
+                    + "it can result in calculated data that is abnormally high"
+    )
+    private long minCalculatePeriodSecondsFistTime = 0;
 
     /**** --- Functions. --- ****/
     @FieldContext(

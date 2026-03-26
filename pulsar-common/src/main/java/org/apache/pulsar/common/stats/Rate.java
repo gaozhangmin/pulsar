@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.LongAdder;
 /**
  */
 public class Rate {
+    private static long minCalculatePeriodSecondsFistTime = 0L;
     // Counters
     private final LongAdder valueAdder = new LongAdder();
     private final LongAdder countAdder = new LongAdder();
@@ -35,6 +36,7 @@ public class Rate {
     private double valueRate = 0.0d;
     private double averageValue = 0.0d;
     private long lastCalculatedTime = System.nanoTime();
+    private boolean initialized = false;
 
     public void recordEvent() {
         countAdder.increment();
@@ -55,6 +57,12 @@ public class Rate {
 
     public void calculateRate() {
         double period = (System.nanoTime() - lastCalculatedTime) / 1e9;
+        if (!initialized) {
+            initialized = true;
+            if (period < minCalculatePeriodSecondsFistTime) {
+                return;
+            }
+        }
         calculateRate(period);
         lastCalculatedTime = System.nanoTime();
     }
@@ -87,5 +95,9 @@ public class Rate {
 
     public long getTotalCount() {
         return this.totalCountAdder.longValue();
+    }
+
+    public static void setMinCalculatePeriodSecondsFistTime(long minCalculatePeriodSecondsFistTime) {
+        Rate.minCalculatePeriodSecondsFistTime = minCalculatePeriodSecondsFistTime;
     }
 }

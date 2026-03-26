@@ -316,7 +316,7 @@ public class ModularLoadManagerImplTest {
         final NamespaceBundle[] bundles = LoadBalancerTestingUtils.makeBundles(nsFactory, "test", "test", "test", 16);
         int numAssignedToPrimary = 0;
         int numAssignedToSecondary = 0;
-        final BundleData bundleData = new BundleData(10, 1000);
+        final BundleData bundleData = new BundleData("test", 10, 1000);
         final TimeAverageMessageData longTermMessageData = new TimeAverageMessageData(1000);
         longTermMessageData.setMsgRateIn(1000);
         bundleData.setLongTermData(longTermMessageData);
@@ -410,7 +410,7 @@ public class ModularLoadManagerImplTest {
         final int totalBundles = 50;
         final NamespaceBundle[] bundles = LoadBalancerTestingUtils.makeBundles(nsFactory, "test", "test", "test",
                 totalBundles);
-        final BundleData bundleData = new BundleData(10, 1000);
+        final BundleData bundleData = new BundleData("test", 10, 1000);
         // it sets max topics under this bundle so, owner of this broker reaches max-topic threshold
         bundleData.setTopics(pulsar1.getConfiguration().getLoadBalancerBrokerMaxTopics() + 10);
         final TimeAverageMessageData longTermMessageData = new TimeAverageMessageData(1000);

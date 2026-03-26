@@ -36,6 +36,7 @@ import java.util.Map;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.service.BrokerService;
 import org.apache.pulsar.common.nar.NarClassLoader;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 import org.testng.annotations.Test;
 
 /**
@@ -114,6 +115,11 @@ public class ProtocolHandlerWithClassLoaderTest {
             public Map<InetSocketAddress, ChannelInitializer<SocketChannel>> newChannelInitializers() {
                 assertEquals(Thread.currentThread().getContextClassLoader(), loader);
                 return null;
+            }
+
+            @Override
+            public Map<String, NamespaceBundleStats> getBundleStatus() {
+                return Map.of();
             }
 
             @Override

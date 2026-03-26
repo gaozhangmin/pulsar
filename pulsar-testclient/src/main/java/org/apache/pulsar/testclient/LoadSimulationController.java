@@ -259,7 +259,7 @@ public class LoadSimulationController extends CmdBase{
         startingStats.msgRateOut = quota.getMsgRateOut();
         startingStats.msgThroughputIn = quota.getBandwidthIn();
         startingStats.msgThroughputOut = quota.getBandwidthOut();
-        final BundleData bundleData = new BundleData(10, 1000, startingStats);
+        final BundleData bundleData = new BundleData("test", 10, 1000, startingStats);
         // Assume there is ample history for the bundle.
         bundleData.getLongTermData().setNumSamples(1000);
         bundleData.getShortTermData().setNumSamples(10);

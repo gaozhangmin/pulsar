@@ -35,6 +35,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.service.BrokerService;
+import org.apache.pulsar.policies.data.loadbalancer.NamespaceBundleStats;
 
 /**
  * A collection of loaded handlers.
@@ -147,6 +148,13 @@ public class ProtocolHandlers implements AutoCloseable {
         }
 
         return channelInitializers;
+    }
+    public Map<String, Map<String, NamespaceBundleStats>> getBundleStatus() {
+        return handlers.entrySet().stream()
+                .collect(Collectors.toMap(
+                        e -> e.getKey(),
+                        e -> e.getValue().getBundleStatus()
+                ));
     }
 
     public void start(BrokerService service) {
