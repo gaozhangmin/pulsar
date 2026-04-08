@@ -19,8 +19,10 @@
 package org.apache.pulsar.broker.loadbalance.extensions;
 
 import static org.apache.pulsar.broker.loadbalance.LoadManager.LOADBALANCE_BROKERS_ROOT;
+import static org.apache.pulsar.common.util.KwsInfoUtil.getKwsInfo;
 import com.google.common.annotations.VisibleForTesting;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,7 @@ import org.apache.pulsar.broker.PulsarServerException;
 import org.apache.pulsar.broker.PulsarService;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.loadbalance.extensions.data.BrokerLookupData;
+import org.apache.pulsar.broker.stats.prometheus.MetricsExports;
 import org.apache.pulsar.common.util.FutureUtil;
 import org.apache.pulsar.metadata.api.MetadataCache;
 import org.apache.pulsar.metadata.api.MetadataStoreException;
@@ -87,6 +90,13 @@ public class BrokerRegistryImpl implements BrokerRegistry {
         this.scheduler = pulsar.getLoadManagerExecutor();
         this.listeners = new ArrayList<>();
         this.brokerIdKeyPath = keyPath(pulsar.getBrokerId());
+        Map<String, String> properties = Collections.emptyMap();
+        if (conf.isLoadBalancerPublishKwsInfo()) {
+            properties = getKwsInfo();
+            if (properties.isEmpty()) {
+                MetricsExports.updateKwsInfoMissing(true);
+            }
+        }
         this.brokerLookupData = new BrokerLookupData(
                 pulsar.getWebServiceAddress(),
                 pulsar.getWebServiceAddressTls(),
@@ -98,7 +108,8 @@ public class BrokerRegistryImpl implements BrokerRegistry {
                 pulsar.getConfiguration().isEnableNonPersistentTopics(),
                 conf.getLoadManagerClassName(),
                 System.currentTimeMillis(),
-                pulsar.getBrokerVersion());
+                pulsar.getBrokerVersion(),
+                properties);
     }
 
     public BrokerRegistryImpl(PulsarService pulsar) {

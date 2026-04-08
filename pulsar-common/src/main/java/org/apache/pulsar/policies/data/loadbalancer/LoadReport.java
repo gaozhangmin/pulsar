@@ -20,6 +20,7 @@ package org.apache.pulsar.policies.data.loadbalancer;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -489,6 +490,11 @@ public class LoadReport implements LoadManagerReport {
     @Override
     public long getStartTimestamp() {
         return this.startTimestamp;
+    }
+
+    @Override
+    public Map<String, String> getProperties() {
+        return Collections.emptyMap();
     }
 
     public void setStartTimestamp(long startTimestamp) {

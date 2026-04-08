@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import java.util.Collections;
 import org.apache.pulsar.broker.PulsarService;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.loadbalance.extensions.ExtensibleLoadManagerImpl;
@@ -106,6 +107,6 @@ public class RedirectManagerTest {
         return new BrokerLookupData(
                 webServiceUrl, webServiceUrlTls, pulsarServiceUrl,
                 pulsarServiceUrlTls, advertisedListeners, protocols, true, true,
-                loadManagerClassName, startTimeStamp, "3.0.0");
+                loadManagerClassName, startTimeStamp, "3.0.0", Collections.emptyMap());
     }
 }

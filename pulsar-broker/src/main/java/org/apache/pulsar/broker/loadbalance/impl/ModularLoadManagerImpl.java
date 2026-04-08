@@ -59,8 +59,10 @@ import org.apache.pulsar.broker.loadbalance.LoadManager;
 import org.apache.pulsar.broker.loadbalance.LoadSheddingStrategy;
 import org.apache.pulsar.broker.loadbalance.ModularLoadManager;
 import org.apache.pulsar.broker.loadbalance.ModularLoadManagerStrategy;
+import org.apache.pulsar.broker.loadbalance.PazBlackListBrokerFilterImpl;
 import org.apache.pulsar.broker.loadbalance.impl.LoadManagerShared.BrokerTopicLoadingPredicate;
 import org.apache.pulsar.broker.resources.PulsarResources;
+import org.apache.pulsar.broker.stats.prometheus.MetricsExports;
 import org.apache.pulsar.broker.stats.prometheus.metrics.Summary;
 import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.client.util.ExecutorProvider;
@@ -263,6 +265,7 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
         policies = new SimpleResourceAllocationPolicies(pulsar);
         filterPipeline.add(new BrokerLoadManagerClassFilter());
         filterPipeline.add(new BrokerVersionFilter());
+        filterPipeline.add(new PazBlackListBrokerFilterImpl());
 
         LoadManagerShared.refreshBrokerToFailureDomainMap(pulsar, brokerToFailureDomainMap);
         // register listeners for domain changes
@@ -1028,20 +1031,30 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
             Map<String, String> protocolData = pulsar.getProtocolDataToAdvertise();
 
             lastData = new LocalBrokerData(pulsar.getWebServiceAddress(), pulsar.getWebServiceAddressTls(),
-                    pulsar.getBrokerServiceUrl(), pulsar.getBrokerServiceUrlTls(), pulsar.getAdvertisedListeners());
+                    pulsar.getBrokerServiceUrl(), pulsar.getBrokerServiceUrlTls(), pulsar.getAdvertisedListeners(),
+                    conf.isLoadBalancerPublishKwsInfo());
             lastData.setProtocols(protocolData);
             // configure broker-topic mode
             lastData.setPersistentTopicsEnabled(pulsar.getConfiguration().isEnablePersistentTopics());
             lastData.setNonPersistentTopicsEnabled(pulsar.getConfiguration().isEnableNonPersistentTopics());
 
             localData = new LocalBrokerData(pulsar.getWebServiceAddress(), pulsar.getWebServiceAddressTls(),
-                    pulsar.getBrokerServiceUrl(), pulsar.getBrokerServiceUrlTls(), pulsar.getAdvertisedListeners());
+                    pulsar.getBrokerServiceUrl(), pulsar.getBrokerServiceUrlTls(), pulsar.getAdvertisedListeners(),
+                    conf.isLoadBalancerPublishKwsInfo());
             localData.setProtocols(protocolData);
             localData.setBrokerVersionString(pulsar.getBrokerVersion());
             // configure broker-topic mode
             localData.setPersistentTopicsEnabled(pulsar.getConfiguration().isEnablePersistentTopics());
             localData.setNonPersistentTopicsEnabled(pulsar.getConfiguration().isEnableNonPersistentTopics());
             localData.setLoadManagerClassName(conf.getLoadManagerClassName());
+
+            // Update KWS info missing metric if KWS info is published
+            if (conf.isLoadBalancerPublishKwsInfo() && localData.getProperties() != null) {
+                String region = localData.getProperties().get("KWS_SERVICE_REGION");
+                String paz = localData.getProperties().get("KWS_SERVICE_PAZ");
+                boolean isMissing = (region == null || paz == null);
+                MetricsExports.updateKwsInfoMissing(isMissing);
+            }
 
             String brokerId = pulsar.getBrokerId();
             brokerZnodePath = LoadManager.LOADBALANCE_BROKERS_ROOT + "/" + brokerId;

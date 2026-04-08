@@ -402,7 +402,8 @@ public class NamespaceServiceTest extends BrokerTestBase {
         final String listener = "listenerName";
         Map<String, AdvertisedListener> advertisedListeners = new HashMap<>();
         advertisedListeners.put(listener, AdvertisedListener.builder().brokerServiceUrl(new URI(listenerUrl)).brokerServiceUrlTls(new URI(listenerUrlTls)).build());
-        LocalBrokerData ld = new LocalBrokerData("http://" + candidateBroker, null, brokerUrl, null, advertisedListeners);
+        LocalBrokerData ld = new LocalBrokerData("http://" + candidateBroker, null, brokerUrl, null, advertisedListeners,
+                false);
         String path = String.format("%s/%s", LoadManager.LOADBALANCE_BROKERS_ROOT, candidateBroker);
 
         pulsar.getLocalMetadataStore().put(path,

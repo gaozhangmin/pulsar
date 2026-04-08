@@ -28,6 +28,18 @@ import org.apache.pulsar.common.util.DirectMemoryUtils;
 public class MetricsExports {
     private static boolean initialized = false;
 
+    // Gauge for KWS info missing (KWS_SERVICE_REGION or KWS_SERVICE_PAZ is null)
+    private static final Gauge kwsInfoMissing = Gauge.build()
+            .name("pulsar_kws_info_missing")
+            .help("Indicates if KWS_SERVICE_REGION or KWS_SERVICE_PAZ is null (1 = missing, 0 = present)")
+            .register();
+
+    // Gauge for load balancer broker paz blacklist status
+    private static final Gauge brokerPazBlacklistEnabled = Gauge.build()
+            .name("pulsar_broker_paz_blacklist_enabled")
+            .help("Indicates if broker paz blacklist is not empty (1 = has blacklist entries, 0 = empty)")
+            .register();
+
     private MetricsExports() {
     }
 
@@ -64,5 +76,21 @@ public class MetricsExports {
                     }
                 }, PulsarVersion.getVersion(), PulsarVersion.getGitSha())
                 .register(registry);
+    }
+
+    /**
+     * Update KWS info missing gauge.
+     * @param isMissing true if KWS_SERVICE_REGION or KWS_SERVICE_PAZ is null
+     */
+    public static void updateKwsInfoMissing(boolean isMissing) {
+        kwsInfoMissing.set(isMissing ? 1 : 0);
+    }
+
+    /**
+     * Update broker paz blacklist enabled gauge.
+     * @param hasBlacklist true if the blacklist is not empty
+     */
+    public static void updateBrokerPazBlacklistEnabled(boolean hasBlacklist) {
+        brokerPazBlacklistEnabled.set(hasBlacklist ? 1 : 0);
     }
 }

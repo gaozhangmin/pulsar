@@ -18,6 +18,7 @@
  */
 package org.apache.pulsar.policies.data.loadbalancer;
 
+import static org.apache.pulsar.common.util.KwsInfoUtil.getKwsInfo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.util.Collections;
@@ -94,6 +95,8 @@ public class LocalBrokerData implements LoadManagerReport {
     private String loadManagerClassName;
     private long startTimestamp;
 
+    private Map<String, String> properties;
+
     // For JSON only.
     public LocalBrokerData() {
         this(null, null, null, null);
@@ -105,11 +108,12 @@ public class LocalBrokerData implements LoadManagerReport {
     public LocalBrokerData(final String webServiceUrl, final String webServiceUrlTls, final String pulsarServiceUrl,
             final String pulsarServiceUrlTls) {
         this(webServiceUrl, webServiceUrlTls, pulsarServiceUrl, pulsarServiceUrlTls,
-                Collections.unmodifiableMap(Collections.emptyMap()));
+                Collections.unmodifiableMap(Collections.emptyMap()), true);
     }
 
     public LocalBrokerData(final String webServiceUrl, final String webServiceUrlTls, final String pulsarServiceUrl,
-                           final String pulsarServiceUrlTls, Map<String, AdvertisedListener> advertisedListeners) {
+                           final String pulsarServiceUrlTls, Map<String, AdvertisedListener> advertisedListeners,
+                           boolean publishKwsInfo) {
         this.webServiceUrl = webServiceUrl;
         this.webServiceUrlTls = webServiceUrlTls;
         this.pulsarServiceUrl = pulsarServiceUrl;
@@ -127,6 +131,9 @@ public class LocalBrokerData implements LoadManagerReport {
         lastBundleLosses = new HashSet<>();
         protocols = new HashMap<>();
         this.advertisedListeners = Collections.unmodifiableMap(new HashMap<>(advertisedListeners));
+        if (publishKwsInfo) {
+            this.properties = getKwsInfo();
+        }
     }
 
     /**
@@ -524,6 +531,15 @@ public class LocalBrokerData implements LoadManagerReport {
     @Override
     public Optional<String> getProtocol(String protocol) {
         return Optional.ofNullable(protocols.get(protocol));
+    }
+
+    public void setProperties(Map<String, String> properties) {
+        this.properties = properties;
+    }
+
+    @Override
+    public Map<String, String> getProperties() {
+        return properties;
     }
 
     public Map<String, AdvertisedListener> getAdvertisedListeners() {

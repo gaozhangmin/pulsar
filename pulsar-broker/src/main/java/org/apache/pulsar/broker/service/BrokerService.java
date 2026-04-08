@@ -130,6 +130,7 @@ import org.apache.pulsar.broker.service.persistent.PersistentTopic;
 import org.apache.pulsar.broker.service.persistent.SystemTopic;
 import org.apache.pulsar.broker.service.plugin.EntryFilterProvider;
 import org.apache.pulsar.broker.stats.ClusterReplicationMetrics;
+import org.apache.pulsar.broker.stats.prometheus.MetricsExports;
 import org.apache.pulsar.broker.stats.prometheus.metrics.ObserverGauge;
 import org.apache.pulsar.broker.stats.prometheus.metrics.Summary;
 import org.apache.pulsar.broker.validator.BindAddressValidator;
@@ -2899,6 +2900,15 @@ public class BrokerService implements Closeable {
         // add listener to notify web service httpRequestsFailOnUnknownPropertiesEnabled changed.
         registerConfigurationListener("configurationMetadataSyncEventTopic", enabled -> {
             pulsar.initConfigMetadataSynchronizerIfNeeded();
+        });
+
+        // add listener to update broker paz blacklist metric
+        registerConfigurationListener("loadBalancerBrokerPazBlackList", blackList -> {
+            boolean hasBlacklist = false;
+            if (blackList instanceof Set<?>) {
+                hasBlacklist = !((Set<?>) blackList).isEmpty();
+            }
+            MetricsExports.updateBrokerPazBlacklistEnabled(hasBlacklist);
         });
 
         // add more listeners here

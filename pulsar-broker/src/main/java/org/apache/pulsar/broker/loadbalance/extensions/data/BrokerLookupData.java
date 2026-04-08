@@ -41,7 +41,8 @@ public record BrokerLookupData (String webServiceUrl,
                                 boolean nonPersistentTopicsEnabled,
                                 String loadManagerClassName,
                                 long startTimestamp,
-                                String brokerVersion) implements ServiceLookupData {
+                                String brokerVersion,
+                                Map<String, String> properties) implements ServiceLookupData {
     @Override
     public String getWebServiceUrl() {
         return this.webServiceUrl();
@@ -80,6 +81,11 @@ public record BrokerLookupData (String webServiceUrl,
     @Override
     public long getStartTimestamp() {
         return this.startTimestamp;
+    }
+
+    @Override
+    public Map<String, String> getProperties() {
+        return this.properties;
     }
 
     public LookupResult toLookupResult(LookupOptions options) throws PulsarServerException {

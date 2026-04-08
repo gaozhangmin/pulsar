@@ -52,4 +52,6 @@ public interface ServiceLookupData {
 
     long getStartTimestamp();
 
+    Map<String, String> getProperties();
+
 }

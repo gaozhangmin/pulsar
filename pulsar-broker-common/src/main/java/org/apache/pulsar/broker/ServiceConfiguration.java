@@ -2957,6 +2957,20 @@ public class ServiceConfiguration implements PulsarConfiguration {
     )
     private int loadBalancerServiceUnitStateMaxConcurrentOverrides = 64;
 
+    @FieldContext(
+            dynamic = true,
+            category = CATEGORY_LOAD_BALANCER,
+            doc = "publish broker kws info for az escape."
+    )
+    private boolean loadBalancerPublishKwsInfo = true;
+
+    @FieldContext(
+            dynamic = true,
+            category = CATEGORY_LOAD_BALANCER,
+            doc = "load balancer broker paz black list for az escape. For example: HB1AZ2,HB1AZ3,HB2AZ1"
+    )
+    private Set<String> loadBalancerBrokerPazBlackList = new HashSet<>();
+
     /**** --- Replication. --- ****/
     @FieldContext(
         category = CATEGORY_REPLICATION,
