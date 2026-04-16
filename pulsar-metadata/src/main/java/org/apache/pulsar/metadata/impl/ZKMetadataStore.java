@@ -19,6 +19,7 @@
 package org.apache.pulsar.metadata.impl;
 
 import com.google.common.annotations.VisibleForTesting;
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.bookkeeper.meta.zk.DnsSrvHostProvider;
 import org.apache.bookkeeper.zookeeper.BoundExponentialBackoffRetryPolicy;
 import org.apache.pulsar.common.util.FutureUtil;
 import org.apache.pulsar.metadata.api.GetResult;
@@ -65,6 +67,7 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.client.ConnectStringParser;
+import org.apache.zookeeper.client.HostProvider;
 
 @Slf4j
 public class ZKMetadataStore extends AbstractBatchedMetadataStore
@@ -96,12 +99,19 @@ public class ZKMetadataStore extends AbstractBatchedMetadataStore
             this.rootPath = new ConnectStringParser(zkConnectString).getChrootPath();
 
             isZkManaged = true;
+            HostProvider hostProvider = null;
+            final ConnectStringParser connectStringParser = new ConnectStringParser(zkConnectString);
+            if (metadataStoreConfig.getZkHostProviderClass().equals(DnsSrvHostProvider.class.getName())) {
+                final InetSocketAddress addr = connectStringParser.getServerAddresses().get(0);
+                hostProvider = new DnsSrvHostProvider(addr.getHostString(), addr.getPort(), null);
+            }
             zkc = PulsarZooKeeperClient.newBuilder().connectString(zkConnectString)
                     .connectRetryPolicy(new BoundExponentialBackoffRetryPolicy(100, 60_000, Integer.MAX_VALUE))
                     .allowReadOnlyMode(metadataStoreConfig.isAllowReadOnlyOperations())
                     .sessionTimeoutMs(metadataStoreConfig.getSessionTimeoutMillis())
                     .watchers(Collections.singleton(this::processSessionWatcher))
                     .configPath(metadataStoreConfig.getConfigFilePath())
+                    .hostProvider(hostProvider)
                     .build();
             if (enableSessionWatcher) {
                 sessionWatcher = new ZKSessionWatcher(zkc, this::receivedSessionEvent);

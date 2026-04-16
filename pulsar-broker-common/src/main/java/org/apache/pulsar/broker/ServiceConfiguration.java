@@ -556,6 +556,12 @@ public class ServiceConfiguration implements PulsarConfiguration {
 
     @FieldContext(
             category = CATEGORY_SERVER,
+            doc = "zkHostProviderClass"
+    )
+    private String zkHostProviderClass = "org.apache.zookeeper.client.StaticHostProvider";
+
+    @FieldContext(
+            category = CATEGORY_SERVER,
             doc = "Maximum size of a batch"
     )
     private int metadataStoreBatchingMaxSizeKb = 128;

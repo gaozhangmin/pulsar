@@ -239,6 +239,7 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
     @Override
     public void initialize(final PulsarService pulsar) {
         this.pulsar = pulsar;
+        this.conf = pulsar.getConfiguration();
         this.pulsarResources = pulsar.getPulsarResources();
         brokersData = pulsar.getCoordinationService().getLockManager(LocalBrokerData.class);
         pulsar.getLocalMetadataStore().registerListener(this::handleDataNotification);
@@ -251,8 +252,6 @@ public class ModularLoadManagerImpl implements ModularLoadManager {
         }
 
         bundleSplitStrategy = new BundleSplitterTask();
-
-        conf = pulsar.getConfiguration();
 
         // Initialize the default stats to assume for unseen bundles (hard-coded for now).
         defaultStats.msgThroughputIn = DEFAULT_MESSAGE_THROUGHPUT;

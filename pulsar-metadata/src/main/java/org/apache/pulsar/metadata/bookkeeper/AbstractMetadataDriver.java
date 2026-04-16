@@ -116,6 +116,7 @@ public abstract class AbstractMetadataDriver implements Closeable {
             try {
                 this.store = MetadataStoreExtended.create(url,
                         MetadataStoreConfig.builder()
+                                .zkHostProviderClass(conf.getZkHostProviderClass())
                                 .sessionTimeoutMillis(conf.getZkTimeout())
                                 .metadataStoreName(MetadataStoreConfig.METADATA_STORE)
                                 .build());

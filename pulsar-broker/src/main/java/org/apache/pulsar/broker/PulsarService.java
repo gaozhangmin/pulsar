@@ -402,6 +402,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
         }
         return MetadataStoreFactory.create(config.getConfigurationMetadataStoreUrl(),
                 MetadataStoreConfig.builder()
+                        .zkHostProviderClass(config.getZkHostProviderClass())
                         .sessionTimeoutMillis((int) config.getMetadataStoreSessionTimeoutMillis())
                         .allowReadOnlyOperations(config.isMetadataStoreAllowReadOnlyOperations())
                         .configFilePath(configFilePath)
@@ -1240,6 +1241,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
             throws MetadataStoreException, PulsarServerException {
         return MetadataStoreExtended.create(config.getMetadataStoreUrl(),
                 MetadataStoreConfig.builder()
+                        .zkHostProviderClass(config.getZkHostProviderClass())
                         .sessionTimeoutMillis((int) config.getMetadataStoreSessionTimeoutMillis())
                         .allowReadOnlyOperations(config.isMetadataStoreAllowReadOnlyOperations())
                         .configFilePath(config.getMetadataStoreConfigPath())

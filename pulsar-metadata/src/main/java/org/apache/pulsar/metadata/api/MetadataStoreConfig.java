@@ -87,6 +87,9 @@ public class MetadataStoreConfig {
     @Builder.Default
     private final boolean fsyncEnable = true;
 
+    @Builder.Default
+    private final String zkHostProviderClass = "org.apache.zookeeper.client.StaticHostProvider";
+
     /**
      * Pluggable MetadataEventSynchronizer to sync metadata events across the
      * separate clusters.

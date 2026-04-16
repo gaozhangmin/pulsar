@@ -61,6 +61,9 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.Watcher.Event.EventType;
 import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.client.ConnectStringParser;
+import org.apache.zookeeper.client.HostProvider;
+import org.apache.zookeeper.client.StaticHostProvider;
 import org.apache.zookeeper.client.ZKClientConfig;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
@@ -78,6 +81,7 @@ public class PulsarZooKeeperClient extends ZooKeeper implements Watcher, AutoClo
     private final String connectString;
     private final int sessionTimeoutMs;
     private final boolean allowReadOnlyMode;
+    private final HostProvider hostProvider;
 
     // state for the zookeeper client
     private final AtomicReference<ZooKeeper> zk = new AtomicReference<ZooKeeper>();
@@ -178,6 +182,7 @@ public class PulsarZooKeeperClient extends ZooKeeper implements Watcher, AutoClo
         double requestRateLimit = 0;
         boolean allowReadOnlyMode = false;
         String configPath = null;
+        HostProvider hostProvider = null;
 
         private Builder() {}
 
@@ -231,6 +236,11 @@ public class PulsarZooKeeperClient extends ZooKeeper implements Watcher, AutoClo
             return this;
         }
 
+        public Builder hostProvider(HostProvider hostProvider) {
+            this.hostProvider = hostProvider;
+            return this;
+        }
+
         public PulsarZooKeeperClient build() throws IOException,
                 KeeperException,
                 InterruptedException,
@@ -251,6 +261,9 @@ public class PulsarZooKeeperClient extends ZooKeeper implements Watcher, AutoClo
                 operationRetryPolicy =
                         new BoundExponentialBackoffRetryPolicy(sessionTimeoutMs, sessionTimeoutMs, 0);
             }
+            if (null == hostProvider) {
+                hostProvider = createDefaultHostProvider(connectString);
+            }
 
             // Create a watcher manager
             StatsLogger watcherStatsLogger = statsLogger.scope("watcher");
@@ -268,7 +281,8 @@ public class PulsarZooKeeperClient extends ZooKeeper implements Watcher, AutoClo
                     retryExecThreadCount,
                     requestRateLimit,
                     allowReadOnlyMode,
-                    configPath
+                    configPath,
+                    hostProvider
             );
             // Wait for connection to be established.
             try {
@@ -298,13 +312,15 @@ public class PulsarZooKeeperClient extends ZooKeeper implements Watcher, AutoClo
                                     int retryExecThreadCount,
                                     double rate,
                                     boolean allowReadOnlyMode,
-                                    String configPath) throws IOException, QuorumPeerConfig.ConfigException {
-        super(connectString, sessionTimeoutMs, watcherManager, allowReadOnlyMode,
+                                    String configPath,
+                                    HostProvider hostProvider) throws IOException, QuorumPeerConfig.ConfigException {
+        super(connectString, sessionTimeoutMs, watcherManager, allowReadOnlyMode, hostProvider,
                 configPath == null ? null : new ZKClientConfig(configPath));
         this.connectString = connectString;
         this.configPath = configPath;
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.allowReadOnlyMode =  allowReadOnlyMode;
+        this.hostProvider = hostProvider;
         this.watcherManager = watcherManager;
         this.connectRetryPolicy = connectRetryPolicy;
         this.operationRetryPolicy = operationRetryPolicy;
@@ -350,16 +366,20 @@ public class PulsarZooKeeperClient extends ZooKeeper implements Watcher, AutoClo
         }
     }
 
+    private static HostProvider createDefaultHostProvider(String connectString) {
+        return new StaticHostProvider((new ConnectStringParser(connectString)).getServerAddresses());
+    }
+
     public void waitForConnection() throws KeeperException, InterruptedException {
         watcherManager.waitForConnection();
     }
 
     protected ZooKeeper createZooKeeper() throws IOException, QuorumPeerConfig.ConfigException {
         if (null != configPath) {
-            return new ZooKeeper(connectString, sessionTimeoutMs, watcherManager, allowReadOnlyMode,
+            return new ZooKeeper(connectString, sessionTimeoutMs, watcherManager, allowReadOnlyMode, hostProvider,
                     new ZKClientConfig(configPath));
         }
-        return new ZooKeeper(connectString, sessionTimeoutMs, watcherManager, allowReadOnlyMode);
+        return new ZooKeeper(connectString, sessionTimeoutMs, watcherManager, allowReadOnlyMode, hostProvider);
     }
 
     @Override
