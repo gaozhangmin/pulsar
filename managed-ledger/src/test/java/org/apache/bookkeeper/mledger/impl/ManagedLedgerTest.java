@@ -4557,10 +4557,6 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         Assert.assertEquals(ml.getLedgersInfo().get(lastLedger).getPropertiesCount(), 0);
     }
 
-    /**
-     * Builds a minimal interceptor that sets firstEntryIndex / firstEntryTimestamp on each OpAddEntry
-     * and exposes offset tracking -- used by first-entry-props tests.
-     */
     private ManagedLedgerInterceptor buildFirstEntryPropsInterceptor(long startIndex) {
         return new ManagedLedgerInterceptor() {
             private volatile long index = startIndex;
@@ -4602,16 +4598,6 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         };
     }
 
-    /**
-     * Verifies that firstEntryIndex and firstEntryTimestamp are stored in the CLOSED ledger's
-     * LedgerInfo rather than being written to ZK immediately when entry 0 is added.
-     *
-     * Steps:
-     * 1. Open an ML with maxEntriesPerLedger=2 and an interceptor that sets offsetIndex on each op.
-     * 2. Write 3 entries to trigger a ledger rollover.
-     * 3. After rollover, the first (now-closed) ledger must carry firstEntryIndex in its props.
-     * 4. Close and reopen the ML; the props must survive the round-trip.
-     */
     @Test
     public void testFirstEntryPropsWrittenOnLedgerClose() throws Exception {
         ManagedLedgerConfig config = new ManagedLedgerConfig();
@@ -4662,21 +4648,6 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         ml2.close();
     }
 
-    /**
-     * Verifies that when the broker crashes before a ledger is normally closed (so firstEntryIndex /
-     * firstEntryTimestamp were never written to ZK), the firstEntryTimestamp property is recovered
-     * during the next {@link ManagedLedgerImpl#initialize} by reading entry 0 from BookKeeper.
-     *
-     * This test writes a properly-formatted Pulsar message (with publish_time) so that
-     * Commands.getEntryTimestamp() can extract the timestamp during recovery.
-     *
-     * Steps:
-     * 1. Open an ML with interceptor, write 1 valid Pulsar message (entry 0).
-     * 2. The interceptor caches firstEntryTimestamp in memory (but NOT in ZK since ledger is open).
-     * 3. Shutdown factory without calling ml.close() (simulates broker crash).
-     * 4. Reopen the ML; recoverFirstEntryPropsIfNeeded() reads entry 0 and restores the timestamp.
-     * 5. Verify getFirstEntryTimestampFromLedgerMetadata() returns the correct value.
-     */
     @Test
     public void testFirstEntryPropsRecoveryAfterCrash() throws Exception {
         final String mlName = "testFirstEntryPropsRecovery";

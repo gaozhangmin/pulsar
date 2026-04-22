@@ -1039,12 +1039,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         }
     }
 
-    /**
-     * Cache the first-entry index and timestamp of the current ledger in memory only.
-     * The values will be flushed to ZK together with the LedgerInfo when the ledger is
-     * closed normally via {@link #ledgerClosed(LedgerHandle)}.
-     * This avoids two extra ZK writes per new ledger at write time.
-     */
     public synchronized void setCurrentLedgerFirstEntryProps(Long firstEntryIndex, Long firstEntryTimestamp) {
         if (currentLedger == null) {
             return;
@@ -1054,45 +1048,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         }
         if (firstEntryTimestamp != null) {
             this.currentLedgerFirstEntryTimestamp = firstEntryTimestamp;
-        }
-    }
-
-    /**
-     * update  properties for the current ledger.
-     * This is called when the first entry is about to be added to ensure accuracy.
-     * @deprecated Use {@link #setCurrentLedgerFirstEntryProps(Long, Long)} to cache props in memory and
-     *             flush them together with LedgerInfo on ledger close.
-     */
-    @Deprecated
-    public void updateCurrentLedgerProps(String key, String value) {
-        if (currentLedger == null) {
-            return;
-        }
-        long ledgerId = currentLedger.getId();
-
-        LedgerInfo currentInfo = ledgers.get(ledgerId);
-        if (currentInfo != null) {
-            Map<String, String> newPropertiesMap = new HashMap<>();
-            newPropertiesMap.put(key, value);
-            LedgerInfo updatedInfo = updateLedgerProps(currentInfo, newPropertiesMap);
-            ledgers.put(ledgerId, updatedInfo);
-
-            // Asynchronously update the metadata store
-            asyncAddLedgerProperty(ledgerId, key, value)
-                .whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        log.error("[{}] Failed persisted current ledger props {}: {} for ledger {}",
-                                name, key, value, ledgerId);
-                        // Note: We keep the in-memory update even if persistence fails
-                        // to maintain consistency within this session
-                    } else {
-                        if (log.isDebugEnabled()) {
-                            log.debug("[{}] Successfully persisted current ledger props {}: {} for ledger {}",
-                                    name, key, value, ledgerId);
-                        }
-
-                    }
-                });
         }
     }
 
