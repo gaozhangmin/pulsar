@@ -247,12 +247,12 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
                 firstEntryIndex = offsetIndex - numberOfMessages + 1;
                 if (log.isDebugEnabled()) {
                     log.debug("[{}] Caching first-entry index {} for ledger {}", ml.getName(),
-                            firstEntryIndex, lh.getId());
+                            firstEntryIndex, lh != null ? lh.getId() : "null");
                 }
             }
             if (extractedTimestamp != null && log.isDebugEnabled()) {
                 log.debug("[{}] Caching first-entry timestamp {} for ledger {}", ml.getName(),
-                        extractedTimestamp, lh.getId());
+                        extractedTimestamp, lh != null ? lh.getId() : "null");
             }
             ml.setCurrentLedgerFirstEntryProps(firstEntryIndex, extractedTimestamp);
         }

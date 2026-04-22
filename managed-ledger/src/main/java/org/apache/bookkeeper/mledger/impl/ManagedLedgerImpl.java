@@ -2043,7 +2043,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 }
                 newLedgerInfo = updateLedgerProps(newLedgerInfo, newPropertiesMap);
             }
-            // Reset in-memory first-entry cache; they now live in the closed LedgerInfo.
             currentLedgerFirstEntryIndex = null;
             currentLedgerFirstEntryTimestamp = null;
             ledgers.put(lh.getId(), newLedgerInfo);
