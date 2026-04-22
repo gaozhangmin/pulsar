@@ -147,4 +147,6 @@ public interface ManagedLedgerMXBean {
     long[] getLedgerAddEntryLatencyBuckets();
 
     StatsBuckets getInternalLedgerAddEntryLatencyBuckets();
+
+    long getLedgerFirstEntryPropsRecoveryFailedCount();
 }
