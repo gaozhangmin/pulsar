@@ -296,7 +296,7 @@ public class TransactionMetricsTest extends BrokerTestBase {
         metric = metrics.get("pulsar_storage_size");
         assertEquals(metric.size(), 4);
         metric = metrics.get("pulsar_storage_logical_size");
-        assertEquals(metric.size(), 2);
+        assertEquals(metric.size(), 3);
         metric = metrics.get("pulsar_storage_backlog_size");
         assertEquals(metric.size(), 2);
     }

@@ -99,7 +99,7 @@ public class NamespaceStatsAggregator {
 
                 brokerStats.updateStats(topicStats);
 
-                if (includeTopicMetrics) {
+                if (includeTopicMetrics || topic.isSystemTopic()) {
                     topicsCount.add(1);
                     TopicStats.printTopicStats(stream, topicStats, compactorMXBean, cluster, namespace, name,
                             splitTopicAndPartitionIndexLabel);
@@ -127,9 +127,7 @@ public class NamespaceStatsAggregator {
             }
         });
 
-        if (includeTopicMetrics) {
-            printTopicsCountStats(stream, localNamespaceTopicCount, cluster);
-        }
+        printTopicsCountStats(stream, localNamespaceTopicCount, cluster);
 
         printBrokerStats(stream, cluster, brokerStats);
     }
