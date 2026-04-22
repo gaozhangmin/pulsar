@@ -570,7 +570,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 }
 
                 Map<String, String> recovered = new HashMap<>();
-                try {
+                try (entries) {
                     LedgerEntry entry = entries.getEntry(0);
                     if (entry != null) {
                         ByteBuf buf = entry.getEntryBuffer();
@@ -582,7 +582,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                             recovered.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(meta.getIndex()));
                         }
                     }
-                    entries.close();
                 } catch (Exception e) {
                     log.warn("[{}] Error extracting first-entry props from entry 0 of ledger {}.",
                             name, ledgerId, e);
