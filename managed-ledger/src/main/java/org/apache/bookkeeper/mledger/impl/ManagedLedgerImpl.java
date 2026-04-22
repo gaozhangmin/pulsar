@@ -2038,7 +2038,8 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                     newPropertiesMap.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(currentLedgerFirstEntryIndex));
                 }
                 if (currentLedgerFirstEntryTimestamp != null) {
-                    newPropertiesMap.put(FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(currentLedgerFirstEntryTimestamp));
+                    newPropertiesMap.put(FIRST_ENTRY_TIMESTAMP_PROPS,
+                            Long.toString(currentLedgerFirstEntryTimestamp));
                 }
                 newLedgerInfo = updateLedgerProps(newLedgerInfo, newPropertiesMap);
             }

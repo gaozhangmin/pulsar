@@ -46,6 +46,7 @@ import static org.testng.Assert.fail;
 import com.google.common.collect.Sets;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.lang.reflect.Field;
 import java.nio.ReadOnlyBufferException;
@@ -142,6 +143,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.pulsar.common.api.proto.CommandSubscribe.InitialPosition;
 import org.apache.pulsar.common.policies.data.EnsemblePlacementPolicyConfig;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
+import org.apache.pulsar.common.protocol.Commands;
 import org.apache.pulsar.common.util.FutureUtil;
 import org.apache.pulsar.metadata.api.MetadataStoreException;
 import org.apache.pulsar.metadata.api.Stat;
@@ -4665,10 +4667,9 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         msgMeta.setPublishTime(publishTimestamp);
         msgMeta.setProducerName("test-producer");
         msgMeta.setSequenceId(0);
-        io.netty.buffer.ByteBuf payload =
-                io.netty.buffer.Unpooled.wrappedBuffer("crash-test".getBytes(UTF_8));
-        io.netty.buffer.ByteBuf msgBuf = org.apache.pulsar.common.protocol.Commands.serializeMetadataAndPayload(
-                org.apache.pulsar.common.protocol.Commands.ChecksumType.Crc32c, msgMeta, payload);
+        ByteBuf payload =
+                Unpooled.wrappedBuffer("crash-test".getBytes(UTF_8));
+        ByteBuf msgBuf = Commands.serializeMetadataAndPayload(Commands.ChecksumType.Crc32c, msgMeta, payload);
         byte[] msgBytes = new byte[msgBuf.readableBytes()];
         msgBuf.readBytes(msgBytes);
         msgBuf.release();
