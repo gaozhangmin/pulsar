@@ -564,7 +564,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 if (ex != null) {
                     log.warn("[{}] Failed to read entry 0 for first-entry props recovery on ledger {}. "
                             + "Props will remain missing until next broker restart.", name, ledgerId, ex);
-                    ledgers.remove(ledgerId);
+                    mbean.recordLedgerFirstEntryPropsRecoveryFailed();
                     initializeBookKeeper(callback);
                     return;
                 }
@@ -604,7 +604,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                     log.error("cannot recover first-entry props for ledger {}, recovered props: {}, so we discard it",
                             ledgerId, recovered);
                     mbean.recordLedgerFirstEntryPropsRecoveryFailed();
-                    ledgers.remove(ledgerId);
                 }
                 initializeBookKeeper(callback);
             });
