@@ -556,8 +556,11 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         log.info("[{}] First-entry props missing for ledger {} (possible broker crash). "
                 + "Recovering from entry 0.", name, ledgerId);
 
+        final long recoveryStartTimeNanos = System.nanoTime();
         lh.readAsync(0, 0).whenComplete((entries, ex) -> {
             executor.execute(() -> {
+                long recoveryLatencyUsec = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - recoveryStartTimeNanos);
+                mbean.recordLedgerFirstEntryPropsRecoveryLatency(recoveryLatencyUsec);
                 if (ex != null) {
                     log.warn("[{}] Failed to read entry 0 for first-entry props recovery on ledger {}. "
                             + "Props will remain missing until next broker restart.", name, ledgerId, ex);
