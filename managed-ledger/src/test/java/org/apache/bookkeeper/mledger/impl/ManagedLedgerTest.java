@@ -141,6 +141,7 @@ import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.pulsar.common.api.proto.CommandSubscribe.InitialPosition;
+import org.apache.pulsar.common.api.proto.MessageMetadata;
 import org.apache.pulsar.common.policies.data.EnsemblePlacementPolicyConfig;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
 import org.apache.pulsar.common.protocol.Commands;
@@ -4662,8 +4663,8 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
 
         // Build a minimal Pulsar message with a known publish_time so recovery can extract it.
-        org.apache.pulsar.common.api.proto.MessageMetadata msgMeta =
-                new org.apache.pulsar.common.api.proto.MessageMetadata();
+        MessageMetadata msgMeta =
+                new MessageMetadata();
         msgMeta.setPublishTime(publishTimestamp);
         msgMeta.setProducerName("test-producer");
         msgMeta.setSequenceId(0);

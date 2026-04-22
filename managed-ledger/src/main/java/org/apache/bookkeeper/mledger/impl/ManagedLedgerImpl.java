@@ -588,7 +588,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 }
 
                 if (recovered.containsKey(FIRST_ENTRY_INDEX_PROPS)
-                        && recovered.containsKey(FIRST_ENTRY_TIMESTAMP_PROPS)) {
+                        || recovered.containsKey(FIRST_ENTRY_TIMESTAMP_PROPS)) {
                     // Apply recovered props to in-memory LedgerInfo.
                     LedgerInfo current = ledgers.get(ledgerId);
                     if (current != null) {
