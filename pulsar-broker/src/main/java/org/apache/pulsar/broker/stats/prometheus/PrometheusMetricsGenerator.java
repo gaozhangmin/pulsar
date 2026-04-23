@@ -295,6 +295,7 @@ public class PrometheusMetricsGenerator implements AutoCloseable {
 
     private final PulsarService pulsar;
     private final boolean includeTopicMetrics;
+    private final boolean includeSystemTopicMetrics;
     private final boolean includeConsumerMetrics;
     private final boolean includeProducerMetrics;
     private final boolean splitTopicAndPartitionIndexLabel;
@@ -303,10 +304,12 @@ public class PrometheusMetricsGenerator implements AutoCloseable {
     private volatile int initialBufferSize = DEFAULT_INITIAL_BUFFER_SIZE;
 
     public PrometheusMetricsGenerator(PulsarService pulsar, boolean includeTopicMetrics,
+                                      boolean includeSystemTopicMetrics,
                                       boolean includeConsumerMetrics, boolean includeProducerMetrics,
                                       boolean splitTopicAndPartitionIndexLabel, Clock clock) {
         this.pulsar = pulsar;
         this.includeTopicMetrics = includeTopicMetrics;
+        this.includeSystemTopicMetrics = includeSystemTopicMetrics;
         this.includeConsumerMetrics = includeConsumerMetrics;
         this.includeProducerMetrics = includeProducerMetrics;
         this.splitTopicAndPartitionIndexLabel = splitTopicAndPartitionIndexLabel;
@@ -323,7 +326,8 @@ public class PrometheusMetricsGenerator implements AutoCloseable {
 
             generateSystemMetrics(stream, pulsar.getConfiguration().getClusterName());
 
-            NamespaceStatsAggregator.generate(pulsar, includeTopicMetrics, includeConsumerMetrics,
+            NamespaceStatsAggregator.generate(pulsar, includeTopicMetrics,
+                    includeSystemTopicMetrics, includeConsumerMetrics,
                     includeProducerMetrics, splitTopicAndPartitionIndexLabel, metricStreams);
 
             if (pulsar.getWorkerServiceOpt().isPresent()) {

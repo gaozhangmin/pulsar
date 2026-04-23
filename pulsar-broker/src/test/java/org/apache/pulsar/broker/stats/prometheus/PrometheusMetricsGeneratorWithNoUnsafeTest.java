@@ -39,7 +39,8 @@ public class PrometheusMetricsGeneratorWithNoUnsafeTest {
     public void testWriteStringWithNoUnsafe() {
         assertFalse(PlatformDependent.hasUnsafe());
         @Cleanup
-        PrometheusMetricsGenerator generator = new PrometheusMetricsGenerator(null, false, false, false, false,
+        PrometheusMetricsGenerator generator = new PrometheusMetricsGenerator(null, false,  false,
+                false, false, false,
             Clock.systemUTC());
         @Cleanup("release")
         ByteBuf buf = generator.allocateMultipartCompositeDirectBuffer();

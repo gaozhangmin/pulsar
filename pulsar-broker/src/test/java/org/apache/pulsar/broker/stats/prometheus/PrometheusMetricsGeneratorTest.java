@@ -57,7 +57,8 @@ public class PrometheusMetricsGeneratorTest {
         ByteBuf byteBuf = Unpooled.wrappedBuffer(inputBytes);
 
         PrometheusMetricsGenerator generator =
-                new PrometheusMetricsGenerator(pulsar, false, false, false, false, Clock.systemUTC()) {
+                new PrometheusMetricsGenerator(pulsar, false,  false,
+                        false, false, false, Clock.systemUTC()) {
                     // override the generateMetrics method to return the random byte buffer for gzip compression
                     // instead of the actual metrics
                     @Override

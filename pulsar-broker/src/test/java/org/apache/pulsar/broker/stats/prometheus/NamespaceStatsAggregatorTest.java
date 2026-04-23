@@ -119,7 +119,7 @@ public class NamespaceStatsAggregatorTest {
         subStats.consumers.add(0, consumerStats);
 
         // when
-        NamespaceStatsAggregator.generate(pulsar, true, true,
+        NamespaceStatsAggregator.generate(pulsar, true,  false,true,
                 true, true, metricStreams);
 
         // then
@@ -195,7 +195,7 @@ public class NamespaceStatsAggregatorTest {
         PrometheusMetricStreams metricStreams = Mockito.spy(new PrometheusMetricStreams());
 
         // when - call with includeTopicMetrics = false to trigger aggregation
-        NamespaceStatsAggregator.generate(pulsar, false, false,
+        NamespaceStatsAggregator.generate(pulsar, false, false, false,
                 false, false, metricStreams);
 
         // then - verify aggregated storage size metric (1000 + 2000 + 3000 = 6000)
@@ -225,7 +225,7 @@ public class NamespaceStatsAggregatorTest {
         PrometheusMetricStreams metricStreams = Mockito.spy(new PrometheusMetricStreams());
 
         // when - call with includeTopicMetrics = false
-        NamespaceStatsAggregator.generate(pulsar, false, false,
+        NamespaceStatsAggregator.generate(pulsar, false,  false,false,
                 false, false, metricStreams);
 
         // then - verify storage size metric for non-partitioned topic
@@ -264,7 +264,7 @@ public class NamespaceStatsAggregatorTest {
         PrometheusMetricStreams metricStreams = Mockito.spy(new PrometheusMetricStreams());
 
         // when - call with includeTopicMetrics = false
-        NamespaceStatsAggregator.generate(pulsar, false, false,
+        NamespaceStatsAggregator.generate(pulsar, false,  false,false,
                 false, false, metricStreams);
 
         // then - verify both topics have correct aggregated storage sizes

@@ -37,14 +37,14 @@ import org.eclipse.jetty.server.HttpOutput;
 public class PrometheusMetricsTestUtil {
     public static void generate(PulsarService pulsar, boolean includeTopicMetrics, boolean includeConsumerMetrics,
                                 boolean includeProducerMetrics, OutputStream out) throws IOException {
-        generate(new PrometheusMetricsGenerator(pulsar, includeTopicMetrics, includeConsumerMetrics,
+        generate(new PrometheusMetricsGenerator(pulsar, includeTopicMetrics, false, includeConsumerMetrics,
                 includeProducerMetrics, false, Clock.systemUTC()), out, null);
     }
 
     public static void generate(PulsarService pulsar, boolean includeTopicMetrics, boolean includeConsumerMetrics,
                                 boolean includeProducerMetrics, boolean splitTopicAndPartitionIndexLabel,
                                 OutputStream out) throws IOException {
-        generate(new PrometheusMetricsGenerator(pulsar, includeTopicMetrics, includeConsumerMetrics,
+        generate(new PrometheusMetricsGenerator(pulsar, includeTopicMetrics, false, includeConsumerMetrics,
                 includeProducerMetrics, splitTopicAndPartitionIndexLabel, Clock.systemUTC()), out, null);
     }
 

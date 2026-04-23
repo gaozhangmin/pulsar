@@ -1900,7 +1900,7 @@ public class PrometheusMetricsTest extends BrokerTestBase {
 
         @Cleanup
         PrometheusMetricsGenerator prometheusMetricsGenerator =
-                new PrometheusMetricsGenerator(pulsar, true, false, false,
+                new PrometheusMetricsGenerator(pulsar, true,  false, false, false,
                         false, clock);
 
         String previousMetrics = null;

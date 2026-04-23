@@ -73,7 +73,8 @@ public class NamespaceStatsAggregator {
         }
     };
 
-    public static void generate(PulsarService pulsar, boolean includeTopicMetrics, boolean includeConsumerMetrics,
+    public static void generate(PulsarService pulsar, boolean includeTopicMetrics,
+                                boolean includeSystemTopicMetrics, boolean includeConsumerMetrics,
                                 boolean includeProducerMetrics, boolean splitTopicAndPartitionIndexLabel,
                                 PrometheusMetricStreams stream) {
         String cluster = pulsar.getConfiguration().getClusterName();
@@ -99,7 +100,7 @@ public class NamespaceStatsAggregator {
 
                 brokerStats.updateStats(topicStats);
 
-                if (includeTopicMetrics || topic.isSystemTopic()) {
+                if (includeTopicMetrics || (includeSystemTopicMetrics && topic.isSystemTopic())) {
                     topicsCount.add(1);
                     TopicStats.printTopicStats(stream, topicStats, compactorMXBean, cluster, namespace, name,
                             splitTopicAndPartitionIndexLabel);
@@ -127,7 +128,9 @@ public class NamespaceStatsAggregator {
             }
         });
 
-        printTopicsCountStats(stream, localNamespaceTopicCount, cluster);
+        if (includeTopicMetrics) {
+            printTopicsCountStats(stream, localNamespaceTopicCount, cluster);
+        }
 
         printBrokerStats(stream, cluster, brokerStats);
     }
