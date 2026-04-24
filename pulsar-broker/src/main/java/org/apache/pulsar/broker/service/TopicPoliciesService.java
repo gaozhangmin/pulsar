@@ -152,7 +152,7 @@ public interface TopicPoliciesService extends AutoCloseable {
      *
      * @param namespaceBundle namespace bundle
      */
-    CompletableFuture<Void> addOwnedNamespaceBundleAsync(NamespaceBundle namespaceBundle);
+    void addOwnedNamespaceBundleAsync(NamespaceBundle namespaceBundle);
 
     /**
      * Remove owned namespace bundle async.
@@ -217,9 +217,7 @@ public interface TopicPoliciesService extends AutoCloseable {
         }
 
         @Override
-        public CompletableFuture<Void> addOwnedNamespaceBundleAsync(NamespaceBundle namespaceBundle) {
-            //No-op
-            return CompletableFuture.completedFuture(null);
+        public void addOwnedNamespaceBundleAsync(NamespaceBundle namespaceBundle) {
         }
 
         @Override
