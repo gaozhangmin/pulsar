@@ -590,14 +590,16 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 if (recovered.containsKey(FIRST_ENTRY_INDEX_PROPS)
                         || recovered.containsKey(FIRST_ENTRY_TIMESTAMP_PROPS)) {
                     // Apply recovered props to in-memory LedgerInfo.
-                    LedgerInfo current = ledgers.get(ledgerId);
-                    if (current != null) {
-                        Map<String, String> merged = new HashMap<>();
-                        current.getPropertiesList().forEach(kv -> merged.put(kv.getKey(), kv.getValue()));
-                        merged.putAll(recovered);
-                        LedgerInfo updated = updateLedgerProps(current, merged);
-                        ledgers.put(ledgerId, updated);
-                        log.info("[{}] Recovered first-entry props {} for ledger {}.", name, recovered, ledgerId);
+                    synchronized (this) {
+                        LedgerInfo current = ledgers.get(ledgerId);
+                        if (current != null) {
+                            Map<String, String> merged = new HashMap<>();
+                            current.getPropertiesList().forEach(kv -> merged.put(kv.getKey(), kv.getValue()));
+                            merged.putAll(recovered);
+                            LedgerInfo updated = updateLedgerProps(current, merged);
+                            ledgers.put(ledgerId, updated);
+                            log.info("[{}] Recovered first-entry props {} for ledger {}.", name, recovered, ledgerId);
+                        }
                     }
                 } else {
                     log.error("cannot recover first-entry props for ledger {}, recovered props: {}, so we discard it",
