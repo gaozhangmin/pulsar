@@ -53,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.stats.NullStatsProvider;
 import org.apache.bookkeeper.stats.StatsProvider;
 import org.apache.pulsar.broker.PulsarService;
+import org.apache.pulsar.broker.stats.metrics.AdminMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedCursorMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedLedgerCacheMetrics;
 import org.apache.pulsar.broker.stats.metrics.ManagedLedgerMetrics;
@@ -417,6 +418,10 @@ public class PrometheusMetricsGenerator implements AutoCloseable {
             parseMetricsToPrometheusMetrics(new ManagedCursorMetrics(pulsar).generate(),
                     clusterName, Collector.Type.GAUGE, stream);
         }
+
+        // generate admin metrics (COUNTER type)
+        parseMetricsToPrometheusMetrics(new AdminMetrics(pulsar).generate(),
+                clusterName, Collector.Type.COUNTER, stream);
 
         parseMetricsToPrometheusMetrics(pulsar.getBrokerService()
                         .getPulsarStats().getBrokerOperabilityMetrics().getMetrics(),

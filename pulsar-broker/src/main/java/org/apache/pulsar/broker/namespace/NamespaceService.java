@@ -189,6 +189,41 @@ public class NamespaceService implements AutoCloseable {
             .quantile(0.999)
             .quantile(1.0)
             .register();
+    private static final Summary findBrokerServiceUrlLatency =
+            Summary.build("pulsar_broker_find_broker_service_url", "-")
+            .quantile(0.50)
+            .quantile(0.99)
+            .quantile(0.999)
+            .quantile(1.0)
+            .register();
+    private static final Summary searchForCandidateBrokerLatency =
+            Summary.build("pulsar_broker_search_for_candidate_broker", "-")
+            .quantile(0.50)
+            .quantile(0.99)
+            .quantile(0.999)
+            .quantile(1.0)
+            .register();
+    private static final Summary cacheGetOwnerLatency =
+            Summary.build("pulsar_broker_cache_get_owner", "-")
+            .quantile(0.50)
+            .quantile(0.99)
+            .quantile(0.999)
+            .quantile(1.0)
+            .register();
+    private static final Summary acquireOwnershipLatency =
+            Summary.build("pulsar_broker_acquire_ownership", "-")
+            .quantile(0.50)
+            .quantile(0.99)
+            .quantile(0.999)
+            .quantile(1.0)
+            .register();
+    private static final Summary loadTopicsInBundleLatency =
+            Summary.build("pulsar_broker_load_topics_in_bundle", "-")
+            .quantile(0.50)
+            .quantile(0.99)
+            .quantile(0.999)
+            .quantile(1.0)
+            .register();
     private final DoubleHistogram lookupLatencyHistogram;
 
     private ConcurrentHashMap<String, CompletableFuture<List<String>>> inProgressQueryUserTopics =
@@ -485,6 +520,7 @@ public class NamespaceService implements AutoCloseable {
             LOG.debug("findBrokerServiceUrl: {} - options: {}", bundle, options);
         }
 
+        long startTime = System.nanoTime();
         ConcurrentOpenHashMap<NamespaceBundle, CompletableFuture<Optional<LookupResult>>> targetMap;
         if (options.isAuthoritative()) {
             targetMap = findingBundlesAuthoritative;
@@ -495,8 +531,10 @@ public class NamespaceService implements AutoCloseable {
         return targetMap.computeIfAbsent(bundle, (k) -> {
             CompletableFuture<Optional<LookupResult>> future = new CompletableFuture<>();
 
+            final long startGetOwnerShipStartTime = System.nanoTime();
             // First check if we or someone else already owns the bundle
             ownershipCache.getOwnerAsync(bundle).thenAccept(nsData -> {
+                cacheGetOwnerLatency.observe(System.nanoTime() - startGetOwnerShipStartTime, TimeUnit.NANOSECONDS);
                 if (nsData.isEmpty()) {
                     // No one owns this bundle
 
@@ -534,14 +572,17 @@ public class NamespaceService implements AutoCloseable {
                     }
                 }
             }).exceptionally(exception -> {
+                cacheGetOwnerLatency.observe(System.nanoTime() - startGetOwnerShipStartTime, TimeUnit.NANOSECONDS);
                 LOG.warn("Failed to check owner for bundle {}: {}", bundle, exception.getMessage(), exception);
                 future.completeExceptionally(exception);
                 return null;
             });
 
-            future.whenComplete((r, t) -> pulsar.getExecutor().execute(
-                () -> targetMap.remove(bundle)
-            ));
+            future.whenComplete((r, t) -> {
+                pulsar.getExecutor().execute(
+                () -> targetMap.remove(bundle));
+                findBrokerServiceUrlLatency.observe(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
+            });
 
             return future;
         });
@@ -584,6 +625,10 @@ public class NamespaceService implements AutoCloseable {
                                           LookupOptions options) {
         String candidateBroker;
         LeaderElectionService les = pulsar.getLeaderElectionService();
+        long searchForCandidateBrokerStartTime = System.nanoTime();
+        lookupFuture.whenComplete((r, t) ->
+                searchForCandidateBrokerLatency.observe(System.nanoTime() - searchForCandidateBrokerStartTime,
+                        TimeUnit.NANOSECONDS));
         if (les == null) {
             LOG.warn("The leader election has not yet been completed! NamespaceBundle[{}]", bundle);
             lookupFuture.completeExceptionally(
@@ -656,8 +701,10 @@ public class NamespaceService implements AutoCloseable {
             Objects.requireNonNull(candidateBroker);
 
             if (candidateBroker.equals(pulsar.getBrokerId())) {
+                long startTime = System.nanoTime();
                 // Load manager decided that the local broker should try to become the owner
                 ownershipCache.tryAcquiringOwnership(bundle).thenAccept(ownerInfo -> {
+                    acquireOwnershipLatency.observe(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
                     if (ownerInfo.isDisabled()) {
                         if (LOG.isDebugEnabled()) {
                             LOG.debug("Namespace bundle {} is currently being unloaded", bundle);
@@ -669,7 +716,10 @@ public class NamespaceService implements AutoCloseable {
 
                         if (options.isLoadTopicsInBundle()) {
                             // Schedule the task to preload topics
+                            long startLoadTopicTime = System.nanoTime();
                             pulsar.loadNamespaceTopics(bundle);
+                            loadTopicsInBundleLatency.observe(System.nanoTime() - startLoadTopicTime,
+                                    TimeUnit.NANOSECONDS);
                         }
                         // find the target
                         if (options.hasAdvertisedListenerName()) {
@@ -692,6 +742,7 @@ public class NamespaceService implements AutoCloseable {
                         }
                     }
                 }).exceptionally(exception -> {
+                    acquireOwnershipLatency.observe(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
                     LOG.warn("Failed to acquire ownership for namespace bundle {}: {}", bundle, exception);
                     lookupFuture.completeExceptionally(new PulsarServerException(
                             "Failed to acquire ownership for namespace bundle " + bundle, exception));

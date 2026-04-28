@@ -31,6 +31,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -96,6 +98,14 @@ import org.slf4j.LoggerFactory;
 @Consumes(MediaType.APPLICATION_JSON)
 @Api(value = "/namespaces", description = "Namespaces admin apis", tags = "namespaces")
 public class Namespaces extends NamespacesBase {
+
+    public static final Map<String, AtomicLong> API_COUNTERS = new ConcurrentHashMap<>();
+
+    private static void incrementApiCounter(String apiName) {
+        try {
+            API_COUNTERS.computeIfAbsent(apiName, k -> new AtomicLong()).incrementAndGet();
+        } catch (Exception ignored) {}
+    }
 
     @GET
     @Path("/{tenant}")
@@ -875,6 +885,7 @@ public class Namespaces extends NamespacesBase {
     public void unloadNamespace(@Suspended final AsyncResponse asyncResponse,
                                 @PathParam("tenant") String tenant,
                                 @PathParam("namespace") String namespace) {
+        incrementApiCounter("unloadNamespace:" + tenant + "/" + namespace);
         try {
             validateNamespaceName(tenant, namespace);
         } catch (WebApplicationException wae) {
@@ -911,6 +922,7 @@ public class Namespaces extends NamespacesBase {
                                     @DefaultValue("false") boolean loadTopicInBundle,
                                     @QueryParam("authoritative")
                                     @DefaultValue("false") boolean authoritative) {
+        incrementApiCounter("loadNamespace:" + tenant + "/" + namespace);
         validateNamespaceName(tenant, namespace);
         internalLoadNamespaceAsync(loadTopicInBundle, authoritative)
                 .thenAccept(__ -> {
@@ -942,6 +954,7 @@ public class Namespaces extends NamespacesBase {
                                       @PathParam("bundle") String bundleRange,
                                       @QueryParam("loadTopicInBundle") @DefaultValue("false") boolean loadTopicInBundle,
                                       @QueryParam("authoritative") @DefaultValue("false") boolean authoritative) {
+        incrementApiCounter("loadNamespaceBundle:" + tenant + "/" + namespace + "/" + bundleRange);
         validateNamespaceName(tenant, namespace);
         internalLoadNamespaceBundleAsync(bundleRange, authoritative, loadTopicInBundle,
                 null)
@@ -973,6 +986,7 @@ public class Namespaces extends NamespacesBase {
             @PathParam("bundle") String bundleRange,
             @QueryParam("authoritative") @DefaultValue("false") boolean authoritative,
                                       @QueryParam("destinationBroker") String destinationBroker) {
+        incrementApiCounter("unloadNamespaceBundle:" + tenant + "/" + namespace + "/" + bundleRange);
         validateNamespaceName(tenant, namespace);
         internalUnloadNamespaceBundleAsync(bundleRange, destinationBroker, authoritative)
                 .thenAccept(__ -> {
