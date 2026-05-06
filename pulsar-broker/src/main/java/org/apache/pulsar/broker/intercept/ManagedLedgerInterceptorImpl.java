@@ -134,7 +134,8 @@ public class ManagedLedgerInterceptorImpl implements ManagedLedgerInterceptor {
         CompletableFuture<Map<String, String>> promise = new CompletableFuture<>();
         boolean hasAppendIndexMetadataInterceptor = appendIndexMetadataInterceptor != null;
         boolean needsIndexRecovery = hasAppendIndexMetadataInterceptor && lh.getLastAddConfirmed() >= 0;
-        boolean needsFirstEntryPropsRecovery = isMissingFirstEntryProps(existingProperties) && lh.getLastAddConfirmed() >= 0;
+        boolean needsFirstEntryPropsRecovery =
+                isMissingFirstEntryProps(existingProperties) && lh.getLastAddConfirmed() >= 0;
 
         if (!needsIndexRecovery && !needsFirstEntryPropsRecovery) {
             promise.complete(Collections.emptyMap());
