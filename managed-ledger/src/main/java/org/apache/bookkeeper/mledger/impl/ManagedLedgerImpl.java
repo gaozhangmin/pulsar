@@ -971,19 +971,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
             return false;
         }
     }
-
-    public synchronized void setCurrentLedgerFirstEntryProps(Long firstEntryIndex, Long firstEntryTimestamp) {
-        if (currentLedger == null) {
-            return;
-        }
-        if (firstEntryIndex != null) {
-            this.currentLedgerFirstEntryIndex = firstEntryIndex;
-        }
-        if (firstEntryTimestamp != null) {
-            this.currentLedgerFirstEntryTimestamp = firstEntryTimestamp;
-        }
-    }
-
     @Override
     public void readyToCreateNewLedger() {
        // only set transition state to ClosedLedger if current state is WriteFailed
