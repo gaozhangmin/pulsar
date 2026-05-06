@@ -469,6 +469,10 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                                         + " for ledger {}.", name, recoveredProps, id);
                                                             }
                                                         }
+                                                    } else {
+                                                        log.info("[{}] Recovered first-entry props for ledger {} is empty.",
+                                                                name, id);
+                                                        mbean.recordLedgerFirstEntryPropsRecoveryFailed();
                                                     }
                                                     initializeBookKeeper(callback);
                                                 } else {
@@ -1962,8 +1966,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 }
                 newLedgerInfo = updateLedgerProps(newLedgerInfo, newPropertiesMap);
             }
-            currentLedgerFirstEntryIndex = null;
-            currentLedgerFirstEntryTimestamp = null;
             ledgers.put(lh.getId(), newLedgerInfo);
         } else {
             // The last ledger was empty, so we can discard it
