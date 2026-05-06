@@ -470,7 +470,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                             }
                                                         }
                                                     } else {
-                                                        log.info("[{}] Recovered first-entry props for ledger {} is empty.",
+                                                        log.info("[{}] Recovered props for ledger {} is empty.",
                                                                 name, id);
                                                         mbean.recordLedgerFirstEntryPropsRecoveryFailed();
                                                     }
