@@ -19,12 +19,15 @@
 package org.apache.pulsar.broker.intercept;
 
 import io.netty.buffer.ByteBuf;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.client.api.LedgerEntry;
+import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.bookkeeper.mledger.impl.OpAddEntry;
 import org.apache.bookkeeper.mledger.intercept.ManagedLedgerInterceptor;
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -126,42 +129,129 @@ public class ManagedLedgerInterceptorImpl implements ManagedLedgerInterceptor {
     }
 
     @Override
-    public CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name, LedgerHandle lh) {
-        CompletableFuture<Void> promise = new CompletableFuture<>();
+    public CompletableFuture<Map<String, String>> onManagedLedgerLastLedgerInitialize(String name,
+            LedgerHandle lh, Map<String, String> existingProperties) {
+        CompletableFuture<Map<String, String>> promise = new CompletableFuture<>();
         boolean hasAppendIndexMetadataInterceptor = appendIndexMetadataInterceptor != null;
-        if (hasAppendIndexMetadataInterceptor && lh.getLastAddConfirmed() >= 0) {
-            lh.readAsync(lh.getLastAddConfirmed(), lh.getLastAddConfirmed()).whenComplete((entries, ex) -> {
-                if (ex != null) {
-                    log.error("[{}] Read last entry error.", name, ex);
-                    promise.completeExceptionally(ex);
+        boolean needsIndexRecovery = hasAppendIndexMetadataInterceptor && lh.getLastAddConfirmed() >= 0;
+        boolean needsFirstEntryPropsRecovery = isMissingFirstEntryProps(existingProperties) && lh.getLastAddConfirmed() >= 0;
+
+        if (!needsIndexRecovery && !needsFirstEntryPropsRecovery) {
+            promise.complete(Collections.emptyMap());
+            return promise;
+        }
+
+        // Read last entry for index recovery if needed
+        CompletableFuture<Void> indexRecoveryFuture;
+        if (needsIndexRecovery) {
+            indexRecoveryFuture = recoverIndexGenerator(name, lh);
+        } else {
+            indexRecoveryFuture = CompletableFuture.completedFuture(null);
+        }
+
+        // Read entry 0 for firstEntryProps recovery if needed
+        CompletableFuture<Map<String, String>> firstEntryPropsFuture;
+        if (needsFirstEntryPropsRecovery) {
+            firstEntryPropsFuture = recoverFirstEntryProps(name, lh);
+        } else {
+            firstEntryPropsFuture = CompletableFuture.completedFuture(Collections.emptyMap());
+        }
+
+        indexRecoveryFuture.whenComplete((__, indexEx) -> {
+            if (indexEx != null) {
+                promise.completeExceptionally(indexEx);
+                return;
+            }
+            firstEntryPropsFuture.whenComplete((recoveredProps, propsEx) -> {
+                if (propsEx != null) {
+                    // firstEntryProps recovery failure is non-critical; log and continue
+                    log.warn("[{}] Failed to recover first-entry props for ledger {}."
+                            + " Props will remain missing until next broker restart.", name, lh.getId(), propsEx);
+                    promise.complete(Collections.emptyMap());
                 } else {
-                    if (entries != null) {
-                        try {
-                            LedgerEntry ledgerEntry = entries.getEntry(lh.getLastAddConfirmed());
-                            if (ledgerEntry != null) {
-                                BrokerEntryMetadata brokerEntryMetadata =
-                                        Commands.parseBrokerEntryMetadataIfExist(ledgerEntry.getEntryBuffer());
-                                if (brokerEntryMetadata != null && brokerEntryMetadata.hasIndex()) {
-                                    appendIndexMetadataInterceptor.recoveryIndexGenerator(
-                                            brokerEntryMetadata.getIndex());
-                                }
-                            }
-                            entries.close();
-                            promise.complete(null);
-                        } catch (Exception e) {
-                            entries.close();
-                            log.error("[{}] Failed to recover the index generator from the last add confirmed entry.",
-                                    name, e);
-                            promise.completeExceptionally(e);
-                        }
-                    } else {
-                        promise.complete(null);
-                    }
+                    promise.complete(recoveredProps);
                 }
             });
-        } else {
-            promise.complete(null);
+        });
+        return promise;
+    }
+
+    private boolean isMissingFirstEntryProps(Map<String, String> existingProperties) {
+        if (existingProperties == null) {
+            return true;
         }
+        boolean hasIndex = existingProperties.containsKey(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS);
+        boolean hasTimestamp = existingProperties.containsKey(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS);
+        return !hasIndex || !hasTimestamp;
+    }
+
+    private CompletableFuture<Void> recoverIndexGenerator(String name, LedgerHandle lh) {
+        CompletableFuture<Void> promise = new CompletableFuture<>();
+        lh.readAsync(lh.getLastAddConfirmed(), lh.getLastAddConfirmed()).whenComplete((entries, ex) -> {
+            if (ex != null) {
+                log.error("[{}] Read last entry error.", name, ex);
+                promise.completeExceptionally(ex);
+            } else {
+                if (entries != null) {
+                    try {
+                        LedgerEntry ledgerEntry = entries.getEntry(lh.getLastAddConfirmed());
+                        if (ledgerEntry != null) {
+                            BrokerEntryMetadata brokerEntryMetadata =
+                                    Commands.parseBrokerEntryMetadataIfExist(ledgerEntry.getEntryBuffer());
+                            if (brokerEntryMetadata != null && brokerEntryMetadata.hasIndex()) {
+                                appendIndexMetadataInterceptor.recoveryIndexGenerator(
+                                        brokerEntryMetadata.getIndex());
+                            }
+                        }
+                        entries.close();
+                        promise.complete(null);
+                    } catch (Exception e) {
+                        entries.close();
+                        log.error("[{}] Failed to recover the index generator from the last add confirmed entry.",
+                                name, e);
+                        promise.completeExceptionally(e);
+                    }
+                } else {
+                    promise.complete(null);
+                }
+            }
+        });
+        return promise;
+    }
+
+    private CompletableFuture<Map<String, String>> recoverFirstEntryProps(String name, LedgerHandle lh) {
+        CompletableFuture<Map<String, String>> promise = new CompletableFuture<>();
+        lh.readAsync(0, 0).whenComplete((entries, ex) -> {
+            if (ex != null) {
+                log.warn("[{}] Failed to read entry 0 for first-entry props recovery on ledger {}."
+                        + " Props will remain missing until next broker restart.", name, lh.getId(), ex);
+                promise.complete(Collections.emptyMap());
+            } else {
+                Map<String, String> recovered = new HashMap<>();
+                try (entries) {
+                    LedgerEntry entry = entries.getEntry(0);
+                    if (entry != null) {
+                        ByteBuf buf = entry.getEntryBuffer();
+                        long ts = Commands.getEntryTimestamp(buf.duplicate());
+                        recovered.put(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(ts));
+                        BrokerEntryMetadata meta =
+                                Commands.parseBrokerEntryMetadataIfExist(buf.duplicate());
+                        if (meta != null && meta.hasIndex()) {
+                            recovered.put(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS,
+                                    Long.toString(meta.getIndex()));
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("[{}] Error extracting first-entry props from entry 0 of ledger {}.",
+                            name, lh.getId(), e);
+                }
+                if (recovered.isEmpty()) {
+                    log.error("[{}] Cannot recover first-entry props for ledger {},"
+                            + " recovered props are empty.", name, lh.getId());
+                }
+                promise.complete(recovered);
+            }
+        });
         return promise;
     }
 

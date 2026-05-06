@@ -4479,8 +4479,9 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
             }
 
             @Override
-            public CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name, LedgerHandle ledgerHandle) {
-                return CompletableFuture.completedFuture(null);
+            public CompletableFuture<Map<String, String>> onManagedLedgerLastLedgerInitialize(String name,
+                    LedgerHandle ledgerHandle, Map<String, String> existingProperties) {
+                return CompletableFuture.completedFuture(Collections.emptyMap());
             }
 
             @Override
@@ -4566,8 +4567,6 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
 
             @Override
             public OpAddEntry beforeAddEntry(OpAddEntry op, int numberOfMessages) {
-                // Mirror the real AppendIndexMetadataInterceptor: the index is advanced first,
-                // then set on the op. Each batch of `numberOfMessages` consumes that many slots.
                 int msgs = Math.max(numberOfMessages, 1);
                 index += msgs;
                 op.setOffsetIndex(index);
@@ -4590,9 +4589,44 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
             }
 
             @Override
-            public CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name,
-                    LedgerHandle lh) {
-                return CompletableFuture.completedFuture(null);
+            public CompletableFuture<Map<String, String>> onManagedLedgerLastLedgerInitialize(String name,
+                    LedgerHandle lh, Map<String, String> existingProperties) {
+                boolean needsRecovery = lh.getLastAddConfirmed() >= 0
+                        && (existingProperties == null
+                        || !existingProperties.containsKey(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS)
+                        || !existingProperties.containsKey(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS));
+                if (!needsRecovery) {
+                    return CompletableFuture.completedFuture(Collections.emptyMap());
+                }
+                CompletableFuture<Map<String, String>> promise = new CompletableFuture<>();
+                lh.readAsync(0, 0).whenComplete((entries, ex) -> {
+                    if (ex != null) {
+                        log.warn("[{}] Failed to read entry 0 for first-entry props recovery on ledger {}.",
+                                name, lh.getId(), ex);
+                        promise.complete(Collections.emptyMap());
+                    } else {
+                        Map<String, String> recovered = new HashMap<>();
+                        try (entries) {
+                            org.apache.bookkeeper.client.api.LedgerEntry entry = entries.getEntry(0);
+                            if (entry != null) {
+                                ByteBuf buf = entry.getEntryBuffer();
+                                long ts = Commands.getEntryTimestamp(buf.duplicate());
+                                recovered.put(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(ts));
+                                org.apache.pulsar.common.api.proto.BrokerEntryMetadata meta =
+                                        Commands.parseBrokerEntryMetadataIfExist(buf.duplicate());
+                                if (meta != null && meta.hasIndex()) {
+                                    recovered.put(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS,
+                                            Long.toString(meta.getIndex()));
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("[{}] Error extracting first-entry props from entry 0 of ledger {}.",
+                                    name, lh.getId(), e);
+                        }
+                        promise.complete(recovered);
+                    }
+                });
+                return promise;
             }
 
             @Override

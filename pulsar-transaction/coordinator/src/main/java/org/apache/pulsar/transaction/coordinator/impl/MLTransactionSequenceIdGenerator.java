@@ -18,6 +18,7 @@
  */
 package org.apache.pulsar.transaction.coordinator.impl;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -68,8 +69,9 @@ public class MLTransactionSequenceIdGenerator implements ManagedLedgerIntercepto
 
     // When we don't roll over ledger, we can init sequenceId from the getLastAddConfirmed transaction metadata entry
     @Override
-    public CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name, LedgerHandle lh) {
-        CompletableFuture<Void> promise = new CompletableFuture<>();
+    public CompletableFuture<Map<String, String>> onManagedLedgerLastLedgerInitialize(String name,
+            LedgerHandle lh, Map<String, String> existingProperties) {
+        CompletableFuture<Map<String, String>> promise = new CompletableFuture<>();
         if (lh.getLastAddConfirmed() >= 0) {
             lh.readAsync(lh.getLastAddConfirmed(), lh.getLastAddConfirmed()).whenComplete((entries, ex) -> {
                 if (ex != null) {
@@ -89,7 +91,7 @@ public class MLTransactionSequenceIdGenerator implements ManagedLedgerIntercepto
                                 }
                             }
                             entries.close();
-                            promise.complete(null);
+                            promise.complete(Collections.emptyMap());
                         } catch (Exception e) {
                             entries.close();
                             log.error("[{}] Failed to recover the tc sequenceId from the last add confirmed entry.",
@@ -97,12 +99,12 @@ public class MLTransactionSequenceIdGenerator implements ManagedLedgerIntercepto
                             promise.completeExceptionally(e);
                         }
                     } else {
-                        promise.complete(null);
+                        promise.complete(Collections.emptyMap());
                     }
                 }
             });
         } else {
-            promise.complete(null);
+            promise.complete(Collections.emptyMap());
         }
         return promise;
     }

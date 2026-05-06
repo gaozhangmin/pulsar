@@ -255,12 +255,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     /** A signal that may trigger all the subsequent OpAddEntry of current ledger to be failed due to timeout. **/
     protected volatile AtomicBoolean currentLedgerTimeoutTriggered;
 
-    /**
-     * Cache the first entry index / timestamp of the current ledger in memory.
-     * These values are written to LedgerInfo when the ledger is closed normally (in ledgerClosed()).
-     * If the broker crashes before the ledger is closed, the values are recovered during initialize()
-     * by reading entry 0 from BookKeeper.
-     */
     protected volatile Long currentLedgerFirstEntryIndex = null;
     protected volatile Long currentLedgerFirstEntryTimestamp = null;
 
@@ -453,11 +447,34 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                 info = updateLedgerProps(info, propertiesMap);
                                 ledgers.put(id, info);
                                 if (managedLedgerInterceptor != null) {
-                                    managedLedgerInterceptor.onManagedLedgerLastLedgerInitialize(name, lh)
-                                            .whenComplete((__, ex) -> {
+                                    final long recoveryStartTimeNanos = System.nanoTime();
+                                    managedLedgerInterceptor.onManagedLedgerLastLedgerInitialize(
+                                            name, lh, propertiesMap)
+                                            .whenComplete((recoveredProps, ex) -> {
                                                 if (ex == null) {
-                                                    recoverFirstEntryPropsIfNeeded(id, lh, callback);
+                                                    long recoveryLatencyUsec = TimeUnit.NANOSECONDS.toMicros(
+                                                            System.nanoTime() - recoveryStartTimeNanos);
+                                                    mbean.recordLedgerFirstEntryPropsRecoveryLatency(
+                                                            recoveryLatencyUsec);
+                                                    if (recoveredProps != null && !recoveredProps.isEmpty()) {
+                                                        // Merge recovered props into LedgerInfo
+                                                        synchronized (ManagedLedgerImpl.this) {
+                                                            LedgerInfo current = ledgers.get(id);
+                                                            if (current != null) {
+                                                                Map<String, String> merged = new HashMap<>();
+                                                                current.getPropertiesList().forEach(
+                                                                        kv -> merged.put(kv.getKey(), kv.getValue()));
+                                                                merged.putAll(recoveredProps);
+                                                                LedgerInfo updated = updateLedgerProps(current, merged);
+                                                                ledgers.put(id, updated);
+                                                                log.info("[{}] Recovered first-entry props {}"
+                                                                        + " for ledger {}.", name, recoveredProps, id);
+                                                            }
+                                                        }
+                                                    }
+                                                    initializeBookKeeper(callback);
                                                 } else {
+                                                    mbean.recordLedgerFirstEntryPropsRecoveryFailed();
                                                     // Open ledger success but read fail.
                                                     // It could happen when the ledger was removed from the disk but
                                                     // leave the meta
@@ -486,7 +503,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                 }
                                             });
                                 } else {
-                                    recoverFirstEntryPropsIfNeeded(id, lh, callback);
+                                    initializeBookKeeper(callback);
                                 }
                             } else if (isNoSuchLedgerExistsException(rc)) {
                                 log.warn("[{}] Ledger not found: {}", name, id);
@@ -526,89 +543,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     private void removeBadLedgerAndInitBookkeeper(long id, ManagedLedgerInitializeLedgerCallback callback) {
         ledgers.remove(id);
         initializeBookKeeper(callback);
-    }
-
-    private boolean isMissingFirstEntryProps(LedgerInfo info) {
-        if (info == null || managedLedgerInterceptor == null) {
-            return false;
-        }
-        boolean hasTimeStamp = false;
-        boolean hasIndex = false;
-        for (MLDataFormats.KeyValue kv : info.getPropertiesList()) {
-            if (FIRST_ENTRY_INDEX_PROPS.equals(kv.getKey())) {
-                hasIndex = true;
-            } else if (FIRST_ENTRY_TIMESTAMP_PROPS.equals(kv.getKey())) {
-                hasTimeStamp = true;
-            }
-        }
-        return !hasIndex || !hasTimeStamp;
-    }
-
-    private void recoverFirstEntryPropsIfNeeded(long ledgerId, LedgerHandle lh,
-                                                ManagedLedgerInitializeLedgerCallback callback) {
-        LedgerInfo info = ledgers.get(ledgerId);
-        if (!isMissingFirstEntryProps(info) || lh.getLastAddConfirmed() < 0) {
-            // Nothing to recover, continue as normal.
-            initializeBookKeeper(callback);
-            return;
-        }
-
-        log.info("[{}] First-entry props missing for ledger {} (possible broker crash). "
-                + "Recovering from entry 0.", name, ledgerId);
-
-        final long recoveryStartTimeNanos = System.nanoTime();
-        lh.readAsync(0, 0).whenComplete((entries, ex) -> {
-            executor.execute(() -> {
-                long recoveryLatencyUsec = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - recoveryStartTimeNanos);
-                mbean.recordLedgerFirstEntryPropsRecoveryLatency(recoveryLatencyUsec);
-                if (ex != null) {
-                    log.warn("[{}] Failed to read entry 0 for first-entry props recovery on ledger {}. "
-                            + "Props will remain missing until next broker restart.", name, ledgerId, ex);
-                    mbean.recordLedgerFirstEntryPropsRecoveryFailed();
-                    initializeBookKeeper(callback);
-                    return;
-                }
-
-                Map<String, String> recovered = new HashMap<>();
-                try (entries) {
-                    LedgerEntry entry = entries.getEntry(0);
-                    if (entry != null) {
-                        ByteBuf buf = entry.getEntryBuffer();
-                        long ts = Commands.getEntryTimestamp(buf.duplicate());
-                        recovered.put(FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(ts));
-                        BrokerEntryMetadata meta =
-                                Commands.parseBrokerEntryMetadataIfExist(buf.duplicate());
-                        if (meta != null && meta.hasIndex()) {
-                            recovered.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(meta.getIndex()));
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("[{}] Error extracting first-entry props from entry 0 of ledger {}.",
-                            name, ledgerId, e);
-                }
-
-                if (recovered.containsKey(FIRST_ENTRY_INDEX_PROPS)
-                        || recovered.containsKey(FIRST_ENTRY_TIMESTAMP_PROPS)) {
-                    // Apply recovered props to in-memory LedgerInfo.
-                    synchronized (this) {
-                        LedgerInfo current = ledgers.get(ledgerId);
-                        if (current != null) {
-                            Map<String, String> merged = new HashMap<>();
-                            current.getPropertiesList().forEach(kv -> merged.put(kv.getKey(), kv.getValue()));
-                            merged.putAll(recovered);
-                            LedgerInfo updated = updateLedgerProps(current, merged);
-                            ledgers.put(ledgerId, updated);
-                            log.info("[{}] Recovered first-entry props {} for ledger {}.", name, recovered, ledgerId);
-                        }
-                    }
-                } else {
-                    log.error("cannot recover first-entry props for ledger {}, recovered props: {}, so we discard it",
-                            ledgerId, recovered);
-                    mbean.recordLedgerFirstEntryPropsRecoveryFailed();
-                }
-                initializeBookKeeper(callback);
-            });
-        });
     }
 
     protected synchronized void initializeBookKeeper(final ManagedLedgerInitializeLedgerCallback callback) {
@@ -2033,9 +1967,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                 List<MLDataFormats.KeyValue> oldProperties = oldInfo.getPropertiesList();
                 Map<String, String> newPropertiesMap = new HashMap<>();
                 oldProperties.forEach(kv -> newPropertiesMap.put(kv.getKey(), kv.getValue()));
-                // Merge in-memory first-entry props (captured when entry 0 was written).
-                // Writing them here avoids two extra ZK writes per new ledger at publish time;
-                // they are persisted atomically together with entries/size/timestamp.
+
                 if (currentLedgerFirstEntryIndex != null) {
                     newPropertiesMap.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(currentLedgerFirstEntryIndex));
                 }

@@ -239,9 +239,7 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
         if (this.entryId == 0
                 && ledger.getId() == ml.getCurrentLedger().getId()
                 && ml.getManagedLedgerInterceptor() != null) {
-            // Cache the first-entry props in memory only; they will be flushed to ZK together
-            // with the LedgerInfo when the ledger is closed normally (in ManagedLedgerImpl.ledgerClosed()).
-            // This avoids two extra ZK writes per new ledger at publish time.
+
             Long firstEntryIndex = null;
             if (offsetIndex != null) {
                 firstEntryIndex = offsetIndex - numberOfMessages + 1;
