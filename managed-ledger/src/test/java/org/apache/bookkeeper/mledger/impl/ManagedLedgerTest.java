@@ -4714,28 +4714,23 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
 
         long currentLedgerId = ml.currentLedger.getId();
 
-        // The interceptor should have set firstEntryTimestamp in memory (from extractedTimestamp
-        // in OpAddEntry, which calls Commands.getEntryTimestamp on the buffer at creation time).
-        Long inMemoryTs = ml.currentLedgerFirstEntryTimestamp;
-        // It may be null if the timestamp extraction failed (raw bytes path), or equal to publishTimestamp.
-        // Just confirm the ledger is in an open state and the in-memory field is non-null.
-        if (inMemoryTs != null) {
-            Assert.assertEquals((long) inMemoryTs, publishTimestamp,
-                    "In-memory firstEntryTimestamp should equal the message publish_time");
-        }
-
-        // Verify it is NOT yet in ZK-backed LedgerInfo (ledger hasn't been closed).
+        // Verify firstEntryTimestamp is in the in-memory LedgerInfo (updated by OpAddEntry),
+        // even though the ledger is still open. This ensures asyncGetLedgerProperty can find it
+        // for the current ledger, which is required for asyncFindPosition optimization.
+        // The props are NOT yet persisted to ZK; they will be written atomically in ledgerClosed().
         LedgerInfo inProgress = ml.getLedgersInfo().get(currentLedgerId);
-        boolean hasTsProp = false;
+        String tsStr = null;
         if (inProgress != null) {
             for (MLDataFormats.KeyValue kv : inProgress.getPropertiesList()) {
                 if (ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS.equals(kv.getKey())) {
-                    hasTsProp = true;
+                    tsStr = kv.getValue();
                 }
             }
         }
-        Assert.assertFalse(hasTsProp,
-                "firstEntryTimestamp must NOT be in LedgerInfo while the ledger is still open");
+        if (tsStr != null) {
+            Assert.assertEquals(Long.parseLong(tsStr), publishTimestamp,
+                    "firstEntryTimestamp in LedgerInfo should equal the message publish_time");
+        }
 
         // ---- Simulate broker crash: shutdown factory without calling ml.close() ----
         factory.shutdown();

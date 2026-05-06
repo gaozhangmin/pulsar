@@ -270,20 +270,23 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
 
         long ledgerId = ledger != null ? ledger.getId() : ((Position) ctx).getLedgerId();
         if (this.entryId == 0 && ml.getManagedLedgerInterceptor() != null) {
+            Long firstEntryIndex = null;
+            Long firstEntryTimestamp = null;
             if (offsetIndex != null) {
-                ml.currentLedgerFirstEntryIndex = offsetIndex - numberOfMessages + 1;
+                firstEntryIndex = offsetIndex - numberOfMessages + 1;
                 if (log.isDebugEnabled()) {
                     log.debug("[{}] Caching first-entry index {} for ledger {}", ml.getName(),
-                            ml.currentLedgerFirstEntryIndex, ledgerId);
+                            firstEntryIndex, ledgerId);
                 }
             }
             if (extractedTimestamp != null) {
-                ml.currentLedgerFirstEntryTimestamp = extractedTimestamp;
+                firstEntryTimestamp = extractedTimestamp;
                 if (log.isDebugEnabled()) {
                     log.debug("[{}] Caching first-entry timestamp {} for ledger {}", ml.getName(),
-                            extractedTimestamp, ledgerId);
+                            firstEntryTimestamp, ledgerId);
                 }
             }
+            ml.setCurrentLedgerFirstEntryPropsInLedgers(firstEntryIndex, firstEntryTimestamp);
         }
 
         // Don't insert to the entry cache for the ShadowManagedLedger

@@ -253,9 +253,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     /** A signal that may trigger all the subsequent OpAddEntry of current ledger to be failed due to timeout. **/
     protected volatile AtomicBoolean currentLedgerTimeoutTriggered;
 
-    protected volatile Long currentLedgerFirstEntryIndex = null;
-    protected volatile Long currentLedgerFirstEntryTimestamp = null;
-
     protected static final int DEFAULT_LEDGER_DELETE_RETRIES = 3;
     protected static final int DEFAULT_LEDGER_DELETE_BACKOFF_TIME_SEC = 60;
     private static final String MIGRATION_STATE_PROPERTY = "migrated";
@@ -541,6 +538,29 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     private void removeBadLedgerAndInitBookkeeper(long id, ManagedLedgerInitializeLedgerCallback callback) {
         ledgers.remove(id);
         initializeBookKeeper(callback);
+    }
+
+    synchronized void setCurrentLedgerFirstEntryPropsInLedgers(Long firstEntryIndex, Long firstEntryTimestamp) {
+        LedgerHandle currentLedger = this.currentLedger;
+        if (currentLedger == null) {
+            return;
+        }
+        long ledgerId = currentLedger.getId();
+        LedgerInfo currentInfo = ledgers.get(ledgerId);
+        if (currentInfo == null) {
+            return;
+        }
+        Map<String, String> propsMap = new HashMap<>();
+        if (firstEntryIndex != null) {
+            propsMap.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(firstEntryIndex));
+        }
+        if (firstEntryTimestamp != null) {
+            propsMap.put(FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(firstEntryTimestamp));
+        }
+        if (!propsMap.isEmpty()) {
+            LedgerInfo updated = updateLedgerProps(currentInfo, propsMap);
+            ledgers.put(ledgerId, updated);
+        }
     }
 
     protected synchronized void initializeBookKeeper(final ManagedLedgerInitializeLedgerCallback callback) {
@@ -1784,9 +1804,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         currentLedgerTimeoutTriggered = new AtomicBoolean();
                         currentLedgerEntries = 0;
                         currentLedgerSize = 0;
-                        // Reset first-entry props cache for the new ledger.
-                        currentLedgerFirstEntryIndex = null;
-                        currentLedgerFirstEntryTimestamp = null;
                         updateLedgersIdsComplete(originalCurrentLedger);
                         mbean.addLedgerSwitchLatencySample(System.currentTimeMillis()
                                 - lastLedgerCreationInitiationTimestamp, TimeUnit.MILLISECONDS);
@@ -1946,21 +1963,13 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         }
         if (entriesInLedger > 0) {
             LedgerInfo oldInfo = ledgers.get(lh.getId());
-            LedgerInfo newLedgerInfo = LedgerInfo.newBuilder().setLedgerId(lh.getId()).setEntries(entriesInLedger)
-                    .setSize(lh.getLength()).setTimestamp(clock.millis()).build();
+            LedgerInfo newLedgerInfo = null;
             if (oldInfo != null) {
-                List<MLDataFormats.KeyValue> oldProperties = oldInfo.getPropertiesList();
-                Map<String, String> newPropertiesMap = new HashMap<>();
-                oldProperties.forEach(kv -> newPropertiesMap.put(kv.getKey(), kv.getValue()));
-
-                if (currentLedgerFirstEntryIndex != null) {
-                    newPropertiesMap.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(currentLedgerFirstEntryIndex));
-                }
-                if (currentLedgerFirstEntryTimestamp != null) {
-                    newPropertiesMap.put(FIRST_ENTRY_TIMESTAMP_PROPS,
-                            Long.toString(currentLedgerFirstEntryTimestamp));
-                }
-                newLedgerInfo = updateLedgerProps(newLedgerInfo, newPropertiesMap);
+                newLedgerInfo = oldInfo.toBuilder().setLedgerId(lh.getId()).setEntries(entriesInLedger)
+                    .setSize(lh.getLength()).setTimestamp(clock.millis()).build();
+            } else {
+                newLedgerInfo = LedgerInfo.newBuilder().setLedgerId(lh.getId()).setEntries(entriesInLedger)
+                    .setSize(lh.getLength()).setTimestamp(clock.millis()).build();
             }
             ledgers.put(lh.getId(), newLedgerInfo);
         } else {
