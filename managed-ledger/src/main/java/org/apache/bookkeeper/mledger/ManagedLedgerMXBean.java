@@ -153,4 +153,6 @@ public interface ManagedLedgerMXBean {
     long getLedgerFirstEntryPropsRecoveryLatencyTotalUsec();
 
     long getLedgerFirstEntryPropsRecoveryCount();
+
+    long getFindPositionFallbackCount();
 }

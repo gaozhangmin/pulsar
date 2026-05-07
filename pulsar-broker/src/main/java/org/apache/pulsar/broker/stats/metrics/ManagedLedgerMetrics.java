@@ -95,6 +95,8 @@ public class ManagedLedgerMetrics extends AbstractMetrics {
                         (double) lStats.getAddEntryErrors());
                 populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ml_LedgerFirstEntryPropsRecoveryFailed",
                         (double) lStats.getLedgerFirstEntryPropsRecoveryFailedCount());
+                populateAggregationMapWithSum(tempAggregatedMetricsMap, "brk_ml_LedgerFindPositionFallback",
+                        (double) lStats.getFindPositionFallbackCount());
                 populateAggregationMapWithSum(tempAggregatedMetricsMap,
                         "brk_ml_LedgerFirstEntryPropsRecoveryLatencyTotalUsec",
                         (double) lStats.getLedgerFirstEntryPropsRecoveryLatencyTotalUsec());

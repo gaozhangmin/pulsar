@@ -2132,6 +2132,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         log.warn("[{}] Failed to get first entry index for ledger {}, "
                                         + "using this ledger as starting point",
                                 name, ledgerId, throwable);
+                        mbean.recordLedgerPositionFallback();
                         result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
@@ -2140,6 +2141,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                     if (firstEntryIndexStr == null || firstEntryIndexStr.isEmpty()) {
                         log.debug("[{}] First entry index missing for ledger {}, using this ledger as starting point",
                                 name, ledgerId);
+                        mbean.recordLedgerPositionFallback();
                         result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
@@ -2151,6 +2153,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         log.warn("[{}] Invalid first entry index value '{}' for ledger {}, "
                                         + "using this ledger as starting point",
                                 name, firstEntryIndexStr, ledgerId, e);
+                        mbean.recordLedgerPositionFallback();
                         result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
@@ -2166,6 +2169,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                     || nextFirstIndexStr == null
                                                     || nextFirstIndexStr.isEmpty()) {
                                                 // Next ledger has no firstEntryIndex or error, use current ledger
+                                                mbean.recordLedgerPositionFallback();
                                                 result.complete(new LedgerSearchResult(ledgers.firstKey(),
                                                         getNumberOfEntries() - 1));
                                                 return;
@@ -2183,6 +2187,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                 }
                                             } catch (NumberFormatException e) {
                                                 // Next ledger has invalid firstEntryIndex, use current ledger
+                                                mbean.recordLedgerPositionFallback();
                                                 result.complete(new LedgerSearchResult(ledgers.firstKey(),
                                                         getNumberOfEntries() - 1));
                                             }
@@ -2199,6 +2204,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         // This ledger's first entry is greater than target, use previous ledger if exists
                         Long prevLedgerId = ledgers.lowerKey(ledgerId);
                         if (prevLedgerId == null) {
+                            mbean.recordLedgerPositionFallback();
                             result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         } else {
                             long max = getLedgerEntries(prevLedgerId);

@@ -55,6 +55,7 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
     private final LongAdder ledgerFirstEntryPropsRecoveryFailed = new LongAdder();
     private final LongAdder ledgerFirstEntryPropsRecoveryLatencyTotalUsec = new LongAdder();
     private final LongAdder ledgerFirstEntryPropsRecoveryCount = new LongAdder();
+    private final LongAdder ledgerFindPositionFallbackCount = new LongAdder();
 
     // addEntryLatencyStatsUsec measure total latency including time entry spent while waiting in queue
     private final StatsBuckets addEntryLatencyStatsUsec = new StatsBuckets(ENTRY_LATENCY_BUCKETS_USEC);
@@ -366,6 +367,10 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
         ledgerFirstEntryPropsRecoveryFailed.increment();
     }
 
+    public void recordLedgerPositionFallback() {
+        ledgerFindPositionFallbackCount.increment();
+    }
+
     @Override
     public long getLedgerFirstEntryPropsRecoveryFailedCount() {
         return ledgerFirstEntryPropsRecoveryFailed.longValue();
@@ -384,5 +389,10 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
     @Override
     public long getLedgerFirstEntryPropsRecoveryCount() {
         return ledgerFirstEntryPropsRecoveryCount.longValue();
+    }
+
+    @Override
+    public long getFindPositionFallbackCount() {
+        return ledgerFindPositionFallbackCount.longValue();
     }
 }
