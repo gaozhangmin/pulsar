@@ -236,28 +236,6 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
         }
 
         this.entryId = entryId;
-        if (this.entryId == 0
-                && ledger.getId() == ml.getCurrentLedger().getId()
-                && ml.getManagedLedgerInterceptor() != null) {
-            if (offsetIndex != null) {
-                String startOffset = Long.toString(offsetIndex - numberOfMessages + 1);
-                ml.updateCurrentLedgerProps(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS, startOffset);
-                if (log.isDebugEnabled()) {
-                    log.debug("[{}] Setting props {}:{} for ledger {}", ml.getName(),
-                            ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS, offsetIndex, lh.getId());
-                }
-            }
-            if (extractedTimestamp != null) {
-                ml.updateCurrentLedgerProps(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS,
-                        Long.toString(extractedTimestamp));
-                if (log.isInfoEnabled()) {
-                    log.info("[{}] Setting props {}:{} for ledger {}", ml.getName(),
-                            ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS, extractedTimestamp, lh.getId());
-                }
-            }
-
-
-        }
         if (log.isDebugEnabled()) {
             log.debug("[{}] [{}] write-complete: ledger-id={} entry-id={} size={} rc={}", this, ml.getName(),
                     lh == null ? -1 : lh.getId(), entryId, dataLength, rc);
@@ -291,6 +269,26 @@ public class OpAddEntry implements AddCallback, CloseCallback, Runnable {
         ManagedLedgerImpl.TOTAL_SIZE_UPDATER.addAndGet(ml, dataLength);
 
         long ledgerId = ledger != null ? ledger.getId() : ((Position) ctx).getLedgerId();
+        if (this.entryId == 0 && ml.getManagedLedgerInterceptor() != null) {
+            Long firstEntryIndex = null;
+            Long firstEntryTimestamp = null;
+            if (offsetIndex != null) {
+                firstEntryIndex = offsetIndex - numberOfMessages + 1;
+                if (log.isDebugEnabled()) {
+                    log.debug("[{}] Caching first-entry index {} for ledger {}", ml.getName(),
+                            firstEntryIndex, ledgerId);
+                }
+            }
+            if (extractedTimestamp != null) {
+                firstEntryTimestamp = extractedTimestamp;
+                if (log.isDebugEnabled()) {
+                    log.debug("[{}] Caching first-entry timestamp {} for ledger {}", ml.getName(),
+                            firstEntryTimestamp, ledgerId);
+                }
+            }
+            ml.setCurrentLedgerFirstEntryPropsInLedgers(firstEntryIndex, firstEntryTimestamp);
+        }
+
         // Don't insert to the entry cache for the ShadowManagedLedger
         if (!(ml instanceof ShadowManagedLedgerImpl) && ml.hasActiveCursors()) {
             // Avoid caching entries if no cursor has been created

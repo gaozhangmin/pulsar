@@ -46,6 +46,7 @@ import static org.testng.Assert.fail;
 import com.google.common.collect.Sets;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import java.lang.reflect.Field;
 import java.nio.ReadOnlyBufferException;
@@ -140,8 +141,10 @@ import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.pulsar.common.api.proto.CommandSubscribe.InitialPosition;
+import org.apache.pulsar.common.api.proto.MessageMetadata;
 import org.apache.pulsar.common.policies.data.EnsemblePlacementPolicyConfig;
 import org.apache.pulsar.common.policies.data.OffloadPoliciesImpl;
+import org.apache.pulsar.common.protocol.Commands;
 import org.apache.pulsar.common.util.FutureUtil;
 import org.apache.pulsar.metadata.api.MetadataStoreException;
 import org.apache.pulsar.metadata.api.Stat;
@@ -4476,8 +4479,9 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
             }
 
             @Override
-            public CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name, LedgerHandle ledgerHandle) {
-                return CompletableFuture.completedFuture(null);
+            public CompletableFuture<Map<String, String>> onManagedLedgerLastLedgerInitialize(String name,
+                    LedgerHandle ledgerHandle, Map<String, String> existingProperties) {
+                return CompletableFuture.completedFuture(Collections.emptyMap());
             }
 
             @Override
@@ -4555,5 +4559,210 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
 
         Assert.assertEquals(ml.getLedgersInfo().get(firstLedger).getPropertiesCount(), 0);
         Assert.assertEquals(ml.getLedgersInfo().get(lastLedger).getPropertiesCount(), 0);
+    }
+
+    private ManagedLedgerInterceptor buildFirstEntryPropsInterceptor(long startIndex) {
+        return new ManagedLedgerInterceptor() {
+            private volatile long index = startIndex;
+
+            @Override
+            public OpAddEntry beforeAddEntry(OpAddEntry op, int numberOfMessages) {
+                int msgs = Math.max(numberOfMessages, 1);
+                index += msgs;
+                op.setOffsetIndex(index);
+                op.setNumberOfMessages(msgs);
+                return op;
+            }
+
+            @Override
+            public void onManagedLedgerPropertiesInitialize(Map<String, String> propertiesMap) {
+            }
+
+            @Override
+            public long getIndex() {
+                return index;
+            }
+
+            @Override
+            public void resetIndex(long idx) {
+                this.index = idx;
+            }
+
+            @Override
+            public CompletableFuture<Map<String, String>> onManagedLedgerLastLedgerInitialize(String name,
+                    LedgerHandle lh, Map<String, String> existingProperties) {
+                boolean needsRecovery = lh.getLastAddConfirmed() >= 0
+                        && (existingProperties == null
+                        || !existingProperties.containsKey(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS)
+                        || !existingProperties.containsKey(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS));
+                if (!needsRecovery) {
+                    return CompletableFuture.completedFuture(Collections.emptyMap());
+                }
+                CompletableFuture<Map<String, String>> promise = new CompletableFuture<>();
+                lh.readAsync(0, 0).whenComplete((entries, ex) -> {
+                    if (ex != null) {
+                        log.warn("[{}] Failed to read entry 0 for first-entry props recovery on ledger {}.",
+                                name, lh.getId(), ex);
+                        promise.complete(Collections.emptyMap());
+                    } else {
+                        Map<String, String> recovered = new HashMap<>();
+                        try (entries) {
+                            org.apache.bookkeeper.client.api.LedgerEntry entry = entries.getEntry(0);
+                            if (entry != null) {
+                                ByteBuf buf = entry.getEntryBuffer();
+                                long ts = Commands.getEntryTimestamp(buf.duplicate());
+                                recovered.put(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(ts));
+                                org.apache.pulsar.common.api.proto.BrokerEntryMetadata meta =
+                                        Commands.parseBrokerEntryMetadataIfExist(buf.duplicate());
+                                if (meta != null && meta.hasIndex()) {
+                                    recovered.put(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS,
+                                            Long.toString(meta.getIndex()));
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("[{}] Error extracting first-entry props from entry 0 of ledger {}.",
+                                    name, lh.getId(), e);
+                        }
+                        promise.complete(recovered);
+                    }
+                });
+                return promise;
+            }
+
+            @Override
+            public void onUpdateManagedLedgerInfo(Map<String, String> propertiesMap) {
+            }
+        };
+    }
+
+    @Test
+    public void testFirstEntryPropsWrittenOnLedgerClose() throws Exception {
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(2);
+        config.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+        config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(100L));
+
+        ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open("testFirstEntryPropsOnClose", config);
+        // Write 2 entries → fills ledger 0; write 1 more → triggers rollover to ledger 1
+        ml.addEntry("msg1".getBytes(UTF_8));
+        ml.addEntry("msg2".getBytes(UTF_8));
+        ml.addEntry("msg3".getBytes(UTF_8));
+
+        // Wait until we have 2 ledgers (the rollover has completed)
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> ml.getLedgersInfo().size() >= 2);
+
+        NavigableMap<Long, LedgerInfo> ledgersInfo = ml.getLedgersInfo();
+        long closedLedgerId = ledgersInfo.firstKey();
+        LedgerInfo closedInfo = ledgersInfo.get(closedLedgerId);
+
+        // The closed ledger must have firstEntryIndex set
+        String firstEntryIndexStr = null;
+        for (MLDataFormats.KeyValue kv : closedInfo.getPropertiesList()) {
+            if (ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS.equals(kv.getKey())) {
+                firstEntryIndexStr = kv.getValue();
+            }
+        }
+        Assert.assertNotNull(firstEntryIndexStr,
+                "firstEntryIndex must be stored in closed ledger's LedgerInfo");
+        long firstEntryIndex = Long.parseLong(firstEntryIndexStr);
+        // interceptor starts at 100; beforeAddEntry increments index first by 1, so entry 0 gets
+        // offsetIndex=101, firstEntryIndex = offsetIndex - numberOfMessages + 1 = 101 - 1 + 1 = 101
+        Assert.assertEquals(firstEntryIndex, 101L);
+
+        ml.close();
+
+        // Reopen and verify the props survived the ZK round-trip
+        config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(103L));
+        ManagedLedgerImpl ml2 = (ManagedLedgerImpl) factory.open("testFirstEntryPropsOnClose", config);
+        Awaitility.await().atMost(5, TimeUnit.SECONDS)
+                .until(() -> ml2.getState() == ManagedLedgerImpl.State.LedgerOpened);
+        LedgerInfo reopenedClosedInfo = ml2.getLedgersInfo().get(closedLedgerId);
+        Assert.assertNotNull(reopenedClosedInfo);
+        long recoveredIndex = ml2.getFirstEntryIndexFromLedgerMetadata(closedLedgerId);
+        Assert.assertEquals(recoveredIndex, 101L,
+                "firstEntryIndex must be persisted and readable after reopen");
+
+        ml2.close();
+    }
+
+    @Test
+    public void testFirstEntryPropsRecoveryAfterCrash() throws Exception {
+        final String mlName = "testFirstEntryPropsRecovery";
+        final long publishTimestamp = 1_700_000_000_000L; // deterministic timestamp for assertion
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(100);
+        config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(200L));
+
+        ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
+
+        // Build a minimal Pulsar message with a known publish_time so recovery can extract it.
+        MessageMetadata msgMeta =
+                new MessageMetadata();
+        msgMeta.setPublishTime(publishTimestamp);
+        msgMeta.setProducerName("test-producer");
+        msgMeta.setSequenceId(0);
+        ByteBuf payload =
+                Unpooled.wrappedBuffer("crash-test".getBytes(UTF_8));
+        ByteBuf msgBuf = Commands.serializeMetadataAndPayload(Commands.ChecksumType.Crc32c, msgMeta, payload);
+        byte[] msgBytes = new byte[msgBuf.readableBytes()];
+        msgBuf.readBytes(msgBytes);
+        msgBuf.release();
+
+        // Write the message as entry 0 of the current ledger.
+        ml.addEntry(msgBytes);
+
+        long currentLedgerId = ml.currentLedger.getId();
+
+        // Verify firstEntryTimestamp is in the in-memory LedgerInfo (updated by OpAddEntry),
+        // even though the ledger is still open. This ensures asyncGetLedgerProperty can find it
+        // for the current ledger, which is required for asyncFindPosition optimization.
+        // The props are NOT yet persisted to ZK; they will be written atomically in ledgerClosed().
+        LedgerInfo inProgress = ml.getLedgersInfo().get(currentLedgerId);
+        String tsStr = null;
+        if (inProgress != null) {
+            for (MLDataFormats.KeyValue kv : inProgress.getPropertiesList()) {
+                if (ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS.equals(kv.getKey())) {
+                    tsStr = kv.getValue();
+                }
+            }
+        }
+        if (tsStr != null) {
+            Assert.assertEquals(Long.parseLong(tsStr), publishTimestamp,
+                    "firstEntryTimestamp in LedgerInfo should equal the message publish_time");
+        }
+
+        // ---- Simulate broker crash: shutdown factory without calling ml.close() ----
+        factory.shutdown();
+
+        // ---- Simulate broker restart ----
+        factory = new ManagedLedgerFactoryImpl(metadataStore, bkc);
+        ManagedLedgerConfig config2 = new ManagedLedgerConfig();
+        config2.setMaxEntriesPerLedger(100);
+        config2.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(202L));
+
+        ManagedLedgerImpl ml2 = (ManagedLedgerImpl) factory.open(mlName, config2);
+        Awaitility.await().atMost(10, TimeUnit.SECONDS)
+                .until(() -> ml2.getState() == ManagedLedgerImpl.State.LedgerOpened);
+
+        // recoverFirstEntryPropsIfNeeded() should have read entry 0 and recovered firstEntryTimestamp.
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> {
+            LedgerInfo li = ml2.getLedgersInfo().get(currentLedgerId);
+            if (li == null) {
+                return false;
+            }
+            for (MLDataFormats.KeyValue kv : li.getPropertiesList()) {
+                if (ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS.equals(kv.getKey())) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        long recoveredTs = ml2.getFirstEntryTimestampFromLedgerMetadata(currentLedgerId);
+        Assert.assertEquals(recoveredTs, publishTimestamp,
+                "firstEntryTimestamp must be recovered from entry 0 after broker crash");
+
+        ml2.close();
     }
 }

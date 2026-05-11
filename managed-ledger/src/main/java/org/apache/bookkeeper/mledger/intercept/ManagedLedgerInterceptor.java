@@ -64,7 +64,8 @@ public interface ManagedLedgerInterceptor {
      * @param name name of ManagedLedger
      * @param ledgerHandle a LedgerHandle.
      */
-    CompletableFuture<Void> onManagedLedgerLastLedgerInitialize(String name, LedgerHandle ledgerHandle);
+    CompletableFuture<Map<String, String>> onManagedLedgerLastLedgerInitialize(String name,
+            LedgerHandle ledgerHandle, Map<String, String> existingProperties);
 
     /**
      * @param propertiesMap  map of properties.

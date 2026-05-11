@@ -442,11 +442,31 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                 info = updateLedgerProps(info, propertiesMap);
                                 ledgers.put(id, info);
                                 if (managedLedgerInterceptor != null) {
-                                    managedLedgerInterceptor.onManagedLedgerLastLedgerInitialize(name, lh)
-                                            .whenComplete((__, ex) -> {
+                                    final long recoveryStartTimeNanos = System.nanoTime();
+                                    managedLedgerInterceptor.onManagedLedgerLastLedgerInitialize(
+                                            name, lh, propertiesMap)
+                                            .whenComplete((recoveredProps, ex) -> {
                                                 if (ex == null) {
+                                                    long recoveryLatencyUsec = TimeUnit.NANOSECONDS.toMicros(
+                                                            System.nanoTime() - recoveryStartTimeNanos);
+                                                    mbean.recordLedgerFirstEntryPropsRecoveryLatency(
+                                                            recoveryLatencyUsec);
+                                                    if (recoveredProps != null && !recoveredProps.isEmpty()) {
+                                                        // Merge recovered props into LedgerInfo
+                                                        synchronized (ManagedLedgerImpl.this) {
+                                                            LedgerInfo current = ledgers.get(id);
+                                                            if (current != null) {
+                                                                LedgerInfo updated =
+                                                                        updateLedgerProps(current, recoveredProps);
+                                                                ledgers.put(id, updated);
+                                                                log.info("[{}] Recovered first-entry props {}"
+                                                                        + " for ledger {}.", name, recoveredProps, id);
+                                                            }
+                                                        }
+                                                    }
                                                     initializeBookKeeper(callback);
                                                 } else {
+                                                    mbean.recordLedgerFirstEntryPropsRecoveryFailed();
                                                     // Open ledger success but read fail.
                                                     // It could happen when the ledger was removed from the disk but
                                                     // leave the meta
@@ -515,6 +535,29 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
     private void removeBadLedgerAndInitBookkeeper(long id, ManagedLedgerInitializeLedgerCallback callback) {
         ledgers.remove(id);
         initializeBookKeeper(callback);
+    }
+
+    synchronized void setCurrentLedgerFirstEntryPropsInLedgers(Long firstEntryIndex, Long firstEntryTimestamp) {
+        LedgerHandle currentLedger = this.currentLedger;
+        if (currentLedger == null) {
+            return;
+        }
+        long ledgerId = currentLedger.getId();
+        LedgerInfo currentInfo = ledgers.get(ledgerId);
+        if (currentInfo == null) {
+            return;
+        }
+        Map<String, String> propsMap = new HashMap<>();
+        if (firstEntryIndex != null) {
+            propsMap.put(FIRST_ENTRY_INDEX_PROPS, Long.toString(firstEntryIndex));
+        }
+        if (firstEntryTimestamp != null) {
+            propsMap.put(FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(firstEntryTimestamp));
+        }
+        if (!propsMap.isEmpty()) {
+            LedgerInfo updated = updateLedgerProps(currentInfo, propsMap);
+            ledgers.put(ledgerId, updated);
+        }
     }
 
     protected synchronized void initializeBookKeeper(final ManagedLedgerInitializeLedgerCallback callback) {
@@ -945,43 +988,6 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
             return false;
         }
     }
-
-    /**
-     * update  properties for the current ledger.
-     * This is called when the first entry is about to be added to ensure accuracy.
-     */
-    public void updateCurrentLedgerProps(String key, String value) {
-        if (currentLedger == null) {
-            return;
-        }
-        long ledgerId = currentLedger.getId();
-
-        LedgerInfo currentInfo = ledgers.get(ledgerId);
-        if (currentInfo != null) {
-            Map<String, String> newPropertiesMap = new HashMap<>();
-            newPropertiesMap.put(key, value);
-            LedgerInfo updatedInfo = updateLedgerProps(currentInfo, newPropertiesMap);
-            ledgers.put(ledgerId, updatedInfo);
-
-            // Asynchronously update the metadata store
-            asyncAddLedgerProperty(ledgerId, key, value)
-                .whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        log.error("[{}] Failed persisted current ledger props {}: {} for ledger {}",
-                                name, key, value, ledgerId);
-                        // Note: We keep the in-memory update even if persistence fails
-                        // to maintain consistency within this session
-                    } else {
-                        if (log.isDebugEnabled()) {
-                            log.debug("[{}] Successfully persisted current ledger props {}: {} for ledger {}",
-                                    name, key, value, ledgerId);
-                        }
-
-                    }
-                });
-        }
-    }
-
     @Override
     public void readyToCreateNewLedger() {
        // only set transition state to ClosedLedger if current state is WriteFailed
@@ -1954,13 +1960,13 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
         }
         if (entriesInLedger > 0) {
             LedgerInfo oldInfo = ledgers.get(lh.getId());
-            LedgerInfo newLedgerInfo = LedgerInfo.newBuilder().setLedgerId(lh.getId()).setEntries(entriesInLedger)
-                    .setSize(lh.getLength()).setTimestamp(clock.millis()).build();
+            LedgerInfo newLedgerInfo = null;
             if (oldInfo != null) {
-                List<MLDataFormats.KeyValue> oldProperties = oldInfo.getPropertiesList();
-                Map<String, String> newPropertiesMap = new HashMap<>();
-                oldProperties.forEach(kv -> newPropertiesMap.put(kv.getKey(), kv.getValue()));
-                newLedgerInfo = updateLedgerProps(newLedgerInfo, newPropertiesMap);
+                newLedgerInfo = oldInfo.toBuilder().setLedgerId(lh.getId()).setEntries(entriesInLedger)
+                    .setSize(lh.getLength()).setTimestamp(clock.millis()).build();
+            } else {
+                newLedgerInfo = LedgerInfo.newBuilder().setLedgerId(lh.getId()).setEntries(entriesInLedger)
+                    .setSize(lh.getLength()).setTimestamp(clock.millis()).build();
             }
             ledgers.put(lh.getId(), newLedgerInfo);
         } else {
@@ -2123,6 +2129,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         log.warn("[{}] Failed to get first entry index for ledger {}, "
                                         + "using this ledger as starting point",
                                 name, ledgerId, throwable);
+                        mbean.recordLedgerPositionFallback();
                         result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
@@ -2131,6 +2138,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                     if (firstEntryIndexStr == null || firstEntryIndexStr.isEmpty()) {
                         log.debug("[{}] First entry index missing for ledger {}, using this ledger as starting point",
                                 name, ledgerId);
+                        mbean.recordLedgerPositionFallback();
                         result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
@@ -2142,6 +2150,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         log.warn("[{}] Invalid first entry index value '{}' for ledger {}, "
                                         + "using this ledger as starting point",
                                 name, firstEntryIndexStr, ledgerId, e);
+                        mbean.recordLedgerPositionFallback();
                         result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         return;
                     }
@@ -2157,6 +2166,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                     || nextFirstIndexStr == null
                                                     || nextFirstIndexStr.isEmpty()) {
                                                 // Next ledger has no firstEntryIndex or error, use current ledger
+                                                mbean.recordLedgerPositionFallback();
                                                 result.complete(new LedgerSearchResult(ledgers.firstKey(),
                                                         getNumberOfEntries() - 1));
                                                 return;
@@ -2174,6 +2184,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                                                 }
                                             } catch (NumberFormatException e) {
                                                 // Next ledger has invalid firstEntryIndex, use current ledger
+                                                mbean.recordLedgerPositionFallback();
                                                 result.complete(new LedgerSearchResult(ledgers.firstKey(),
                                                         getNumberOfEntries() - 1));
                                             }
@@ -2190,6 +2201,7 @@ public class ManagedLedgerImpl implements ManagedLedger, CreateCallback {
                         // This ledger's first entry is greater than target, use previous ledger if exists
                         Long prevLedgerId = ledgers.lowerKey(ledgerId);
                         if (prevLedgerId == null) {
+                            mbean.recordLedgerPositionFallback();
                             result.complete(new LedgerSearchResult(ledgers.firstKey(), getNumberOfEntries() - 1));
                         } else {
                             long max = getLedgerEntries(prevLedgerId);
