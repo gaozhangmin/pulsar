@@ -4765,4 +4765,224 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
 
         ml2.close();
     }
+
+    /**
+     * Ledger Rollover: 验证 rollover 触发关闭 ledger 时 firstEntryIndex 写入内存，
+     * 且重新打开 ManagedLedger 后从 ZK 读回的值一致（不会被后续写入覆盖）。
+     */
+    @Test
+    public void testFirstEntryPropsPreservedAcrossMultipleRollovers() throws Exception {
+        final String mlName = "testFirstEntryPropsMultiRollover-" + System.nanoTime();
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(2);
+        config.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+        config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(0L));
+
+        ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
+        // 写 2 条填满 ledger0，触发 rollover，写第 3 条进 ledger1
+        ml.addEntry("a".getBytes(UTF_8));
+        ml.addEntry("b".getBytes(UTF_8));
+        ml.addEntry("c".getBytes(UTF_8));
+
+        // 等待 rollover 完成
+        Awaitility.await().atMost(15, TimeUnit.SECONDS)
+                .until(() -> ml.getLedgersInfo().size() >= 2);
+
+        long ledger0Id = ml.getLedgersInfo().firstKey();
+        long idxBefore = ml.getFirstEntryIndexFromLedgerMetadata(ledger0Id);
+        Assert.assertTrue(idxBefore >= 0,
+                "Ledger0 must have firstEntryIndex in memory after rollover");
+
+        // 再写 2 条填满 ledger1，触发第二次 rollover
+        ml.addEntry("d".getBytes(UTF_8));
+        Awaitility.await().atMost(15, TimeUnit.SECONDS)
+                .until(() -> ml.getLedgersInfo().size() >= 3
+                        || ml.getFirstEntryIndexFromLedgerMetadata(
+                                ml.getLedgersInfo().higherKey(ledger0Id) == null
+                                        ? ledger0Id
+                                        : ml.getLedgersInfo().higherKey(ledger0Id)) >= 0);
+
+        // 验证 ledger0 的 firstEntryIndex 在第二次 rollover 后仍然正确（未被覆盖）
+        long idxAfterSecondWrite = ml.getFirstEntryIndexFromLedgerMetadata(ledger0Id);
+        Assert.assertEquals(idxAfterSecondWrite, idxBefore,
+                "Ledger0 firstEntryIndex must not change after subsequent writes to other ledgers");
+
+        ml.close();
+
+        // reopen 验证 ZK 持久化
+        ManagedLedgerConfig config2 = new ManagedLedgerConfig();
+        config2.setMaxEntriesPerLedger(2);
+        config2.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+        config2.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(5L));
+
+        ManagedLedgerImpl ml2 = (ManagedLedgerImpl) factory.open(mlName, config2);
+        long idxAfterReopen = ml2.getFirstEntryIndexFromLedgerMetadata(ledger0Id);
+        Assert.assertEquals(idxAfterReopen, idxBefore,
+                "Ledger0 firstEntryIndex must survive ZK round-trip after multiple rollovers");
+
+        ml2.close();
+    }
+
+    /**
+     * Ledger Rollover: 验证 rollover 后重新打开 ManagedLedger，所有已关闭 ledger 的
+     * firstEntryIndex 经过 ZK 持久化后可以被正确读回。
+     */
+    @Test
+    public void testFirstEntryPropsPersistedAfterRolloverAndReopen() throws Exception {
+        final String mlName = "testFirstEntryPropsReopenAfterRollover-" + System.nanoTime();
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(2);
+        config.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+        config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(1000L));
+
+        ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
+
+        // 写 3 条消息：2 条填满 ledger0（触发 rollover），1 条写入 ledger1（当前）
+        // 只触发 1 次 rollover，ledger0 通过 rollover 关闭，firstEntryIndex 写入 ZK
+        ml.addEntry("a".getBytes(UTF_8));
+        ml.addEntry("b".getBytes(UTF_8));
+        ml.addEntry("c".getBytes(UTF_8));
+
+        // 等待 rollover 完成：ledger1 已创建（ZK 已写入包含 ledger0 的 firstEntryIndex）
+        Awaitility.await().atMost(15, TimeUnit.SECONDS)
+                .until(() -> ml.getLedgersInfo().size() >= 2);
+
+        // close() 确保所有 BK 操作完成
+        ml.close();
+
+        // 第一次 reopen：通过 factory.open（阻塞）确保 ZK 已完成所有 rollover 写入，再收集快照
+        ManagedLedgerConfig configCheck = new ManagedLedgerConfig();
+        configCheck.setMaxEntriesPerLedger(2);
+        configCheck.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+        configCheck.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(1004L));
+        ManagedLedgerImpl mlCheck = (ManagedLedgerImpl) factory.open(mlName, configCheck);
+
+        Map<Long, Long> expectedIndexes = new HashMap<>();
+        long currentLedgerId = mlCheck.currentLedger.getId();
+        for (Map.Entry<Long, LedgerInfo> e : mlCheck.getLedgersInfo().entrySet()) {
+            if (e.getKey() == currentLedgerId) {
+                continue;
+            }
+            LedgerInfo info = e.getValue();
+            // 只验证通过 rollover 关闭的 ledger（entry 数量等于 maxEntriesPerLedger）
+            if (info.getEntries() < 2) {
+                continue;
+            }
+            long idx = mlCheck.getFirstEntryIndexFromLedgerMetadata(e.getKey());
+            Assert.assertTrue(idx >= 0,
+                    "Rollover-closed ledger " + e.getKey() + " must have firstEntryIndex in ZK");
+            expectedIndexes.put(e.getKey(), idx);
+        }
+
+        Assert.assertFalse(expectedIndexes.isEmpty(), "Must have at least one rollover-closed ledger to verify");
+        mlCheck.close();
+
+        ManagedLedgerConfig config2 = new ManagedLedgerConfig();
+        config2.setMaxEntriesPerLedger(2);
+        config2.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+        config2.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(1005L));
+
+        ManagedLedgerImpl ml2 = (ManagedLedgerImpl) factory.open(mlName, config2);
+
+        for (Map.Entry<Long, Long> e : expectedIndexes.entrySet()) {
+            long ledgerId = e.getKey();
+            long expectedIdx = e.getValue();
+            long actualIdx = ml2.getFirstEntryIndexFromLedgerMetadata(ledgerId);
+            Assert.assertEquals(actualIdx, expectedIdx,
+                    "firstEntryIndex for ledger " + ledgerId
+                            + " must survive ZK round-trip after rollover");
+        }
+
+        ml2.close();
+    }
+
+    /**
+     * Ledger Rollover: 验证在 rollover 时没有 interceptor（不需要 firstEntryProps）的场景下，
+     * LedgerInfo 的其他正常属性不会受到影响。
+     */
+    @Test
+    public void testLedgerInfoPropertiesIntactAfterRolloverWithoutInterceptor() throws Exception {
+        final String mlName = "testLedgerInfoNoInterceptorRollover-" + System.nanoTime();
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(2);
+        config.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+
+        ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
+
+        ml.addEntry("x".getBytes(UTF_8));
+        ml.addEntry("y".getBytes(UTF_8));
+        ml.addEntry("z".getBytes(UTF_8));
+
+        Awaitility.await().atMost(10, TimeUnit.SECONDS)
+                .until(() -> ml.getLedgersInfo().size() >= 2);
+
+        long closedLedgerId = ml.getLedgersInfo().firstKey();
+        LedgerInfo closedInfo = ml.getLedgersInfo().get(closedLedgerId);
+
+        Assert.assertEquals(closedInfo.getEntries(), 2L,
+                "Closed ledger must have correct entry count");
+        Assert.assertTrue(closedInfo.getSize() > 0,
+                "Closed ledger must have non-zero size");
+        Assert.assertTrue(closedInfo.getTimestamp() > 0,
+                "Closed ledger must have a valid timestamp");
+
+        ml.close();
+    }
+
+    /**
+     * Ledger Rollover: 验证 rollover 触发后，新 ledger 的第一条消息写入时，
+     * in-memory firstEntryIndex/firstEntryTimestamp 被正确设置到新 ledger 上（而非旧 ledger）。
+     */
+    @Test
+    public void testFirstEntryPropsSetOnNewLedgerAfterRollover() throws Exception {
+        final String mlName = "testFirstEntryPropsNewLedger-" + System.nanoTime();
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(2);
+        config.setMinimumRolloverTime(0, TimeUnit.SECONDS);
+        config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(500L));
+
+        ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
+
+        // 写满第一个 ledger，触发 rollover
+        ml.addEntry("m1".getBytes(UTF_8));
+        ml.addEntry("m2".getBytes(UTF_8));
+
+        // 等待新 ledger 被创建
+        Awaitility.await().atMost(10, TimeUnit.SECONDS)
+                .until(() -> ml.getLedgersInfo().size() >= 2);
+
+        long ledger0Id = ml.getLedgersInfo().firstKey();
+
+        // 在新 ledger 写第一条消息
+        ml.addEntry("m3".getBytes(UTF_8));
+
+        long newLedgerId = ml.currentLedger.getId();
+        Assert.assertNotEquals(newLedgerId, ledger0Id,
+                "Current ledger must have changed after rollover");
+
+        // 新 ledger 的 in-memory LedgerInfo 应该有 firstEntryIndex
+        LedgerInfo newLedgerInfo = ml.getLedgersInfo().get(newLedgerId);
+        Assert.assertNotNull(newLedgerInfo, "New ledger must exist in ledgersInfo");
+
+        String newFirstEntryIndexStr = null;
+        for (MLDataFormats.KeyValue kv : newLedgerInfo.getPropertiesList()) {
+            if (ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS.equals(kv.getKey())) {
+                newFirstEntryIndexStr = kv.getValue();
+            }
+        }
+        Assert.assertNotNull(newFirstEntryIndexStr,
+                "New ledger after rollover must have firstEntryIndex set in-memory after first write");
+
+        // 同时验证旧 ledger 的 firstEntryIndex 不受新 ledger 影响
+        long oldFirstEntryIndex = ml.getFirstEntryIndexFromLedgerMetadata(ledger0Id);
+        long newFirstEntryIndex = Long.parseLong(newFirstEntryIndexStr);
+        Assert.assertTrue(newFirstEntryIndex > oldFirstEntryIndex,
+                "New ledger's firstEntryIndex must be greater than old ledger's firstEntryIndex");
+
+        ml.close();
+    }
 }
