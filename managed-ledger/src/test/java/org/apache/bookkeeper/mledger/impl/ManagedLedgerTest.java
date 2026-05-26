@@ -4781,6 +4781,9 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
 
+        // 创建一个 cursor 防止 ledger 被 trim
+        ml.openCursor("test-cursor");
+
         // 写 2 条填满 ledger0，触发第一次 rollover，再写第 3 条进 ledger1
         ml.addEntry("a".getBytes(UTF_8));
         ml.addEntry("b".getBytes(UTF_8));
@@ -4831,6 +4834,9 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(1000L));
 
         ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
+
+        // 创建一个 cursor 防止 ledger 被 trim
+        ml.openCursor("test-cursor");
 
         // 写 3 条消息：2 条填满 ledger0（触发 rollover），1 条写入 ledger1（当前）
         // 只触发 1 次 rollover，ledger0 通过 rollover 关闭，firstEntryIndex 写入 ZK
@@ -4905,6 +4911,9 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
 
+        // 创建一个 cursor 防止 ledger 被 trim
+        ml.openCursor("test-cursor");
+
         ml.addEntry("x".getBytes(UTF_8));
         ml.addEntry("y".getBytes(UTF_8));
         ml.addEntry("z".getBytes(UTF_8));
@@ -4939,6 +4948,9 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         config.setManagedLedgerInterceptor(buildFirstEntryPropsInterceptor(500L));
 
         ManagedLedgerImpl ml = (ManagedLedgerImpl) factory.open(mlName, config);
+
+        // 创建一个 cursor 防止 ledger 被 trim
+        ml.openCursor("test-cursor");
 
         // 写满第一个 ledger，触发 rollover
         ml.addEntry("m1".getBytes(UTF_8));

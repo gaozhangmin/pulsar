@@ -32,6 +32,7 @@ import org.apache.bookkeeper.mledger.impl.OpAddEntry;
 import org.apache.bookkeeper.mledger.intercept.ManagedLedgerInterceptor;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.pulsar.common.api.proto.BrokerEntryMetadata;
+import org.apache.pulsar.common.api.proto.MessageMetadata;
 import org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor;
 import org.apache.pulsar.common.intercept.BrokerEntryMetadataInterceptor;
 import org.apache.pulsar.common.intercept.ManagedLedgerPayloadProcessor;
@@ -237,9 +238,10 @@ public class ManagedLedgerInterceptorImpl implements ManagedLedgerInterceptor {
                         recovered.put(ManagedLedgerImpl.FIRST_ENTRY_TIMESTAMP_PROPS, Long.toString(ts));
                         BrokerEntryMetadata meta =
                                 Commands.parseBrokerEntryMetadataIfExist(buf.duplicate());
-                        if (meta != null && meta.hasIndex()) {
+                        MessageMetadata messageMetadata = Commands.parseMessageMetadata(buf.duplicate());
+                        if (meta != null && messageMetadata != null && meta.hasIndex()) {
                             recovered.put(ManagedLedgerImpl.FIRST_ENTRY_INDEX_PROPS,
-                                    Long.toString(meta.getIndex()));
+                                    Long.toString(meta.getIndex() - messageMetadata.getNumMessagesInBatch() + 1));
                         }
                     }
                 } catch (Exception e) {
