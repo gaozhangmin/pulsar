@@ -21,6 +21,8 @@ package org.apache.pulsar.metadata.api;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
+import org.apache.bookkeeper.stats.NullStatsProvider;
+import org.apache.bookkeeper.stats.StatsProvider;
 
 /**
  * The configuration builder for a {@link MetadataStore} config.
@@ -90,9 +92,21 @@ public class MetadataStoreConfig {
     @Builder.Default
     private final String zkHostProviderClass = "org.apache.zookeeper.client.StaticHostProvider";
 
+    @Builder.Default
+    private final StatsProvider statsProvider = new NullStatsProvider();
+
+    @Builder.Default
+    private final int metadataStorePrometheusStatsLatencyRolloverSeconds = 60;
+
     /**
      * Pluggable MetadataEventSynchronizer to sync metadata events across the
      * separate clusters.
      */
     private MetadataEventSynchronizer synchronizer;
+
+    /**
+     * The number of threads used for serializing and deserializing data to and from the metadata store.
+     */
+    @Builder.Default
+    private final int numSerDesThreads = 1;
 }

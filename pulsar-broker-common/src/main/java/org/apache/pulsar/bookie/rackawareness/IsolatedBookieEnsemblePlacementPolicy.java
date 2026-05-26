@@ -283,4 +283,9 @@ public class IsolatedBookieEnsemblePlacementPolicy extends RackawareEnsemblePlac
         }
         return excludedBookies;
     }
+
+    @VisibleForTesting
+    MetadataCache<BookiesRackConfiguration> getBookieMappingCache() {
+        return bookieMappingCache;
+    }
 }

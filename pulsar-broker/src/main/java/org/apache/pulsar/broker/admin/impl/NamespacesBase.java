@@ -555,8 +555,7 @@ public abstract class NamespacesBase extends AdminResource {
                     }
                     return future
                             .thenCompose(__ ->
-                                    validateNamespaceBundleOwnershipAsync(namespaceName, policies.bundles,
-                                            bundleRange,
+                                    validateNamespaceBundleOwnershipAsync(namespaceName, bundleRange,
                                             authoritative, true))
                             .thenCompose(bundle -> {
                                 return pulsar().getNamespaceService().getListOfPersistentTopics(namespaceName)
@@ -1241,9 +1240,8 @@ public abstract class NamespacesBase extends AdminResource {
                     }
                 })
                 .thenCompose(__ -> validatePoliciesReadOnlyAccessAsync())
-                .thenCompose(__ -> getNamespacePoliciesAsync(namespaceName))
-                .thenCompose(policies ->
-                     isBundleOwnedByAnyBroker(namespaceName, policies.bundles, bundleRange)
+                .thenCompose(__ ->
+                        isBundleOwnedByAnyBroker(namespaceName, bundleRange)
                         .thenCompose(flag -> {
                             if (!flag) {
                                 log.info("[{}] Namespace bundle is not owned by any broker {}/{}", clientAppId(),
@@ -1251,7 +1249,7 @@ public abstract class NamespacesBase extends AdminResource {
                                 return CompletableFuture.completedFuture(null);
                             }
                             Optional<String> destinationBrokerOpt = Optional.ofNullable(destinationBroker);
-                            return validateNamespaceBundleOwnershipAsync(namespaceName, policies.bundles, bundleRange,
+                            return validateNamespaceBundleOwnershipAsync(namespaceName, bundleRange,
                                     authoritative, true)
                                     .thenCompose(nsBundle -> pulsar().getNamespaceService()
                                             .unloadNamespaceBundle(nsBundle, destinationBrokerOpt));
@@ -1297,10 +1295,8 @@ public abstract class NamespacesBase extends AdminResource {
                 .thenCompose(__ -> validatePoliciesReadOnlyAccessAsync())
                 .thenCompose(__ -> getBundleRangeAsync(bundleName))
                 .thenCompose(bundleRange -> {
-                    return getNamespacePoliciesAsync(namespaceName)
-                            .thenCompose(policies ->
-                                    validateNamespaceBundleOwnershipAsync(namespaceName, policies.bundles, bundleRange,
-                                        authoritative, false))
+                    return validateNamespaceBundleOwnershipAsync(namespaceName, bundleRange,
+                                    authoritative, false)
                             .thenCompose(nsBundle -> pulsar().getNamespaceService().splitAndOwnBundle(nsBundle, unload,
                                     pulsar().getNamespaceService()
                                             .getNamespaceBundleSplitAlgorithmByName(splitAlgorithmName),
@@ -1314,9 +1310,8 @@ public abstract class NamespacesBase extends AdminResource {
             log.debug("[{}] Getting hash position for topic list {}, bundle {}", clientAppId(), topics, bundleRange);
         }
         return validateNamespacePolicyOperationAsync(namespaceName, PolicyName.PERSISTENCE, PolicyOperation.READ)
-                .thenCompose(__ -> getNamespacePoliciesAsync(namespaceName))
-                .thenCompose(policies -> {
-                    return validateNamespaceBundleOwnershipAsync(namespaceName, policies.bundles, bundleRange,
+                .thenCompose(__ -> {
+                    return validateNamespaceBundleOwnershipAsync(namespaceName, bundleRange,
                             false, true)
                             .thenCompose(nsBundle ->
                                     pulsar().getNamespaceService().getOwnedTopicListForNamespaceBundle(nsBundle))
@@ -1671,7 +1666,7 @@ public abstract class NamespacesBase extends AdminResource {
             validateClusterForTenant(namespaceName.getTenant(), namespaceName.getCluster());
         }
 
-        validateNamespaceBundleOwnership(namespaceName, policies.bundles, bundleRange, authoritative, true);
+        validateNamespaceBundleOwnership(namespaceName, bundleRange, authoritative, true);
 
         clearBacklog(namespaceName, bundleRange, null);
         log.info("[{}] Successfully cleared backlog on namespace bundle {}/{}", clientAppId(), namespaceName,
@@ -1738,7 +1733,7 @@ public abstract class NamespacesBase extends AdminResource {
             validateClusterForTenant(namespaceName.getTenant(), namespaceName.getCluster());
         }
 
-        validateNamespaceBundleOwnership(namespaceName, policies.bundles, bundleRange, authoritative, true);
+        validateNamespaceBundleOwnership(namespaceName, bundleRange, authoritative, true);
 
         clearBacklog(namespaceName, bundleRange, subscription);
         log.info("[{}] Successfully cleared backlog for subscription {} on namespace bundle {}/{}", clientAppId(),
@@ -1804,7 +1799,7 @@ public abstract class NamespacesBase extends AdminResource {
             validateClusterForTenant(namespaceName.getTenant(), namespaceName.getCluster());
         }
 
-        validateNamespaceBundleOwnership(namespaceName, policies.bundles, bundleRange, authoritative, true);
+        validateNamespaceBundleOwnership(namespaceName, bundleRange, authoritative, true);
 
         unsubscribe(namespaceName, bundleRange, subscription);
         log.info("[{}] Successfully unsubscribed {} on namespace bundle {}/{}", clientAppId(), subscription,

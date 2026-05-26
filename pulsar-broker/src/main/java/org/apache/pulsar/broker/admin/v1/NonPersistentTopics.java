@@ -260,13 +260,13 @@ public class NonPersistentTopics extends PersistentTopics {
         }
         NamespaceName fqnn = NamespaceName.get(property, cluster, namespace);
         try {
-            if (!isBundleOwnedByAnyBroker(fqnn, policies.bundles, bundleRange)
+            if (!isBundleOwnedByAnyBroker(fqnn, bundleRange)
                 .get(pulsar().getConfig().getMetadataStoreOperationTimeoutSeconds(), TimeUnit.SECONDS)) {
                 log.info("[{}] Namespace bundle is not owned by any broker {}/{}/{}/{}", clientAppId(), property,
                     cluster, namespace, bundleRange);
                 return null;
             }
-            NamespaceBundle nsBundle = validateNamespaceBundleOwnership(fqnn, policies.bundles, bundleRange,
+            NamespaceBundle nsBundle = validateNamespaceBundleOwnership(fqnn, bundleRange,
                 true, true);
             final List<String> topicList = new ArrayList<>();
             pulsar().getBrokerService().forEachTopic(topic -> {

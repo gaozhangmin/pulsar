@@ -45,6 +45,7 @@ public final class MetadataStoreStats implements AutoCloseable {
             .quantile(0.999, 0.01D)
             .quantile(0.9999, 0.01D)
             .quantile(1.0, 0.01D)
+            .maxAgeSeconds(60)
             .labelNames(METADATA_STORE_LABEL_NAME, OPS_TYPE_LABEL_NAME, STATUS)
             .register();
 

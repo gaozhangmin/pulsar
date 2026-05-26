@@ -76,6 +76,9 @@ import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
 import org.apache.bookkeeper.mledger.impl.NullLedgerOffloader;
 import org.apache.bookkeeper.mledger.offload.Offloaders;
 import org.apache.bookkeeper.mledger.offload.OffloadersCache;
+import org.apache.bookkeeper.stats.NullStatsProvider;
+import org.apache.bookkeeper.stats.StatsProvider;
+import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.PulsarVersion;
 import org.apache.pulsar.broker.authentication.AuthenticationService;
@@ -116,6 +119,7 @@ import org.apache.pulsar.broker.stats.PulsarBrokerOpenTelemetry;
 import org.apache.pulsar.broker.stats.prometheus.PrometheusMetricsServlet;
 import org.apache.pulsar.broker.stats.prometheus.PrometheusRawMetricsProvider;
 import org.apache.pulsar.broker.stats.prometheus.PulsarPrometheusMetricsServlet;
+import org.apache.pulsar.broker.stats.prometheus.metrics.PrometheusMetricsProvider;
 import org.apache.pulsar.broker.storage.ManagedLedgerStorage;
 import org.apache.pulsar.broker.transaction.buffer.TransactionBufferProvider;
 import org.apache.pulsar.broker.transaction.buffer.impl.TransactionBufferClientImpl;
@@ -292,6 +296,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
     private String brokerId;
     private final CompletableFuture<Void> readyForIncomingRequestsFuture = new CompletableFuture<>();
     private final List<Runnable> pendingTasksBeforeReadyForIncomingRequests = new ArrayList<>();
+    private StatsProvider metadataStatsProvider = new NullStatsProvider();
 
     public enum State {
         Init, Started, Closing, Closed
@@ -402,6 +407,9 @@ public class PulsarService implements AutoCloseable, ShutdownService {
         }
         return MetadataStoreFactory.create(config.getConfigurationMetadataStoreUrl(),
                 MetadataStoreConfig.builder()
+                        .statsProvider(metadataStatsProvider)
+                        .metadataStorePrometheusStatsLatencyRolloverSeconds(
+                                config.getManagedLedgerPrometheusStatsLatencyRolloverSeconds())
                         .zkHostProviderClass(config.getZkHostProviderClass())
                         .sessionTimeoutMillis((int) config.getMetadataStoreSessionTimeoutMillis())
                         .allowReadOnlyOperations(config.isMetadataStoreAllowReadOnlyOperations())
@@ -411,6 +419,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
                         .batchingMaxOperations(config.getMetadataStoreBatchingMaxOperations())
                         .batchingMaxSizeKb(config.getMetadataStoreBatchingMaxSizeKb())
                         .metadataStoreName(MetadataStoreConfig.CONFIGURATION_METADATA_STORE)
+                        .numSerDesThreads(config.getMetadataStoreSerDesThreads())
                         .synchronizer(synchronizer)
                         .build());
     }
@@ -693,6 +702,9 @@ public class PulsarService implements AutoCloseable, ShutdownService {
                 openTelemetryTopicStats.close();
                 openTelemetryTopicStats = null;
             }
+            if (metadataStatsProvider != null) {
+                metadataStatsProvider.stop();
+            }
 
             asyncCloseFutures.add(EventLoopUtil.shutdownGracefully(ioEventLoopGroup));
 
@@ -840,6 +852,14 @@ public class PulsarService implements AutoCloseable, ShutdownService {
             localMetadataSynchronizer = StringUtils.isNotBlank(config.getMetadataSyncEventTopic())
                     ? new PulsarMetadataEventSynchronizer(this, config.getMetadataSyncEventTopic())
                     : null;
+            Configuration configuration = new ClientConfiguration();
+            if (config.isMetadataStoreExposeStatsToPrometheus()) {
+                configuration.addProperty(PrometheusMetricsProvider.PROMETHEUS_STATS_LATENCY_ROLLOVER_SECONDS,
+                        config.getManagedLedgerPrometheusStatsLatencyRolloverSeconds());
+                configuration.addProperty(PrometheusMetricsProvider.CLUSTER_NAME, config.getClusterName());
+                metadataStatsProvider = new PrometheusMetricsProvider();
+            }
+            metadataStatsProvider.start(configuration);
             localMetadataStore = createLocalMetadataStore(localMetadataSynchronizer);
             localMetadataStore.registerSessionListener(this::handleMetadataSessionEvent);
 
@@ -1242,6 +1262,9 @@ public class PulsarService implements AutoCloseable, ShutdownService {
             throws MetadataStoreException, PulsarServerException {
         return MetadataStoreExtended.create(config.getMetadataStoreUrl(),
                 MetadataStoreConfig.builder()
+                        .statsProvider(metadataStatsProvider)
+                        .metadataStorePrometheusStatsLatencyRolloverSeconds(
+                                config.getManagedLedgerPrometheusStatsLatencyRolloverSeconds())
                         .zkHostProviderClass(config.getZkHostProviderClass())
                         .sessionTimeoutMillis((int) config.getMetadataStoreSessionTimeoutMillis())
                         .allowReadOnlyOperations(config.isMetadataStoreAllowReadOnlyOperations())
@@ -1250,6 +1273,7 @@ public class PulsarService implements AutoCloseable, ShutdownService {
                         .batchingMaxDelayMillis(config.getMetadataStoreBatchingMaxDelayMillis())
                         .batchingMaxOperations(config.getMetadataStoreBatchingMaxOperations())
                         .batchingMaxSizeKb(config.getMetadataStoreBatchingMaxSizeKb())
+                        .numSerDesThreads(config.getMetadataStoreSerDesThreads())
                         .synchronizer(synchronizer)
                         .metadataStoreName(MetadataStoreConfig.METADATA_STORE)
                         .build());

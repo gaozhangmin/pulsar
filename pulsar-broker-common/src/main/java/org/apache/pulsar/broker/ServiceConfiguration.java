@@ -480,6 +480,12 @@ public class ServiceConfiguration implements PulsarConfiguration {
     )
     private boolean metadataStoreAllowReadOnlyOperations;
 
+    @FieldContext(
+            category = CATEGORY_SERVER,
+            doc = "The number of threads used for serializing and deserializing data to and from the metadata store"
+    )
+    private int metadataStoreSerDesThreads = 1;
+
     @Deprecated
     @FieldContext(
         category = CATEGORY_SERVER,
@@ -1940,6 +1946,12 @@ public class ServiceConfiguration implements PulsarConfiguration {
         doc = "whether expose managed ledger client stats to prometheus"
     )
     private boolean bookkeeperClientExposeStatsToPrometheus = false;
+
+    @FieldContext(
+        category = CATEGORY_METRICS,
+        doc = "whether expose metadataStore stats to prometheus"
+    )
+    private boolean metadataStoreExposeStatsToPrometheus = false;
 
     @FieldContext(
             category = CATEGORY_STORAGE_BK,
