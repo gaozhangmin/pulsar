@@ -20,12 +20,15 @@ package org.apache.pulsar.metadata.impl.stats;
 
 import io.prometheus.client.Counter;
 import io.prometheus.client.Summary;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.pulsar.metadata.api.extended.SessionEvent;
 
 public final class MetadataStoreStats implements AutoCloseable {
     private static final String OPS_TYPE_LABEL_NAME = "type";
     private static final String METADATA_STORE_LABEL_NAME = "name";
     private static final String STATUS = "status";
+    private static final String SESSION_EVENT_LABEL_NAME = "event";
 
     private static final String OPS_TYPE_GET = "get";
     private static final String OPS_TYPE_DEL = "del";
@@ -55,6 +58,11 @@ public final class MetadataStoreStats implements AutoCloseable {
             .labelNames(METADATA_STORE_LABEL_NAME)
             .register();
 
+    private static final Counter SESSION_EVENTS = Counter
+            .build(PREFIX + "session_event", "-")
+            .labelNames(METADATA_STORE_LABEL_NAME, SESSION_EVENT_LABEL_NAME)
+            .register();
+
     private final Summary.Child getOpsSucceedChild;
     private final Summary.Child delOpsSucceedChild;
     private final Summary.Child putOpsSucceedChild;
@@ -63,6 +71,8 @@ public final class MetadataStoreStats implements AutoCloseable {
     private final Summary.Child putOpsFailedChild;
     private final Counter.Child putBytesChild;
     private final String metadataStoreName;
+    private final ConcurrentHashMap<SessionEvent, Counter.Child> sessionEventCounters =
+            new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     public MetadataStoreStats(String metadataStoreName) {
@@ -102,6 +112,10 @@ public final class MetadataStoreStats implements AutoCloseable {
         this.putOpsFailedChild.observe(millis);
     }
 
+    public void recordSessionEvent(SessionEvent event) {
+        sessionEventCounters.computeIfAbsent(event, e -> SESSION_EVENTS.labels(metadataStoreName, e.name())).inc();
+    }
+
     @Override
     public void close() throws Exception {
         if (this.closed.compareAndSet(false, true)) {
@@ -112,6 +126,10 @@ public final class MetadataStoreStats implements AutoCloseable {
             OPS_LATENCY.remove(this.metadataStoreName, OPS_TYPE_DEL, STATUS_FAIL);
             OPS_LATENCY.remove(this.metadataStoreName, OPS_TYPE_PUT, STATUS_FAIL);
             PUT_BYTES.remove(this.metadataStoreName);
+            sessionEventCounters.forEach((event, counter) -> {
+                SESSION_EVENTS.remove(this.metadataStoreName, event.name());
+            });
+            sessionEventCounters.clear();
         }
     }
 }
