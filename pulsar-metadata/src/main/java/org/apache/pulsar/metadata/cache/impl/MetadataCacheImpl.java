@@ -60,6 +60,7 @@ import org.apache.pulsar.metadata.impl.AbstractMetadataStore;
 
 @Slf4j
 public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notification> {
+    public static final String ALL_PATH = "*";
     @Getter
     private final String cacheName;
     @Getter
@@ -345,6 +346,7 @@ public class MetadataCacheImpl<T> implements MetadataCache<T>, Consumer<Notifica
     @VisibleForTesting
     public void invalidateAll() {
         objCache.synchronous().invalidateAll();
+        notifyRemoveListeners(ALL_PATH);
     }
 
     private void notifyRemoveListeners(String path) {

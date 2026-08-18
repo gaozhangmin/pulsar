@@ -22,10 +22,14 @@ import com.google.common.collect.Sets;
 import io.netty.channel.Channel;
 import java.net.URL;
 import java.nio.channels.SelectionKey;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pulsar.broker.PulsarService;
 import org.apache.pulsar.broker.ServiceConfiguration;
@@ -35,6 +39,7 @@ import org.apache.pulsar.common.policies.data.ClusterData;
 import org.apache.pulsar.common.policies.data.TenantInfoImpl;
 import org.apache.pulsar.common.policies.data.TopicType;
 import org.apache.pulsar.metadata.api.extended.SessionEvent;
+import org.apache.pulsar.metadata.impl.PulsarZooKeeperClient;
 import org.apache.pulsar.metadata.impl.ZKMetadataStore;
 import org.apache.pulsar.tests.TestRetrySupport;
 import org.apache.pulsar.zookeeper.LocalBookkeeperEnsemble;
@@ -61,7 +66,6 @@ public abstract class CanReconnectZKClientPulsarServiceBaseTest extends TestRetr
     protected PulsarClient client;
     protected ZooKeeper localZkOfBroker;
     protected volatile SessionEvent sessionEvent;
-    protected Object localMetaDataStoreClientCnx;
     protected final AtomicBoolean connectionTerminationThreadKeepRunning = new AtomicBoolean();
     private volatile Thread connectionTerminationThread;
 
@@ -87,14 +91,27 @@ public abstract class CanReconnectZKClientPulsarServiceBaseTest extends TestRetr
             log.info("Received session event: {}", n);
             sessionEvent = n;
         });
-        ClientCnxn cnxn = WhiteboxImpl.getInternalState(localZkOfBroker, "cnxn");
-        Object sendThread = WhiteboxImpl.getInternalState(cnxn, "sendThread");
-        localMetaDataStoreClientCnx = WhiteboxImpl.getInternalState(sendThread, "clientCnxnSocket");
-
         url = new URL(pulsar.getWebServiceAddress());
         urlTls = new URL(pulsar.getWebServiceAddressTls());
         admin = PulsarAdmin.builder().serviceHttpUrl(url.toString()).build();
         client = PulsarClient.builder().serviceUrl(url.toString()).build();
+    }
+
+    protected ZooKeeper getActiveZkOfBroker() {
+        if (localZkOfBroker instanceof PulsarZooKeeperClient) {
+            AtomicReference<ZooKeeper> zkRef = WhiteboxImpl.getInternalState(localZkOfBroker, "zk");
+            ZooKeeper activeZk = zkRef.get();
+            if (activeZk != null) {
+                return activeZk;
+            }
+        }
+        return localZkOfBroker;
+    }
+
+    private Object getActiveClientCnxnSocket() {
+        ClientCnxn cnxn = WhiteboxImpl.getInternalState(getActiveZkOfBroker(), "cnxn");
+        Object sendThread = WhiteboxImpl.getInternalState(cnxn, "sendThread");
+        return WhiteboxImpl.getInternalState(sendThread, "clientCnxnSocket");
     }
 
     protected void startLocalMetadataStoreConnectionTermination() throws Exception {
@@ -102,62 +119,60 @@ public abstract class CanReconnectZKClientPulsarServiceBaseTest extends TestRetr
             throw new RuntimeException("Local metadata store connection is already being terminated");
         }
         CompletableFuture<Void> future = new CompletableFuture<>();
-        if (localMetaDataStoreClientCnx.getClass().getSimpleName().equals("ClientCnxnSocketNIO")) {
-            startNIOImplTermination(future);
+        connectionTerminationThread = new Thread(() -> {
+            while (connectionTerminationThreadKeepRunning.get()) {
+                try {
+                    if (closeCurrentConnection()) {
+                        future.complete(null);
+                    }
+                    // Prevents high cpu usage.
+                    Thread.sleep(5);
+                } catch (Exception e) {
+                    log.error("Try close the ZK connection of local metadata store failed: {}", e.toString());
+                }
+            }
+        });
+        connectionTerminationThread.start();
+        // wait until connection is closed at least once
+        try {
+            future.get(60, TimeUnit.SECONDS);
+        } catch (TimeoutException te) {
+            connectionTerminationThreadKeepRunning.set(false);
+            throw new IllegalStateException("Could not close the ZK connection of the local metadata store", te);
+        }
+    }
+
+    private boolean closeCurrentConnection() throws Exception {
+        Object clientCnxnSocket = getActiveClientCnxnSocket();
+        if (clientCnxnSocket.getClass().getSimpleName().equals("ClientCnxnSocketNIO")) {
+            SelectionKey sockKey = WhiteboxImpl.getInternalState(clientCnxnSocket, "sockKey");
+            if (sockKey != null) {
+                sockKey.channel().close();
+                return true;
+            }
         } else {
             // ClientCnxnSocketNetty.
-            startNettyImplTermination(future);
+            Channel channel = WhiteboxImpl.getInternalState(clientCnxnSocket, "channel");
+            if (channel != null) {
+                channel.close();
+                return true;
+            }
         }
-        // wait until connection is closed at least once
-        future.get();
-    }
-
-    private void startNIOImplTermination(CompletableFuture<Void> future) {
-        connectionTerminationThread = new Thread(() -> {
-            while (connectionTerminationThreadKeepRunning.get()) {
-                try {
-                    SelectionKey sockKey = WhiteboxImpl.getInternalState(localMetaDataStoreClientCnx, "sockKey");
-                    if (sockKey != null) {
-                        sockKey.channel().close();
-                        future.complete(null);
-                    }
-                    // Prevents high cpu usage.
-                    Thread.sleep(5);
-                } catch (Exception e) {
-                    log.error("Try close the ZK connection of local metadata store failed: {}", e.toString());
-                }
-            }
-        });
-        connectionTerminationThread.start();
-    }
-
-    private void startNettyImplTermination(CompletableFuture<Void> future) {
-        connectionTerminationThread = new Thread(() -> {
-            while (connectionTerminationThreadKeepRunning.get()) {
-                try {
-                    Channel channel = WhiteboxImpl.getInternalState(localMetaDataStoreClientCnx, "channel");
-                    if (channel != null) {
-                        channel.close();
-                        future.complete(null);
-                    }
-                    // Prevents high cpu usage.
-                    Thread.sleep(5);
-                } catch (Exception e) {
-                    log.error("Try close the ZK connection of local metadata store failed: {}", e.toString());
-                }
-            }
-        });
-        connectionTerminationThread.start();
+        return false;
     }
 
     protected void stopLocalMetadataStoreConnectionTermination() throws InterruptedException {
-        connectionTerminationThreadKeepRunning.set(false);
+        if (!connectionTerminationThreadKeepRunning.compareAndSet(true, false)) {
+            // The termination was never started, or has already been stopped.
+            return;
+        }
         if (connectionTerminationThread != null) {
             // Wait for the reconnect thread to finish.
             connectionTerminationThread.join();
             connectionTerminationThread = null;
         }
-        Awaitility.await().until(() -> SessionEvent.Reconnected.equals(sessionEvent));
+        Awaitility.await().atMost(Duration.ofSeconds(60))
+                .until(() -> SessionEvent.Reconnected.equals(sessionEvent));
     }
 
     protected void createDefaultTenantsAndClustersAndNamespace() throws Exception {

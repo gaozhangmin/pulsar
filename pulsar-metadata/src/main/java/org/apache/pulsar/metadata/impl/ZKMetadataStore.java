@@ -19,6 +19,7 @@
 package org.apache.pulsar.metadata.impl;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -26,6 +27,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -85,6 +88,8 @@ public class ZKMetadataStore extends AbstractBatchedMetadataStore
     private final ZooKeeper zkc;
     private final ZKSessionWatcher sessionWatcher;
     private final Watcher eventWatcher = this::handleWatchEvent;
+    private final ScheduledExecutorService scheduler = Executors
+                .newSingleThreadScheduledExecutor(new DefaultThreadFactory("metadata-store-zk-session-watcher"));
 
     public ZKMetadataStore(String metadataURL, MetadataStoreConfig metadataStoreConfig, boolean enableSessionWatcher)
             throws MetadataStoreException {
@@ -114,17 +119,23 @@ public class ZKMetadataStore extends AbstractBatchedMetadataStore
                     .watchers(Collections.singleton(this::processSessionWatcher))
                     .configPath(metadataStoreConfig.getConfigFilePath())
                     .hostProvider(hostProvider)
+                    .scheduler(scheduler)
+                    .clientReadyHook(this::installPersistentWatch)
                     .statsLogger(zkMetadataStore)
                     .build();
             if (enableSessionWatcher) {
-                sessionWatcher = new ZKSessionWatcher(zkc, this::receivedSessionEvent);
+                sessionWatcher = new ZKSessionWatcher(zkc, this::receivedSessionEvent, scheduler);
             } else {
                 sessionWatcher = null;
             }
-            zkc.addWatch("/", eventWatcher, AddWatchMode.PERSISTENT_RECURSIVE);
         } catch (Throwable t) {
+            scheduler.shutdownNow();
             throw new MetadataStoreException(t);
         }
+    }
+
+    private void installPersistentWatch(ZooKeeper zk) throws KeeperException, InterruptedException {
+        zk.addWatch("/", eventWatcher, AddWatchMode.PERSISTENT_RECURSIVE);
     }
 
     private void processSessionWatcher(WatchedEvent event) {
@@ -154,36 +165,29 @@ public class ZKMetadataStore extends AbstractBatchedMetadataStore
         this.metadataStoreConfig = null;
         this.isZkManaged = isZkManaged;
         this.zkc = zkc;
-        this.sessionWatcher = new ZKSessionWatcher(zkc, this::receivedSessionEvent);
+        this.sessionWatcher = new ZKSessionWatcher(zkc, this::receivedSessionEvent, scheduler);
         zkc.addWatch("/", eventWatcher, AddWatchMode.PERSISTENT_RECURSIVE);
     }
 
     @Override
     protected void receivedSessionEvent(SessionEvent event) {
-        if (event == SessionEvent.SessionReestablished) {
-            // Recreate the persistent watch on the new session
-            zkc.addWatch("/", eventWatcher, AddWatchMode.PERSISTENT_RECURSIVE,
-                    (rc, path, ctx) -> {
-                        if (rc == Code.OK.intValue()) {
-                            super.receivedSessionEvent(event);
-                        } else {
-                            log.error("Failed to recreate persistent watch on ZooKeeper: {}", Code.get(rc));
-                            if (sessionWatcher != null) {
-                                sessionWatcher.setSessionInvalid();
-                            }
-                            // On the re-connectable client, mark the session as expired to trigger a new reconnect,
-                            // and we will have the chance to set the watch again.
-                            if (zkc instanceof PulsarZooKeeperClient) {
-                                ((PulsarZooKeeperClient) zkc).process(
-                                        new WatchedEvent(Watcher.Event.EventType.None,
-                                                Watcher.Event.KeeperState.Expired,
-                                                null));
-                             }
-                        }
-                    }, null);
-        } else {
+        if (zkc instanceof PulsarZooKeeperClient || event != SessionEvent.SessionReestablished) {
+            // PulsarZooKeeperClient installs the persistent watch through its client-ready hook.
             super.receivedSessionEvent(event);
+            return;
         }
+
+        zkc.addWatch("/", eventWatcher, AddWatchMode.PERSISTENT_RECURSIVE,
+            (rc, path, ctx) -> {
+                if (rc == Code.OK.intValue()) {
+                    super.receivedSessionEvent(event);
+                } else {
+                    log.error("Failed to recreate persistent watch on ZooKeeper: {}", Code.get(rc));
+                    if (sessionWatcher != null) {
+                        sessionWatcher.setSessionInvalid();
+                    }
+                }
+        }, null);
     }
 
     @Override
@@ -484,6 +488,8 @@ public class ZKMetadataStore extends AbstractBatchedMetadataStore
             if (sessionWatcher != null) {
                 sessionWatcher.close();
             }
+            scheduler.shutdownNow();
+            scheduler.awaitTermination(10, TimeUnit.SECONDS);
             super.close();
         }
     }

@@ -19,9 +19,7 @@
 package org.apache.pulsar.metadata.impl;
 
 import static org.apache.pulsar.common.util.Runnables.catchingAndLoggingThrowables;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -57,14 +55,13 @@ public class ZKSessionWatcher implements AutoCloseable, Watcher {
 
     private long disconnectedAt = 0;
 
-    public ZKSessionWatcher(ZooKeeper zk, Consumer<SessionEvent> sessionListener) {
+    public ZKSessionWatcher(ZooKeeper zk, Consumer<SessionEvent> sessionListener, ScheduledExecutorService scheduler) {
         this.zk = zk;
         this.monitorTimeoutMillis = zk.getSessionTimeout() * 5 / 6;
         this.tickTimeMillis = zk.getSessionTimeout() / 15;
         this.sessionListener = sessionListener;
 
-        this.scheduler = Executors
-                .newSingleThreadScheduledExecutor(new DefaultThreadFactory("metadata-store-zk-session-watcher"));
+        this.scheduler = scheduler;
         this.task =
                 scheduler.scheduleWithFixedDelay(
                         catchingAndLoggingThrowables(this::checkConnectionStatus), tickTimeMillis,
@@ -76,8 +73,6 @@ public class ZKSessionWatcher implements AutoCloseable, Watcher {
     @Override
     public void close() throws Exception {
         task.cancel(true);
-        scheduler.shutdownNow();
-        scheduler.awaitTermination(10, TimeUnit.SECONDS);
     }
 
     // task that runs every TICK_TIME to check zk connection
@@ -123,15 +118,22 @@ public class ZKSessionWatcher implements AutoCloseable, Watcher {
     @Override
     public synchronized void process(WatchedEvent event) {
         log.info("Got ZK session watch event: {}", event);
-        checkState(event.getState());
+        scheduler.execute(() -> checkState(event.getState()));
     }
 
-    synchronized void setSessionInvalid() {
-        currentStatus = SessionEvent.SessionLost;
+    void setSessionInvalid() {
+        scheduler.execute(() -> {
+            synchronized (this) {
+                currentStatus = SessionEvent.SessionLost;
+            }
+        });
     }
 
     private synchronized void checkState(Watcher.Event.KeeperState zkClientState) {
         switch (zkClientState) {
+        case Closed:
+            log.info("ZooKeeper client handle was closed. Current status: {}", currentStatus);
+            break;
         case Expired:
             if (currentStatus != SessionEvent.SessionLost) {
                 log.error("ZooKeeper session expired");
@@ -169,11 +171,12 @@ public class ZKSessionWatcher implements AutoCloseable, Watcher {
                 log.info("ZooKeeper client reconnection with server quorum. Current status: {}", currentStatus);
                 disconnectedAt = 0;
 
+                SessionEvent previousStatus = currentStatus;
+                currentStatus = SessionEvent.SessionReestablished;
                 sessionListener.accept(SessionEvent.Reconnected);
-                if (currentStatus == SessionEvent.SessionLost) {
+                if (previousStatus == SessionEvent.SessionLost) {
                     sessionListener.accept(SessionEvent.SessionReestablished);
                 }
-                currentStatus = SessionEvent.SessionReestablished;
             }
             break;
         }

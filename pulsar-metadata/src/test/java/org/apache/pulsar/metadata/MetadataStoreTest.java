@@ -29,7 +29,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -63,8 +62,6 @@ import org.apache.pulsar.metadata.api.Stat;
 import org.apache.pulsar.metadata.impl.PulsarZooKeeperClient;
 import org.apache.pulsar.metadata.impl.ZKMetadataStore;
 import org.apache.pulsar.metadata.impl.oxia.OxiaMetadataStore;
-import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.assertj.core.util.Lists;
 import org.awaitility.Awaitility;
@@ -532,10 +529,17 @@ public class MetadataStoreTest extends BaseMetadataStoreTest {
         PulsarZooKeeperClient zkClient = (PulsarZooKeeperClient) store.getZkClient();
         assertFalse(zkClient.getClientConfig().isSaslClientEnabled());
 
-        zkClient.process(new WatchedEvent(Watcher.Event.EventType.None, Watcher.Event.KeeperState.Expired, null));
-
         var zooKeeperRef = (AtomicReference<ZooKeeper>) WhiteboxImpl.getInternalState(zkClient, "zk");
-        var zooKeeper = Awaitility.await().until(zooKeeperRef::get, Objects::nonNull);
+        ZooKeeper zooKeeperBeforeExpiry = zooKeeperRef.get();
+        assertNotNull(zooKeeperBeforeExpiry);
+        assertFalse(zooKeeperBeforeExpiry.getClientConfig().isSaslClientEnabled());
+
+        // Trigger a real session expiration, so the client is actually rebuilt.
+        zks.expireSession(store.getZkSessionId());
+
+        var zooKeeper = Awaitility.await().atMost(Duration.ofSeconds(30))
+                .until(zooKeeperRef::get, zk -> zk != null && zk != zooKeeperBeforeExpiry);
+        // The rebuilt client must still honour the config loaded from the file.
         assertFalse(zooKeeper.getClientConfig().isSaslClientEnabled());
     }
 
