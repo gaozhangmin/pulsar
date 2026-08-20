@@ -2060,9 +2060,23 @@ public class ServiceConfiguration implements PulsarConfiguration {
     private int managedLedgerCacheSizeMB = Math.max(64,
             (int) (DirectMemoryUtils.jvmMaxDirectMemory() / 5 / (1024 * 1024)));
 
-    @FieldContext(category = CATEGORY_STORAGE_ML, doc = "Whether we should make a copy of the entry payloads when "
+    @FieldContext(category = CATEGORY_STORAGE_ML,
+            dynamic = true,
+            doc = "Whether we should make a copy of the entry payloads when "
             + "inserting in cache")
     private boolean managedLedgerCacheCopyEntries = false;
+
+    @FieldContext(category = CATEGORY_STORAGE_ML,
+            dynamic = true, doc = "The ByteBufAllocator type used for the managed-ledger entry cache. "
+            + "Valid values: 1 = PooledByteBufAllocator (default), 2 = SlabByteBufAllocator, "
+            + "3 = HeapByteBufAllocator.")
+    private int managedLedgerCacheAllocatorType = 1;
+
+    @FieldContext(category = CATEGORY_STORAGE_ML,
+            dynamic = true, doc = "Pages idle longer than this (ms) are asynchronously released by the "
+            + "SlabPagePool background evictor. Only effective when managedLedgerCacheAllocatorType = 2. "
+            + "Default: 60000 ms.")
+    private long managedLedgerSlabPagePoolIdleEvictMs = 60_000;
 
     @FieldContext(category = CATEGORY_STORAGE_ML, doc = "Maximum buffer size for bytes read from storage."
             + " This is the memory retained by data read from storage (or cache) until it has been delivered to the"

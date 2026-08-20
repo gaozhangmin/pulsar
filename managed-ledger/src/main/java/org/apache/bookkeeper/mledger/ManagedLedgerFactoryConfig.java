@@ -18,6 +18,7 @@
  */
 package org.apache.bookkeeper.mledger;
 
+import java.util.function.Supplier;
 import lombok.Data;
 import org.apache.bookkeeper.common.annotation.InterfaceAudience;
 import org.apache.bookkeeper.common.annotation.InterfaceStability;
@@ -54,7 +55,21 @@ public class ManagedLedgerFactoryConfig {
     /**
      * Whether we should make a copy of the entry payloads when inserting in cache.
      */
-    private boolean copyEntriesInCache = false;
+    private Supplier<Boolean> copyEntriesInCacheSupplier = () -> false;
+
+    /**
+     * The ByteBufAllocator type used for the managed-ledger entry cache.
+     * Valid values: 1 = PooledByteBufAllocator (default), 2 = SlabByteBufAllocator, 3 = HeapByteBufAllocator.
+     */
+    private Supplier<Integer> allocatorType = () -> 1;
+
+    /**
+     * Pages idle longer than this (milliseconds) are asynchronously released by the
+     * {@link org.apache.pulsar.common.allocator.SlabPagePool} background evictor.
+     * Only effective when {@code allocatorType} resolves to 2 (SlabByteBufAllocator).
+     * Default: 60 seconds.
+     */
+    private Supplier<Long> slabPagePoolIdleEvictMsSupplier = () -> 60_000L;
 
     /**
      * Maximum number of (estimated) data in-flight reading from storage and the cache.

@@ -35,6 +35,8 @@ import org.apache.bookkeeper.mledger.impl.ManagedLedgerFactoryImpl;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerFactoryMBeanImpl;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.bookkeeper.mledger.intercept.ManagedLedgerInterceptor;
+import org.apache.pulsar.common.allocator.SlabByteBufAllocator;
+import org.apache.pulsar.common.allocator.SlabPagePool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +55,7 @@ public class RangeEntryCacheManagerImpl implements EntryCacheManager {
     private final ManagedLedgerFactoryImpl mlFactory;
     protected final ManagedLedgerFactoryMBeanImpl mlFactoryMBean;
     private final InflightReadsLimiter inflightReadsLimiter;
+    final SlabByteBufAllocator slabByteBufAllocator;
 
     protected static final double MB = 1024 * 1024;
     private static final double evictionTriggerThresholdPercent = 0.98;
@@ -70,8 +73,15 @@ public class RangeEntryCacheManagerImpl implements EntryCacheManager {
         this.evictionPolicy = new EntryCacheDefaultEvictionPolicy();
         this.mlFactory = factory;
         this.mlFactoryMBean = factory.getMbean();
-
-        log.info("Initialized managed-ledger entry cache of {} Mb", maxSize / MB);
+        SlabPagePool pool = new SlabPagePool(
+                RangeEntryCacheImpl.ALLOCATOR,
+                SlabByteBufAllocator.PAGE_SIZE,
+                this.maxSize,
+                config.getSlabPagePoolIdleEvictMsSupplier(),
+                Math.max(1000, config.getSlabPagePoolIdleEvictMsSupplier().get() / 2));
+        this.slabByteBufAllocator = new SlabByteBufAllocator(RangeEntryCacheImpl.ALLOCATOR, pool);
+        log.info("Initialized managed-ledger entry cache of {} Mb, SlabPagePool maxPages={}",
+                maxSize / MB, pool.maxPageCount());
     }
 
     public EntryCache getEntryCache(ManagedLedgerImpl ml) {
@@ -80,7 +90,10 @@ public class RangeEntryCacheManagerImpl implements EntryCacheManager {
             return new EntryCacheDisabled(ml);
         }
 
-        EntryCache newEntryCache = new RangeEntryCacheImpl(this, ml, mlFactory.getConfig().isCopyEntriesInCache());
+        EntryCache newEntryCache = new RangeEntryCacheImpl(this, ml,
+                mlFactory.getConfig().getCopyEntriesInCacheSupplier(),
+                mlFactory.getConfig().getAllocatorType(),
+                slabByteBufAllocator);
         EntryCache currentEntryCache = caches.putIfAbsent(ml.getName(), newEntryCache);
         if (currentEntryCache != null) {
             return currentEntryCache;

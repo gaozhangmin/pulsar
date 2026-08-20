@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Supplier;
 import org.apache.bookkeeper.client.api.BKException;
 import org.apache.bookkeeper.client.api.LedgerEntry;
 import org.apache.bookkeeper.client.api.ReadHandle;
@@ -46,6 +47,8 @@ import org.apache.bookkeeper.mledger.impl.PositionImpl;
 import org.apache.bookkeeper.mledger.intercept.ManagedLedgerInterceptor;
 import org.apache.bookkeeper.mledger.util.RangeCache;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.pulsar.common.allocator.PulsarByteBufAllocator;
+import org.apache.pulsar.common.allocator.SlabByteBufAllocator;
 import org.apache.pulsar.common.util.ShutdownUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,26 +64,36 @@ public class RangeEntryCacheImpl implements EntryCache {
     public static final long BOOKKEEPER_READ_OVERHEAD_PER_ENTRY = 64;
     public static final int DEFAULT_ESTIMATED_ENTRY_SIZE = 10 * 1024;
     private static final boolean DEFAULT_CACHE_INDIVIDUAL_READ_ENTRY = false;
+    private static final int DEFAULT_ALLOCATOR_TYPE = 1;
+    private static final int ALLOCATOR_TYPE_SLAB = 2;
+    private static final int ALLOCATOR_TYPE_HEAP = 3;
 
     private final RangeEntryCacheManagerImpl manager;
     final ManagedLedgerImpl ml;
     private ManagedLedgerInterceptor interceptor;
     private final RangeCache<PositionImpl, EntryImpl> entries;
-    private final boolean copyEntries;
+    private final Supplier<Boolean> copyEntriesSupplier;
+    private final Supplier<Integer> allocatorType;
     private final PendingReadsManager pendingReadsManager;
 
     private static final double MB = 1024 * 1024;
 
     private final LongAdder totalAddedEntriesSize = new LongAdder();
     private final LongAdder totalAddedEntriesCount = new LongAdder();
+    private final SlabByteBufAllocator slabByteBufAllocator;
 
-    public RangeEntryCacheImpl(RangeEntryCacheManagerImpl manager, ManagedLedgerImpl ml, boolean copyEntries) {
+    public RangeEntryCacheImpl(RangeEntryCacheManagerImpl manager, ManagedLedgerImpl ml,
+                               Supplier<Boolean> copyEntriesSupplier,
+                               Supplier<Integer> allocatorType,
+                               SlabByteBufAllocator slabByteBufAllocator) {
         this.manager = manager;
         this.ml = ml;
         this.pendingReadsManager = new PendingReadsManager(this);
         this.interceptor = ml.getManagedLedgerInterceptor();
         this.entries = new RangeCache<>(EntryImpl::getLength, EntryImpl::getTimestamp);
-        this.copyEntries = copyEntries;
+        this.copyEntriesSupplier = copyEntriesSupplier;
+        this.allocatorType = allocatorType;
+        this.slabByteBufAllocator = slabByteBufAllocator;
 
         if (log.isDebugEnabled()) {
             log.debug("[{}] Initialized managed-ledger entry cache", ml.getName());
@@ -114,7 +127,7 @@ public class RangeEntryCacheImpl implements EntryCache {
             PooledByteBufAllocator.defaultMaxOrder(), // maxOrder
             PooledByteBufAllocator.defaultSmallCacheSize(), // smallCacheSize
             PooledByteBufAllocator.defaultNormalCacheSize(), // normalCacheSize,
-            true // Use cache for all threads
+            true
     );
 
     @Override
@@ -139,7 +152,8 @@ public class RangeEntryCacheImpl implements EntryCache {
         }
 
         ByteBuf cachedData;
-        if (copyEntries) {
+        Boolean copyEntries = copyEntriesSupplier == null ? null : copyEntriesSupplier.get();
+        if (copyEntries != null && copyEntries) {
             cachedData = copyEntry(entry);
             if (cachedData == null) {
                 return false;
@@ -169,8 +183,22 @@ public class RangeEntryCacheImpl implements EntryCache {
         // retain actually the full 64Kb even for a small entry
         int size = entry.getLength();
         ByteBuf cachedData = null;
+        Integer type = allocatorType == null ? null : allocatorType.get();
+        int allocator = type == null ? DEFAULT_ALLOCATOR_TYPE : type;
         try {
-            cachedData = ALLOCATOR.directBuffer(size, size);
+            if (allocator == ALLOCATOR_TYPE_SLAB) {
+                if (slabByteBufAllocator == null) {
+                    cachedData = ALLOCATOR.directBuffer(size, size);
+                } else {
+                    cachedData = slabByteBufAllocator.directBuffer(size, size);
+                }
+            } else if (allocator == ALLOCATOR_TYPE_HEAP) {
+                // heap
+                cachedData = PulsarByteBufAllocator.DEFAULT.heapBuffer(size, size);
+            } else {
+                // 默认配置
+                cachedData = ALLOCATOR.directBuffer(size, size);
+            }
         } catch (Throwable t) {
             log.warn("[{}] Failed to allocate buffer for entry cache: {}", ml.getName(), t.getMessage());
             if (t instanceof OutOfMemoryError) {
